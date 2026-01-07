@@ -185,7 +185,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
         oDesktop.AddMessage "", "", 0, "  Right Return leg 생성: " & rightName
 
         ' ===== 4. Top Yoke =====
-        yokeXSize = 2 * gap + 2 * x2
+        ' Yoke 치수 계산
+        ' Left Return 외곽(-gap - x2/2) ~ Right Return 외곽(gap + x2/2)
+        yokeXSize = 2 * gap + x2  ' 정확한 길이 (튀어나오지 않음)
         yokeYSize = x2
         yokeZSize = y
 

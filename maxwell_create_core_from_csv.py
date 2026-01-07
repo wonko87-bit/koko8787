@@ -263,7 +263,8 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
         # ===== 4. Top Yoke =====
         # Yoke 치수 계산
-        yoke_x_size = 2 * gap + 2 * x2  # Left Return 외곽 ~ Right Return 외곽
+        # Left Return 외곽(-gap - x2/2) ~ Right Return 외곽(gap + x2/2)
+        yoke_x_size = 2 * gap + x2  # 정확한 길이 (튀어나오지 않음)
         yoke_y_size = x2  # Leg를 눕힌 것
         yoke_z_size = y   # Leg의 Y 크기
 

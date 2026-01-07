@@ -228,8 +228,8 @@ X1,X2,Y,,75
 - Main leg (중앙): X1 × Y × E2
 - Left Return leg: X2 × Y × E2
 - Right Return leg: X2 × Y × E2
-- Top yoke (상단): (2*E1 + 2*X2) × X2 × Y
-- Bottom yoke (하단): (2*E1 + 2*X2) × X2 × Y
+- Top yoke (상단): (2*E1 + X2) × X2 × Y
+- Bottom yoke (하단): (2*E1 + X2) × X2 × Y
 
 **좌표 계산:**
 - 모든 박스는 원점(0,0,0)을 중심으로 자동 배치
