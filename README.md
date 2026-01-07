@@ -9,6 +9,9 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
 - **maxwell_create_box_simple.vbs**: 간단한 VBScript 버전 (추천 - 빠른 시작)
 - **maxwell_create_box.py**: 전체 기능 Python 스크립트 (함수 포함)
 - **maxwell_create_box.vbs**: 전체 기능 VBScript 스크립트 (함수 포함)
+- **maxwell_create_core_from_csv.py**: CSV 기반 변압기 철심 생성 (Python)
+- **maxwell_create_core_from_csv.vbs**: CSV 기반 변압기 철심 생성 (VBScript)
+- **transformer_core_sample.csv**: 샘플 CSV 파일
 
 ### Simcenter Magnet 3D 박스 모델링 스크립트
 - **create_box.vbs**: 전체 기능을 포함한 박스 생성 스크립트
@@ -31,6 +34,19 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
   - `create_maxwell_box()`: 사용자 정의 박스
   - `CreateBoxInteractive()`: 대화형 입력 (VBScript)
   - `create_multiple_boxes()`: 여러 박스 일괄 생성
+  - `create_transformer_core_from_csv()`: CSV 파일 기반 변압기 철심 생성
+
+### 1-1. CSV 기반 변압기 철심 생성 (신규!)
+- **1x2 구조**: Main leg 1개 + Return legs 2개
+- **CSV 입력**: 철심 치수 데이터를 CSV 파일로 관리
+- **다층 구조**: 여러 레이어의 철심을 한 번에 생성
+- **중심 정렬**: 모든 박스는 원점(0,0,0)을 중심으로 자동 배치
+- **CSV 구조**:
+  - A열: X1 (Main leg의 X 크기)
+  - B열: X2 (Return leg의 X 크기)
+  - C열: Y (Y축 크기)
+  - E1 셀: Return leg 이격거리
+  - E2 셀: 철심 창 높이 (Z축)
 
 ### 2. Simcenter Magnet 3D 박스 모델링
 - 원점 (0, 0, 0)을 기준으로 양의 방향으로 확장되는 직육면체 생성
@@ -159,6 +175,55 @@ oEditor.CreateBox(
     ["NAME:Attributes", "Name:=", "Box1", ...]
 )
 ```
+
+### 방법 3: CSV 기반 변압기 철심 생성 (신규!)
+
+**Python 버전:**
+1. **transformer_core_sample.csv** 파일을 참고하여 CSV 파일을 작성합니다
+2. CSV 구조:
+   ```
+   X1,X2,Y,,75          (첫 행: 헤더 + E1값)
+   50,30,100,,200       (데이터 행: X1,X2,Y + E2값)
+   48,28,95,,,          (이후 데이터 행)
+   ...
+   ```
+3. **maxwell_create_core_from_csv.py** 파일을 엽니다
+4. CSV 파일 경로를 수정합니다:
+   ```python
+   csv_file = r"C:\path\to\your\transformer_core_data.csv"
+   core_material = "steel_1008"  # 재질 설정
+   ```
+5. **Tools → Run Script**로 실행합니다
+
+**VBScript 버전:**
+1. CSV 파일을 작성합니다 (위와 동일)
+2. **maxwell_create_core_from_csv.vbs** 파일을 엽니다
+3. CSV 파일 경로를 수정합니다:
+   ```vbscript
+   csvFile = "C:\path\to\your\transformer_core_data.csv"
+   coreMaterial = "steel_1008"  ' 재질 설정
+   ```
+4. **Tools → Run Script**로 실행합니다
+
+**CSV 파일 예제:**
+```csv
+X1,X2,Y,,75
+50,30,100,,200
+48,28,95,,,
+46,26,90,,,
+44,24,85,,,
+```
+- E1 (첫 행 E열): 75mm (Return leg 이격거리)
+- E2 (둘째 행 E열): 200mm (철심 창 높이)
+- 각 행: Main leg와 Return legs의 크기 정의
+
+**생성되는 구조:**
+각 행마다 3개의 박스 생성:
+- Main leg (중앙): X1 × Y × E2
+- Left Return leg: X2 × Y × E2
+- Right Return leg: X2 × Y × E2
+
+모든 박스는 원점(0,0,0)을 중심으로 자동 배치됩니다.
 
 ## B. Simcenter Magnet 3D 박스 모델링 스크립트
 
