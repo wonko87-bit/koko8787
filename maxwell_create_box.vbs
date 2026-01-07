@@ -76,7 +76,7 @@ Sub CreateMaxwellBox(width, depth, height, boxName, materialName)
     ' 3D Modeler 에디터 가져오기
     Set oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    ' 박스 생성
+    ' 박스 생성 (Maxwell 2021 R1 API에 맞춤)
     Dim arrBoxParams(1), arrAttributes(1)
 
     ' 박스 매개변수 배열
@@ -102,6 +102,8 @@ Sub CreateMaxwellBox(width, depth, height, boxName, materialName)
         "MaterialValue:=", Chr(34) & materialName & Chr(34), _
         "SurfaceMaterialValue:=", Chr(34) & Chr(34), _
         "SolveInside:=", True, _
+        "ShellElement:=", False, _
+        "ShellElementThickness:=", "0mm", _
         "IsMaterialEditable:=", True, _
         "UseMaterialAppearance:=", False, _
         "IsLightweight:=", False _

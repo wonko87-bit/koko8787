@@ -5,8 +5,10 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
 ## 파일 구성
 
 ### Ansys Maxwell 3D 박스 모델링 스크립트
-- **maxwell_create_box.py**: Maxwell용 Python 스크립트 (IronPython)
-- **maxwell_create_box.vbs**: Maxwell용 VBScript 스크립트
+- **maxwell_create_box_simple.py**: 간단한 Python 버전 (추천 - 빠른 시작)
+- **maxwell_create_box_simple.vbs**: 간단한 VBScript 버전 (추천 - 빠른 시작)
+- **maxwell_create_box.py**: 전체 기능 Python 스크립트 (함수 포함)
+- **maxwell_create_box.vbs**: 전체 기능 VBScript 스크립트 (함수 포함)
 
 ### Simcenter Magnet 3D 박스 모델링 스크립트
 - **create_box.vbs**: 전체 기능을 포함한 박스 생성 스크립트
@@ -59,11 +61,39 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
 
 ## A. Maxwell 3D 박스 모델링 스크립트
 
-### 방법 1: Python 스크립트 사용 (추천)
+### 방법 1: 간단한 스크립트 사용 (추천 - 가장 빠름)
 
+**Python 버전:**
 1. **Ansys Maxwell Electronics Desktop 2021 R1**을 실행합니다
-2. **maxwell_create_box.py** 파일을 엽니다
-3. 스크립트 하단의 메인 실행 부분에서 원하는 방법을 선택합니다:
+2. **maxwell_create_box_simple.py** 파일을 엽니다
+3. 상단의 파라미터 값을 원하는 크기로 수정합니다:
+   ```python
+   box_width = 20      # X 방향 너비 (mm)
+   box_depth = 10      # Y 방향 깊이 (mm)
+   box_height = 5      # Z 방향 높이 (mm)
+   box_name = "Box1"   # 박스 이름
+   material = "vacuum" # 재질
+   ```
+4. **Tools → Run Script** 메뉴에서 스크립트를 실행합니다
+
+**VBScript 버전:**
+1. **Ansys Maxwell Electronics Desktop**을 실행합니다
+2. **maxwell_create_box_simple.vbs** 파일을 엽니다
+3. 상단의 파라미터 값을 원하는 크기로 수정합니다:
+   ```vbscript
+   boxWidth = 20        ' X 방향 너비 (mm)
+   boxDepth = 10        ' Y 방향 깊이 (mm)
+   boxHeight = 5        ' Z 방향 높이 (mm)
+   boxName = "Box1"     ' 박스 이름
+   materialName = "vacuum"  ' 재질
+   ```
+4. **Tools → Run Script**에서 스크립트를 실행합니다
+
+### 방법 2: 전체 기능 스크립트 사용 (함수 호출)
+
+**Python 버전:**
+1. **maxwell_create_box.py** 파일을 엽니다
+2. 스크립트 하단의 메인 실행 부분에서 원하는 방법을 선택합니다:
    ```python
    # 방법 1: 기본 박스 생성 (20x10x5)
    create_box_simple()
@@ -71,13 +101,11 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
    # 방법 2: 사용자 정의 박스 생성
    # create_maxwell_box(100, 50, 30, "MyCustomBox", "aluminum")
    ```
-4. **Tools → Run Script** 메뉴에서 스크립트를 실행합니다
+3. **Tools → Run Script** 메뉴에서 스크립트를 실행합니다
 
-### 방법 2: VBScript 사용
-
-1. **Ansys Maxwell Electronics Desktop**을 실행합니다
-2. **maxwell_create_box.vbs** 파일을 엽니다
-3. 스크립트 하단에서 실행할 함수를 선택합니다:
+**VBScript 버전:**
+1. **maxwell_create_box.vbs** 파일을 엽니다
+2. 스크립트 하단에서 실행할 함수를 선택합니다:
    ```vbscript
    ' 방법 1: 기본 박스 생성 (20x10x5)
    Call CreateBoxSimple()
@@ -85,26 +113,51 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
    ' 방법 2: 대화형 입력으로 박스 생성
    ' Call CreateBoxInteractive()
    ```
-4. **Tools → Run Script**에서 스크립트를 실행합니다
+3. **Tools → Run Script**에서 스크립트를 실행합니다
 
 ### Maxwell 스크립트 특징
 
+- **실제 Maxwell 2021 R1 API 기반**: 실제 녹화된 스크립트를 기반으로 작성
 - **0,0,0 위치**에서 시작하여 양의 방향으로 확장되는 박스 생성
-- 기본 크기: **20mm × 10mm × 5mm**
+- 기본 크기: **20mm × 10mm × 5mm** (요청하신 사양)
 - 자동으로 프로젝트와 Maxwell 3D 디자인 생성
 - 다양한 재질 지원 (vacuum, aluminum, copper, steel, iron 등)
-- 대화형 입력 모드 지원
+- 대화형 입력 모드 지원 (전체 기능 버전)
+- 간단한 버전과 전체 기능 버전 제공
 
 ### Maxwell 스크립트 예제
 
+**간단한 버전 (파라미터 직접 수정):**
 ```python
+# maxwell_create_box_simple.py
+box_width = 100
+box_depth = 50
+box_height = 30
+box_name = "MyCustomBox"
+material = "aluminum"
+# 그냥 실행하면 됨!
+```
+
+**전체 기능 버전 (함수 호출):**
+```python
+# maxwell_create_box.py
 # Python에서 사용자 정의 박스 생성
 create_maxwell_box(50, 30, 20, "MyBox", "copper")
 ```
 
 ```vbscript
+' maxwell_create_box.vbs
 ' VBScript에서 사용자 정의 박스 생성
 Call CreateMaxwellBox(50, 30, 20, "MyBox", "copper")
+```
+
+**실제 녹화된 API 형식:**
+```python
+# Maxwell에서 Tools → Record Script to File로 확인 가능
+oEditor.CreateBox(
+    ["NAME:BoxParameters", "XPosition:=", "0mm", ...],
+    ["NAME:Attributes", "Name:=", "Box1", ...]
+)
 ```
 
 ## B. Simcenter Magnet 3D 박스 모델링 스크립트

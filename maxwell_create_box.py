@@ -63,9 +63,6 @@ def create_maxwell_box(width, depth, height, name="Box1", material="vacuum"):
     print("-" * 60)
 
     try:
-        # Desktop 객체 가져오기
-        oDesktop = oDesktop
-
         # 활성 프로젝트 가져오기 (없으면 새로 생성)
         oProject = oDesktop.GetActiveProject()
         if oProject is None:
@@ -78,15 +75,14 @@ def create_maxwell_box(width, depth, height, name="Box1", material="vacuum"):
         # Maxwell 3D 디자인이 없으면 새로 생성
         if oDesign is None:
             oProject.InsertDesign("Maxwell 3D", "Maxwell3DDesign1", "Magnetostatic", "")
-            oDesign = oProject.GetActiveDesign()
+            oDesign = oProject.SetActiveDesign("Maxwell3DDesign1")
             print("새 Maxwell 3D 디자인을 생성했습니다.")
 
         # 3D Modeler 에디터 가져오기
         oEditor = oDesign.SetActiveEditor("3D Modeler")
 
         # 박스 생성
-        # CreateBox 명령 사용
-        # 형식: CreateBox [시작점], [크기], [속성]
+        # CreateBox 명령 사용 (실제 Maxwell 2021 R1 API에 맞춤)
         oEditor.CreateBox(
             [
                 "NAME:BoxParameters",
@@ -108,6 +104,8 @@ def create_maxwell_box(width, depth, height, name="Box1", material="vacuum"):
                 "MaterialValue:=", "\"{}\"".format(material),
                 "SurfaceMaterialValue:=", "\"\"",
                 "SolveInside:=", True,
+                "ShellElement:=", False,
+                "ShellElementThickness:=", "0mm",
                 "IsMaterialEditable:=", True,
                 "UseMaterialAppearance:=", False,
                 "IsLightweight:=", False
