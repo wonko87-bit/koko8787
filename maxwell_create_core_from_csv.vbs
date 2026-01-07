@@ -143,6 +143,10 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
     Set oEditor = oDesign.SetActiveEditor("3D Modeler")
 
+    ' 화면 업데이트 일시 중지 (성능 향상)
+    oEditor.SuspendUpdate
+    oDesktop.AddMessage "", "", 0, "화면 업데이트를 일시 중지했습니다. (성능 향상 모드)"
+
     ' 각 데이터 행마다 완전한 철심 생성 (3 legs + 2 yokes)
     For i = 0 To rowCount - 1
         x1 = dataRows(i)(0)
@@ -244,6 +248,10 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
         oDesktop.AddMessage "", "", 0, "  완료! 통합된 철심: " & core_name
     Next
+
+    ' 화면 업데이트 재개
+    oEditor.ResumeUpdate
+    oDesktop.AddMessage "", "", 0, "화면 업데이트를 재개했습니다."
 
     ' 뷰 맞추기
     oEditor.FitAll

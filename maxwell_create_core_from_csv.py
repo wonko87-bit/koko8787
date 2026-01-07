@@ -143,6 +143,10 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
     created_cores = []
 
+    # 화면 업데이트 일시 중지 (성능 향상)
+    oEditor.SuspendUpdate()
+    print("\n화면 업데이트를 일시 중지했습니다. (성능 향상 모드)")
+
     # 각 데이터 행마다 완전한 철심 생성 (3 legs + 2 yokes)
     for i, row_data in enumerate(data):
         x1 = row_data['X1']
@@ -376,6 +380,10 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
         created_cores.append(core_name)
         print("  완료! 통합된 철심: {}".format(core_name))
+
+    # 화면 업데이트 재개
+    oEditor.ResumeUpdate()
+    print("\n화면 업데이트를 재개했습니다.")
 
     # 뷰 맞추기
     oEditor.FitAll()
