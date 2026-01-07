@@ -296,8 +296,22 @@ End Sub
 ' ============================================================================
 
 ' CSV 파일 경로 설정 (여기를 수정하세요!)
-Dim csvFile
-csvFile = "C:\path\to\your\transformer_core_data.csv"
+Dim csvFile, fso, scriptFolder
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+' 기본값: 스크립트와 같은 폴더의 transformer_core_sample.csv
+On Error Resume Next
+scriptFolder = fso.GetParentFolderName(WScript.ScriptFullName)
+If Err.Number <> 0 Or scriptFolder = "" Then
+    ' Maxwell 내에서 실행 시 기본 경로
+    scriptFolder = "C:\"
+End If
+On Error Goto 0
+
+csvFile = fso.BuildPath(scriptFolder, "transformer_core_sample.csv")
+
+' 또는 절대 경로 사용:
+' csvFile = "C:\your\path\to\transformer_core_data.csv"
 
 ' 재질 설정
 Dim coreMaterial

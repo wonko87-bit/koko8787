@@ -393,7 +393,13 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
 if __name__ == "__main__":
     # CSV 파일 경로 설정 (여기를 수정하세요!)
-    csv_file = r"C:\path\to\your\transformer_core_data.csv"
+    # 기본값: 스크립트와 같은 폴더의 transformer_core_sample.csv
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+
+    # 또는 절대 경로 사용:
+    # csv_file = r"C:\your\path\to\transformer_core_data.csv"
 
     # 재질 설정
     core_material = "steel_1008"  # Maxwell의 재질 라이브러리에 있는 재질 이름
