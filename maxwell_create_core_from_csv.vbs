@@ -1,8 +1,8 @@
 ' ============================================================================
-' Maxwell 3D - CSV 기반 변압기 철심 생성 스크립트 (VBScript)
+' Maxwell 3D - CSV 기반 변압기 철심 생성 스크립트 (VBScript, Yoke 포함)
 ' ============================================================================
 '
-' CSV 파일에서 철심 치수 데이터를 읽어 1x2 구조의 변압기 철심을 생성합니다.
+' CSV 파일에서 철심 치수 데이터를 읽어 완전한 1x2 변압기 철심을 생성합니다.
 '
 ' CSV 구조:
 ' - A2:A(x): X1 값 (Main leg의 X 크기)
@@ -14,7 +14,10 @@
 ' 생성되는 구조:
 ' - Main leg: 1개 (중앙)
 ' - Return legs: 2개 (양쪽)
+' - Top yoke: 3개 leg를 상단에서 연결
+' - Bottom yoke: 3개 leg를 하단에서 연결
 ' - 모든 박스는 원점(0,0,0)을 중심으로 배치
+' - Unite 연산으로 5개 박스를 하나로 통합
 '
 ' 작성자: Claude
 ' 날짜: 2026-01-07
@@ -23,7 +26,7 @@
 Option Explicit
 
 ' ============================================================================
-' CSV 파일에서 변압기 철심 생성
+' CSV 파일에서 변압기 철심 생성 (Legs + Yokes)
 ' ============================================================================
 Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     Dim oAnsoftApp, oDesktop, oProject, oDesign, oEditor
@@ -32,10 +35,14 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     Dim x1, x2, y, gap, windowHeight
     Dim dataRows()
     Dim rowCount
-    Dim mainName, leftName, rightName
+    Dim layer_boxes, core_name
+    Dim mainName, leftName, rightName, topYokeName, bottomYokeName
     Dim mainXPos, mainYPos, mainZPos
     Dim leftXPos, leftYPos, leftZPos
     Dim rightXPos, rightYPos, rightZPos
+    Dim yokeXSize, yokeYSize, yokeZSize
+    Dim topYokeXPos, topYokeYPos, topYokeZPos
+    Dim bottomYokeXPos, bottomYokeYPos, bottomYokeZPos
 
     ' Desktop 연결
     Set oAnsoftApp = CreateObject("Ansoft.ElectronicsDesktop")
@@ -50,6 +57,7 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
         Exit Sub
     End If
 
+    oDesktop.AddMessage "", "", 0, "CSV 기반 변압기 철심 생성 (Legs + Yokes)"
     oDesktop.AddMessage "", "", 0, "CSV 파일 읽기 중: " & csvFilePath
 
     Set file = fso.OpenTextFile(csvFilePath, 1)  ' 1 = ForReading
@@ -70,7 +78,6 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     windowHeight = 0
 
     If UBound(lines) >= 0 Then
-        ' 첫 번째 행에서 E1 읽기
         fields = Split(lines(0), ",")
         If UBound(fields) >= 4 Then
             If IsNumeric(fields(4)) Then
@@ -80,7 +87,6 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     End If
 
     If UBound(lines) >= 1 Then
-        ' 두 번째 행에서 E2 읽기
         fields = Split(lines(1), ",")
         If UBound(fields) >= 4 Then
             If IsNumeric(fields(4)) Then
@@ -96,7 +102,7 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     rowCount = 0
     ReDim dataRows(0)
 
-    For i = 1 To UBound(lines)  ' 1부터 시작 (헤더 제외)
+    For i = 1 To UBound(lines)
         fields = Split(lines(i), ",")
 
         If UBound(fields) >= 2 Then
@@ -137,7 +143,7 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
     Set oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    ' 각 데이터 행마다 3개의 박스 생성
+    ' 각 데이터 행마다 완전한 철심 생성 (3 legs + 2 yokes)
     For i = 0 To rowCount - 1
         x1 = dataRows(i)(0)
         x2 = dataRows(i)(1)
@@ -145,7 +151,7 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
         oDesktop.AddMessage "", "", 0, "레이어 " & (i + 1) & ": X1=" & x1 & ", X2=" & x2 & ", Y=" & y
 
-        ' 1. Main leg (중앙)
+        ' ===== 1. Main leg (중앙) =====
         mainName = namePrefix & "_Layer" & (i + 1) & "_Main"
         mainXPos = -x1 / 2.0
         mainYPos = -y / 2.0
@@ -156,7 +162,7 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
         oDesktop.AddMessage "", "", 0, "  Main leg 생성: " & mainName
 
-        ' 2. Left Return leg
+        ' ===== 2. Left Return leg =====
         leftName = namePrefix & "_Layer" & (i + 1) & "_LeftReturn"
         leftXPos = -gap - x2 / 2.0
         leftYPos = -y / 2.0
@@ -167,7 +173,7 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
         oDesktop.AddMessage "", "", 0, "  Left Return leg 생성: " & leftName
 
-        ' 3. Right Return leg
+        ' ===== 3. Right Return leg =====
         rightName = namePrefix & "_Layer" & (i + 1) & "_RightReturn"
         rightXPos = gap - x2 / 2.0
         rightYPos = -y / 2.0
@@ -177,13 +183,71 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                        x2, y, windowHeight, materialName, "(132 132 193)")
 
         oDesktop.AddMessage "", "", 0, "  Right Return leg 생성: " & rightName
+
+        ' ===== 4. Top Yoke =====
+        yokeXSize = 2 * gap + 2 * x2
+        yokeYSize = x2
+        yokeZSize = y
+
+        topYokeName = namePrefix & "_Layer" & (i + 1) & "_TopYoke"
+        topYokeXPos = -yokeXSize / 2.0
+        topYokeYPos = -yokeYSize / 2.0
+        topYokeZPos = windowHeight / 2.0
+
+        Call CreateBox(oEditor, topYokeName, topYokeXPos, topYokeYPos, topYokeZPos, _
+                       yokeXSize, yokeYSize, yokeZSize, materialName, "(193 132 132)")
+
+        oDesktop.AddMessage "", "", 0, "  Top yoke 생성: " & topYokeName
+
+        ' ===== 5. Bottom Yoke =====
+        bottomYokeName = namePrefix & "_Layer" & (i + 1) & "_BottomYoke"
+        bottomYokeXPos = -yokeXSize / 2.0
+        bottomYokeYPos = -yokeYSize / 2.0
+        bottomYokeZPos = -windowHeight / 2.0 - yokeZSize
+
+        Call CreateBox(oEditor, bottomYokeName, bottomYokeXPos, bottomYokeYPos, bottomYokeZPos, _
+                       yokeXSize, yokeYSize, yokeZSize, materialName, "(193 132 132)")
+
+        oDesktop.AddMessage "", "", 0, "  Bottom yoke 생성: " & bottomYokeName
+
+        ' ===== 6. Unite all parts into one core =====
+        core_name = namePrefix & "_Layer" & (i + 1)
+        oDesktop.AddMessage "", "", 0, "  Unite 연산 중... (5개 박스 -> 1개 철심)"
+
+        ' 박스 이름 리스트 작성
+        layer_boxes = mainName & "," & leftName & "," & rightName & "," & topYokeName & "," & bottomYokeName
+
+        ' Unite 연산
+        Dim arrUnite1(1), arrUnite2(1)
+        arrUnite1(0) = "NAME:Selections"
+        arrUnite1(1) = Array("Selections:=", layer_boxes)
+        arrUnite2(0) = "NAME:UniteParameters"
+        arrUnite2(1) = Array("KeepOriginals:=", False)
+
+        oEditor.Unite arrUnite1, arrUnite2
+
+        ' Unite 후 첫 번째 이름으로 남으므로, 원하는 이름으로 변경
+        Dim arrChange1(1), arrChange2(1), arrChange3(1), arrChange4(1)
+        arrChange1(0) = "NAME:AllTabs"
+        arrChange2(0) = "NAME:Geometry3DAttributeTab"
+        arrChange3(0) = "NAME:PropServers"
+        arrChange3(1) = Array(mainName)
+        arrChange4(0) = "NAME:ChangedProps"
+        arrChange4(1) = Array(Array("NAME:Name", "Value:=", core_name))
+
+        arrChange2(1) = Array(arrChange3, arrChange4)
+        arrChange1(1) = Array(arrChange2)
+
+        oEditor.ChangeProperty arrChange1
+
+        oDesktop.AddMessage "", "", 0, "  완료! 통합된 철심: " & core_name
     Next
 
     ' 뷰 맞추기
     oEditor.FitAll
 
-    MsgBox "완료! 총 " & (rowCount * 3) & " 개의 박스가 생성되었습니다.", vbInformation, "완료"
-    oDesktop.AddMessage "", "", 0, "완료! 총 " & (rowCount * 3) & " 개의 박스가 생성되었습니다."
+    MsgBox "완료! 총 " & rowCount & " 개의 철심 레이어가 생성되었습니다.", vbInformation, "완료"
+    oDesktop.AddMessage "", "", 0, "완료! 총 " & rowCount & " 개의 철심 레이어가 생성되었습니다."
 End Sub
 
 

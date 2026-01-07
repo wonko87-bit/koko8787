@@ -36,8 +36,14 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
   - `create_multiple_boxes()`: 여러 박스 일괄 생성
   - `create_transformer_core_from_csv()`: CSV 파일 기반 변압기 철심 생성
 
-### 1-1. CSV 기반 변압기 철심 생성 (신규!)
-- **1x2 구조**: Main leg 1개 + Return legs 2개
+### 1-1. CSV 기반 변압기 철심 생성 (Yoke 포함!)
+- **완전한 철심 구조**: Legs (3개) + Yokes (2개) = 완성된 변압기 철심
+- **1x2 구조**:
+  - Main leg 1개 (중앙)
+  - Return legs 2개 (양쪽)
+  - Top yoke (상단 수평 연결)
+  - Bottom yoke (하단 수평 연결)
+- **Unite 연산**: 5개 박스가 자동으로 하나의 철심으로 통합
 - **CSV 입력**: 철심 치수 데이터를 CSV 파일로 관리
 - **다층 구조**: 여러 레이어의 철심을 한 번에 생성
 - **중심 정렬**: 모든 박스는 원점(0,0,0)을 중심으로 자동 배치
@@ -45,8 +51,8 @@ Ansys Maxwell과 Simcenter Magnet을 위한 스크립트 모음입니다.
   - A열: X1 (Main leg의 X 크기)
   - B열: X2 (Return leg의 X 크기)
   - C열: Y (Y축 크기)
-  - E1 셀: Return leg 이격거리
-  - E2 셀: 철심 창 높이 (Z축)
+  - E1 셀: Return leg 이격거리 (Main leg 중점 ↔ Return leg 중점)
+  - E2 셀: 철심 창 높이 (Z축 extrusion)
 
 ### 2. Simcenter Magnet 3D 박스 모델링
 - 원점 (0, 0, 0)을 기준으로 양의 방향으로 확장되는 직육면체 생성
@@ -218,12 +224,22 @@ X1,X2,Y,,75
 - 각 행: Main leg와 Return legs의 크기 정의
 
 **생성되는 구조:**
-각 행마다 3개의 박스 생성:
+각 행마다 완전한 철심 생성 (5개 박스 → Unite → 1개 철심):
 - Main leg (중앙): X1 × Y × E2
 - Left Return leg: X2 × Y × E2
 - Right Return leg: X2 × Y × E2
+- Top yoke (상단): (2*E1 + 2*X2) × X2 × Y
+- Bottom yoke (하단): (2*E1 + 2*X2) × X2 × Y
 
-모든 박스는 원점(0,0,0)을 중심으로 자동 배치됩니다.
+**좌표 계산:**
+- 모든 박스는 원점(0,0,0)을 중심으로 자동 배치
+- Leg Z 범위: -E2/2 ~ +E2/2
+- Top yoke Z 범위: +E2/2 ~ +E2/2+Y
+- Bottom yoke Z 범위: -E2/2-Y ~ -E2/2
+- 전체 철심 높이: E2 + 2*Y (완벽한 중심 정렬)
+
+**Unite 연산:**
+5개의 개별 박스가 자동으로 하나의 철심 객체로 통합되어 매끄럽게 연결됩니다.
 
 ## B. Simcenter Magnet 3D 박스 모델링 스크립트
 

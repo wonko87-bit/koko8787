@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Maxwell 3D - CSV 기반 변압기 철심 생성 스크립트
-================================================
+Maxwell 3D - CSV 기반 변압기 철심 생성 스크립트 (Yoke 포함)
+==========================================================
 
-CSV 파일에서 철심 치수 데이터를 읽어 1x2 구조의 변압기 철심을 생성합니다.
+CSV 파일에서 철심 치수 데이터를 읽어 완전한 1x2 변압기 철심을 생성합니다.
 
 CSV 구조:
 - A2:A(x): X1 값 (Main leg의 X 크기)
@@ -15,6 +15,8 @@ CSV 구조:
 생성되는 구조:
 - Main leg: 1개 (중앙)
 - Return legs: 2개 (양쪽)
+- Top yoke: 3개 leg를 상단에서 연결
+- Bottom yoke: 3개 leg를 하단에서 연결
 - 모든 박스는 원점(0,0,0)을 중심으로 배치
 
 Author: Claude
@@ -92,7 +94,7 @@ def read_csv_data(csv_file_path):
 
 def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_prefix="Core"):
     """
-    CSV 파일로부터 변압기 철심을 생성합니다.
+    CSV 파일로부터 변압기 철심을 생성합니다 (Legs + Yokes).
 
     Parameters:
     -----------
@@ -105,12 +107,12 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
     Returns:
     --------
-    created_boxes : list
-        생성된 박스 이름 목록
+    created_cores : list
+        생성된 철심 이름 목록
     """
 
     print("=" * 60)
-    print("CSV 기반 변압기 철심 생성")
+    print("CSV 기반 변압기 철심 생성 (Legs + Yokes)")
     print("=" * 60)
 
     # CSV 데이터 읽기
@@ -139,9 +141,9 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
     oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    created_boxes = []
+    created_cores = []
 
-    # 각 데이터 행마다 3개의 박스 생성
+    # 각 데이터 행마다 완전한 철심 생성 (3 legs + 2 yokes)
     for i, row_data in enumerate(data):
         x1 = row_data['X1']
         x2 = row_data['X2']
@@ -149,7 +151,9 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
         print("\n레이어 {}: X1={}, X2={}, Y={}".format(i+1, x1, x2, y))
 
-        # 1. Main leg (중앙)
+        layer_boxes = []
+
+        # ===== 1. Main leg (중앙) =====
         main_name = "{}_Layer{}_Main".format(name_prefix, i+1)
         main_x_pos = -x1 / 2.0
         main_y_pos = -y / 2.0
@@ -182,10 +186,10 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
                 "UseMaterialAppearance:=", False,
                 "IsLightweight:=", False
             ])
-        created_boxes.append(main_name)
+        layer_boxes.append(main_name)
         print("  Main leg 생성: {}".format(main_name))
 
-        # 2. Left Return leg
+        # ===== 2. Left Return leg =====
         left_name = "{}_Layer{}_LeftReturn".format(name_prefix, i+1)
         left_x_pos = -gap - x2 / 2.0
         left_y_pos = -y / 2.0
@@ -218,10 +222,10 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
                 "UseMaterialAppearance:=", False,
                 "IsLightweight:=", False
             ])
-        created_boxes.append(left_name)
+        layer_boxes.append(left_name)
         print("  Left Return leg 생성: {}".format(left_name))
 
-        # 3. Right Return leg
+        # ===== 3. Right Return leg =====
         right_name = "{}_Layer{}_RightReturn".format(name_prefix, i+1)
         right_x_pos = gap - x2 / 2.0
         right_y_pos = -y / 2.0
@@ -254,17 +258,132 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
                 "UseMaterialAppearance:=", False,
                 "IsLightweight:=", False
             ])
-        created_boxes.append(right_name)
+        layer_boxes.append(right_name)
         print("  Right Return leg 생성: {}".format(right_name))
+
+        # ===== 4. Top Yoke =====
+        # Yoke 치수 계산
+        yoke_x_size = 2 * gap + 2 * x2  # Left Return 외곽 ~ Right Return 외곽
+        yoke_y_size = x2  # Leg를 눕힌 것
+        yoke_z_size = y   # Leg의 Y 크기
+
+        top_yoke_name = "{}_Layer{}_TopYoke".format(name_prefix, i+1)
+        top_yoke_x_pos = -(yoke_x_size) / 2.0
+        top_yoke_y_pos = -yoke_y_size / 2.0
+        top_yoke_z_pos = window_height / 2.0  # Leg 윗면에서 시작
+
+        oEditor.CreateBox(
+            [
+                "NAME:BoxParameters",
+                "XPosition:=", "{}mm".format(top_yoke_x_pos),
+                "YPosition:=", "{}mm".format(top_yoke_y_pos),
+                "ZPosition:=", "{}mm".format(top_yoke_z_pos),
+                "XSize:=", "{}mm".format(yoke_x_size),
+                "YSize:=", "{}mm".format(yoke_y_size),
+                "ZSize:=", "{}mm".format(yoke_z_size)
+            ],
+            [
+                "NAME:Attributes",
+                "Name:=", top_yoke_name,
+                "Flags:=", "",
+                "Color:=", "(193 132 132)",
+                "Transparency:=", 0,
+                "PartCoordinateSystem:=", "Global",
+                "UDMId:=", "",
+                "MaterialValue:=", '"{}"'.format(material),
+                "SurfaceMaterialValue:=", '""',
+                "SolveInside:=", True,
+                "ShellElement:=", False,
+                "ShellElementThickness:=", "0mm",
+                "IsMaterialEditable:=", True,
+                "UseMaterialAppearance:=", False,
+                "IsLightweight:=", False
+            ])
+        layer_boxes.append(top_yoke_name)
+        print("  Top yoke 생성: {}".format(top_yoke_name))
+
+        # ===== 5. Bottom Yoke =====
+        bottom_yoke_name = "{}_Layer{}_BottomYoke".format(name_prefix, i+1)
+        bottom_yoke_x_pos = -(yoke_x_size) / 2.0
+        bottom_yoke_y_pos = -yoke_y_size / 2.0
+        bottom_yoke_z_pos = -window_height / 2.0 - yoke_z_size  # Leg 아래면에서 시작
+
+        oEditor.CreateBox(
+            [
+                "NAME:BoxParameters",
+                "XPosition:=", "{}mm".format(bottom_yoke_x_pos),
+                "YPosition:=", "{}mm".format(bottom_yoke_y_pos),
+                "ZPosition:=", "{}mm".format(bottom_yoke_z_pos),
+                "XSize:=", "{}mm".format(yoke_x_size),
+                "YSize:=", "{}mm".format(yoke_y_size),
+                "ZSize:=", "{}mm".format(yoke_z_size)
+            ],
+            [
+                "NAME:Attributes",
+                "Name:=", bottom_yoke_name,
+                "Flags:=", "",
+                "Color:=", "(193 132 132)",
+                "Transparency:=", 0,
+                "PartCoordinateSystem:=", "Global",
+                "UDMId:=", "",
+                "MaterialValue:=", '"{}"'.format(material),
+                "SurfaceMaterialValue:=", '""',
+                "SolveInside:=", True,
+                "ShellElement:=", False,
+                "ShellElementThickness:=", "0mm",
+                "IsMaterialEditable:=", True,
+                "UseMaterialAppearance:=", False,
+                "IsLightweight:=", False
+            ])
+        layer_boxes.append(bottom_yoke_name)
+        print("  Bottom yoke 생성: {}".format(bottom_yoke_name))
+
+        # ===== 6. Unite all parts into one core =====
+        core_name = "{}_Layer{}".format(name_prefix, i+1)
+        print("  Unite 연산 중... (5개 박스 -> 1개 철심)")
+
+        # Unite: 첫 번째 박스가 기준, 나머지를 합침
+        oEditor.Unite(
+            [
+                "NAME:Selections",
+                "Selections:=", ",".join(layer_boxes)
+            ],
+            [
+                "NAME:UniteParameters",
+                "KeepOriginals:=", False
+            ])
+
+        # Unite 후 첫 번째 이름으로 남으므로, 원하는 이름으로 변경
+        oEditor.ChangeProperty(
+            [
+                "NAME:AllTabs",
+                [
+                    "NAME:Geometry3DAttributeTab",
+                    [
+                        "NAME:PropServers",
+                        layer_boxes[0]  # Unite 후 남은 첫 번째 객체
+                    ],
+                    [
+                        "NAME:ChangedProps",
+                        [
+                            "NAME:Name",
+                            "Value:=", core_name
+                        ]
+                    ]
+                ]
+            ])
+
+        created_cores.append(core_name)
+        print("  완료! 통합된 철심: {}".format(core_name))
 
     # 뷰 맞추기
     oEditor.FitAll()
 
     print("\n" + "=" * 60)
-    print("완료! 총 {} 개의 박스가 생성되었습니다.".format(len(created_boxes)))
+    print("완료! 총 {} 개의 철심 레이어가 생성되었습니다.".format(len(created_cores)))
     print("=" * 60)
 
-    return created_boxes
+    return created_cores
 
 
 # ============================================================================
@@ -280,10 +399,10 @@ if __name__ == "__main__":
 
     # 변압기 철심 생성
     try:
-        boxes = create_transformer_core_from_csv(csv_file, core_material, "Core")
-        print("\n생성된 박스 목록:")
-        for i, box_name in enumerate(boxes, 1):
-            print("  {}. {}".format(i, box_name))
+        cores = create_transformer_core_from_csv(csv_file, core_material, "Core")
+        print("\n생성된 철심 목록:")
+        for i, core_name in enumerate(cores, 1):
+            print("  {}. {}".format(i, core_name))
     except Exception as e:
         print("\n오류 발생: {}".format(str(e)))
         import traceback
