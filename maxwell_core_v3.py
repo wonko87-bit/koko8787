@@ -128,11 +128,7 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     # Z 시작 위치 (일단 0)
     z_start = 0.0
 
-    # Y 누적 위치 (적층용)
-    cumulative_y = 0.0
-    prev_b = 0.0
-
-    # 각 레이어마다 3개 직사각형 생성
+    # 각 레이어마다 3개 직사각형 생성 (모두 원점 중심에 겹쳐짐)
     for i, row_data in enumerate(data):
         a = row_data['A']  # 메인 레그 X
         b = row_data['B']  # Y (공통)
@@ -140,34 +136,23 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
 
         print("\n레이어 {}: A={}, B={}, C={}".format(i+1, a, b, c))
 
-        # 적층 Y 좌표 계산
-        if i == 0:
-            cumulative_y = 0.0  # 첫 번째 레이어는 원점
-        else:
-            cumulative_y += prev_b / 2.0 + b / 2.0
-
-        print("  적층 Y 위치: {}mm".format(cumulative_y))
-
         # ===== 1. 메인 레그 =====
         main_name = "{}_Layer{}_Main".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, a, b, main_name)
-        # 중심을 원점에, 적층 위치 고려
-        move_object(oEditor, main_name, -a/2.0, cumulative_y - b/2.0, 0)
+        # 중심을 원점에
+        move_object(oEditor, main_name, -a/2.0, -b/2.0, 0)
 
         # ===== 2. 사이드 레그 1 (오른쪽) =====
         side1_name = "{}_Layer{}_Side1".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, c, b, side1_name)
-        # 중심을 원점에, 적층 위치 고려, gap만큼 오른쪽 이동
-        move_object(oEditor, side1_name, -c/2.0 + gap, cumulative_y - b/2.0, 0)
+        # 중심을 원점에, gap만큼 오른쪽 이동
+        move_object(oEditor, side1_name, -c/2.0 + gap, -b/2.0, 0)
 
-        # ===== 3. 사이드 레그 2 (왼쪽) - Y축 대칭 =====
+        # ===== 3. 사이드 레그 2 (왼쪽) =====
         side2_name = "{}_Layer{}_Side2".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, c, b, side2_name)
-        # 중심을 원점에, 적층 위치 고려, gap만큼 왼쪽 이동 (음수)
-        move_object(oEditor, side2_name, -c/2.0 - gap, cumulative_y - b/2.0, 0)
-
-        # 다음 레이어를 위해 현재 B 저장
-        prev_b = b
+        # 중심을 원점에, gap만큼 왼쪽 이동 (음수)
+        move_object(oEditor, side2_name, -c/2.0 - gap, -b/2.0, 0)
 
     # 뷰 맞추기
     oEditor.FitAll()
