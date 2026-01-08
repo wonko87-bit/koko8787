@@ -215,8 +215,6 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     main_rects = []
     side1_rects = []  # 오른쪽 사이드 레그
     side2_rects = []  # 왼쪽 사이드 레그
-    top_yoke_rects = []  # 상단 요크용
-    bottom_yoke_rects = []  # 하단 요크용
 
     for i, row_data in enumerate(data):
         a = row_data['A']  # 메인 레그 X
@@ -243,20 +241,6 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
         move_object(oEditor, side2_name, -c/2.0 - gap, -b/2.0, 0)
         side2_rects.append(side2_name)
 
-        # 상단 요크 (2개의 사이드 레그를 연결하는 하나의 긴 직사각형)
-        # X 크기: 2*gap + c (왼쪽 끝부터 오른쪽 끝까지)
-        yoke_x_size = 2.0 * gap + c
-        top_yoke_name = "{}_Layer{}_TopYoke".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, b, top_yoke_name)
-        move_object(oEditor, top_yoke_name, -yoke_x_size/2.0, -b/2.0, 0)
-        top_yoke_rects.append(top_yoke_name)
-
-        # 하단 요크 (2개의 사이드 레그를 연결하는 하나의 긴 직사각형)
-        bottom_yoke_name = "{}_Layer{}_BottomYoke".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, b, bottom_yoke_name)
-        move_object(oEditor, bottom_yoke_name, -yoke_x_size/2.0, -b/2.0, 0)
-        bottom_yoke_rects.append(bottom_yoke_name)
-
     # ===== 2. 각 레그별 평면 Unite =====
     print("\n===== Unite 작업 =====")
 
@@ -272,52 +256,98 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     side2_united = "{}_Side2Leg".format(name_prefix)
     unite_objects(oEditor, side2_rects, side2_united)
 
-    # 상단 요크 Unite
-    top_yoke_united = "{}_TopYoke".format(name_prefix)
-    unite_objects(oEditor, top_yoke_rects, top_yoke_united)
-
-    # 하단 요크 Unite
-    bottom_yoke_united = "{}_BottomYoke".format(name_prefix)
-    unite_objects(oEditor, bottom_yoke_rects, bottom_yoke_united)
-
-    # ===== 3. Yoke용 평면 회전 =====
-    print("\n===== Yoke용 평면 회전 =====")
-    # Y축 기준 90도 회전
-    rotate_object(oEditor, top_yoke_united, "Y", 90)
-    rotate_object(oEditor, bottom_yoke_united, "Y", 90)
-
-    # ===== 4. 메인 레그와 사이드 레그 Sweep (E2만큼 +z 방향) =====
+    # ===== 3. 메인 레그와 사이드 레그 Sweep (E2만큼 +z 방향) =====
     print("\n===== Sweep 작업 =====")
     sweep_along_z(oEditor, main_united, window_height)
     sweep_along_z(oEditor, side1_united, window_height)
     sweep_along_z(oEditor, side2_united, window_height)
 
-    # ===== 5. Sweep한 객체를 -E2/2만큼 z축 아래로 이동 =====
+    # ===== 4. Sweep한 객체를 -E2/2만큼 z축 아래로 이동 =====
     print("\n===== 중심 맞추기 (Z축 이동) =====")
     move_object(oEditor, main_united, 0, 0, -window_height/2.0)
     move_object(oEditor, side1_united, 0, 0, -window_height/2.0)
     move_object(oEditor, side2_united, 0, 0, -window_height/2.0)
 
-    # ===== 6. Yoke 위치 조정 =====
-    print("\n===== Yoke 위치 조정 =====")
+    # ===== 5. 사이드 레그를 복사해서 요크 생성 =====
+    print("\n===== Yoke 생성 (사이드 레그 복사) =====")
 
-    # 상단 요크를 z축 이동: -gap + window_height/2 (상단 위치)
-    move_object(oEditor, top_yoke_united, 0, 0, -gap + window_height/2.0)
+    # 상단 요크 생성 (side1을 복사)
+    oEditor.Copy(
+        [
+            "NAME:Selections",
+            "Selections:=", side1_united
+        ]
+    )
+    oEditor.Paste()
+    top_yoke_name = "{}_TopYoke".format(name_prefix)
+    # Paste 후 생성된 객체 이름은 "Core_Side1Leg_1"
+    pasted_name = side1_united + "_1"
 
-    # 하단 요크를 z축 이동: gap - window_height/2 (하단 위치)
-    move_object(oEditor, bottom_yoke_united, 0, 0, gap - window_height/2.0)
+    # 이름 변경
+    oEditor.ChangeProperty(
+        [
+            "NAME:AllTabs",
+            [
+                "NAME:Geometry3DAttributeTab",
+                [
+                    "NAME:PropServers",
+                    pasted_name
+                ],
+                [
+                    "NAME:ChangedProps",
+                    [
+                        "NAME:Name",
+                        "Value:=", top_yoke_name
+                    ]
+                ]
+            ]
+        ]
+    )
 
-    # ===== 7. Yoke Sweep (양방향으로 gap + c/2씩) =====
-    print("\n===== Yoke Sweep =====")
-    # C는 첫 번째 레이어의 사이드 레그 X 크기
-    c_first = data[0]['C']
-    yoke_sweep_distance = gap + c_first/2.0
+    # Y축 기준 90도 회전
+    rotate_object(oEditor, top_yoke_name, "Y", 90)
 
-    # 상단 yoke: +z 방향으로 sweep
-    sweep_along_z(oEditor, top_yoke_united, yoke_sweep_distance)
+    # 상단 위치로 이동: z = -gap + window_height/2
+    move_object(oEditor, top_yoke_name, 0, 0, -gap + window_height/2.0)
 
-    # 하단 yoke: -z 방향으로 sweep (음수)
-    sweep_along_z(oEditor, bottom_yoke_united, -yoke_sweep_distance)
+    # 하단 요크 생성 (side1을 복사)
+    oEditor.Copy(
+        [
+            "NAME:Selections",
+            "Selections:=", side1_united
+        ]
+    )
+    oEditor.Paste()
+    bottom_yoke_name = "{}_BottomYoke".format(name_prefix)
+    # Paste 후 생성된 객체 이름은 "Core_Side1Leg_2"
+    pasted_name2 = side1_united + "_2"
+
+    # 이름 변경
+    oEditor.ChangeProperty(
+        [
+            "NAME:AllTabs",
+            [
+                "NAME:Geometry3DAttributeTab",
+                [
+                    "NAME:PropServers",
+                    pasted_name2
+                ],
+                [
+                    "NAME:ChangedProps",
+                    [
+                        "NAME:Name",
+                        "Value:=", bottom_yoke_name
+                    ]
+                ]
+            ]
+        ]
+    )
+
+    # Y축 기준 90도 회전
+    rotate_object(oEditor, bottom_yoke_name, "Y", 90)
+
+    # 하단 위치로 이동: z = gap - window_height/2
+    move_object(oEditor, bottom_yoke_name, 0, 0, gap - window_height/2.0)
 
     # 뷰 맞추기
     oEditor.FitAll()
