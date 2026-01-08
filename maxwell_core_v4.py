@@ -243,29 +243,19 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
         move_object(oEditor, side2_name, -c/2.0 - gap, -b/2.0, 0)
         side2_rects.append(side2_name)
 
-        # 상단 요크용 사이드 레그 1 (오른쪽)
-        top_yoke1_name = "{}_Layer{}_TopYoke1".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, c, b, top_yoke1_name)
-        move_object(oEditor, top_yoke1_name, -c/2.0 + gap, -b/2.0, 0)
-        top_yoke_rects.append(top_yoke1_name)
+        # 상단 요크 (2개의 사이드 레그를 연결하는 하나의 긴 직사각형)
+        # X 크기: 2*gap + c (왼쪽 끝부터 오른쪽 끝까지)
+        yoke_x_size = 2.0 * gap + c
+        top_yoke_name = "{}_Layer{}_TopYoke".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, b, top_yoke_name)
+        move_object(oEditor, top_yoke_name, -yoke_x_size/2.0, -b/2.0, 0)
+        top_yoke_rects.append(top_yoke_name)
 
-        # 상단 요크용 사이드 레그 2 (왼쪽)
-        top_yoke2_name = "{}_Layer{}_TopYoke2".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, c, b, top_yoke2_name)
-        move_object(oEditor, top_yoke2_name, -c/2.0 - gap, -b/2.0, 0)
-        top_yoke_rects.append(top_yoke2_name)
-
-        # 하단 요크용 사이드 레그 1 (오른쪽)
-        bottom_yoke1_name = "{}_Layer{}_BottomYoke1".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, c, b, bottom_yoke1_name)
-        move_object(oEditor, bottom_yoke1_name, -c/2.0 + gap, -b/2.0, 0)
-        bottom_yoke_rects.append(bottom_yoke1_name)
-
-        # 하단 요크용 사이드 레그 2 (왼쪽)
-        bottom_yoke2_name = "{}_Layer{}_BottomYoke2".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, c, b, bottom_yoke2_name)
-        move_object(oEditor, bottom_yoke2_name, -c/2.0 - gap, -b/2.0, 0)
-        bottom_yoke_rects.append(bottom_yoke2_name)
+        # 하단 요크 (2개의 사이드 레그를 연결하는 하나의 긴 직사각형)
+        bottom_yoke_name = "{}_Layer{}_BottomYoke".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, b, bottom_yoke_name)
+        move_object(oEditor, bottom_yoke_name, -yoke_x_size/2.0, -b/2.0, 0)
+        bottom_yoke_rects.append(bottom_yoke_name)
 
     # ===== 2. 각 레그별 평면 Unite =====
     print("\n===== Unite 작업 =====")
