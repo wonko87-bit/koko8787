@@ -356,21 +356,23 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
 
 # 스크립트 실행
-# CSV 파일 경로 (스크립트와 동일한 폴더)
-try:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-except:
-    # Maxwell에서 실행할 때 __file__이 정의되지 않을 수 있음
-    import sys
-    if len(sys.argv) > 0:
-        script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-    else:
-        script_dir = os.getcwd()
+# CSV 파일 경로 설정
+# 옵션 1: 하드코딩 경로 (가장 확실함)
+csv_file = r"C:\Users\YourUsername\Documents\koko8787\transformer_core_sample.csv"
 
-csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+# 옵션 2: 자동 경로 감지 (주석 해제하려면 위 줄을 주석처리하고 아래 줄들의 주석을 해제)
+# try:
+#     script_dir = os.path.dirname(os.path.abspath(__file__))
+# except:
+#     import sys
+#     if len(sys.argv) > 0:
+#         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+#     else:
+#         script_dir = os.getcwd()
+# csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
 
-print("스크립트 디렉토리: {}".format(script_dir))
 print("CSV 파일 경로: {}".format(csv_file))
+print("CSV 파일 존재 여부: {}".format(os.path.exists(csv_file)))
 
 # 철심 생성
 create_transformer_core_from_csv(
