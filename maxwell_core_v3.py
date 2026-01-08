@@ -90,47 +90,6 @@ def move_object(oEditor, obj_name, dx, dy, dz):
     print("  이동: {} → ({}, {}, {})".format(obj_name, dx, dy, dz))
 
 
-def mirror_object(oEditor, obj_name, new_name):
-    """Y축 대칭 복사 (X=0 평면 기준)"""
-    oEditor.Mirror(
-        [
-            "NAME:Selections",
-            "Selections:=", obj_name,
-            "NewPartsModelFlag:=", "Model"
-        ],
-        [
-            "NAME:MirrorParameters",
-            "MirrorBaseX:=", "0mm",
-            "MirrorBaseY:=", "0mm",
-            "MirrorBaseZ:=", "0mm",
-            "MirrorNormalX:=", "1mm",
-            "MirrorNormalY:=", "0mm",
-            "MirrorNormalZ:=", "0mm"
-        ]
-    )
-    # Mirror는 자동으로 이름 생성, 수동으로 rename
-    oEditor.ChangeProperty(
-        [
-            "NAME:AllTabs",
-            [
-                "NAME:Geometry3DAttributeTab",
-                [
-                    "NAME:PropServers",
-                    obj_name + "_1"  # Mirror는 _1 suffix 추가
-                ],
-                [
-                    "NAME:ChangedProps",
-                    [
-                        "NAME:Name",
-                        "Value:=", new_name
-                    ]
-                ]
-            ]
-        ]
-    )
-    print("  대칭 복사: {} → {}".format(obj_name, new_name))
-
-
 def create_core_from_csv(csv_file_path, name_prefix="Core"):
     """CSV 파일에서 변압기 철심을 생성"""
     print("=" * 60)
@@ -201,9 +160,11 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
         # 중심을 원점에, 적층 위치 고려, gap만큼 오른쪽 이동
         move_object(oEditor, side1_name, -c/2.0 + gap, cumulative_y - b/2.0, 0)
 
-        # ===== 3. 사이드 레그 2 (왼쪽) - Y축 대칭 복사 =====
+        # ===== 3. 사이드 레그 2 (왼쪽) - Y축 대칭 =====
         side2_name = "{}_Layer{}_Side2".format(name_prefix, i+1)
-        mirror_object(oEditor, side1_name, side2_name)
+        create_rectangle(oEditor, 0, 0, z_start, c, b, side2_name)
+        # 중심을 원점에, 적층 위치 고려, gap만큼 왼쪽 이동 (음수)
+        move_object(oEditor, side2_name, -c/2.0 - gap, cumulative_y - b/2.0, 0)
 
         # 다음 레이어를 위해 현재 B 저장
         prev_b = b
