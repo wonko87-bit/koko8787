@@ -172,7 +172,7 @@ def unite_objects(oEditor, obj_list, result_name):
     print("  Unite: {} → {}".format(obj_list, result_name))
 
 
-def duplicate_and_rotate(oEditor, obj_name, axis, angle_deg):
+def duplicate_and_rotate(oEditor, obj_name, axis, angle_deg, num_clones):
     """객체를 복제하고 회전"""
     oEditor.DuplicateAroundAxis(
         [
@@ -185,14 +185,14 @@ def duplicate_and_rotate(oEditor, obj_name, axis, angle_deg):
             "CreateNewObjects:=", True,
             "WhichAxis:=", axis,
             "AngleStr:=", "{}deg".format(angle_deg),
-            "NumClones:=", "1"
+            "NumClones:=", "{}".format(num_clones)
         ],
         [
             "NAME:Options",
             "DuplicateAssignments:=", False
         ]
     )
-    print("  복제 및 회전: {} → {} axis, {}deg".format(obj_name, axis, angle_deg))
+    print("  복제 및 회전: {} → {} axis, {}deg, {} clones".format(obj_name, axis, angle_deg, num_clones))
 
 
 def move_faces_along_normal(oEditor, obj_name, face_id, offset_distance):
@@ -308,20 +308,17 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     move_object(oEditor, main_united, 0, 0, -window_height/2.0)
     move_object(oEditor, side_united, 0, 0, -window_height/2.0)
 
-    # ===== 5. 사이드 레그를 3번 복제하여 회전 (총 4개 생성) =====
+    # ===== 5. 사이드 레그를 한 번에 4개 복제하여 회전 =====
     print("\n===== 사이드 레그 복제 및 회전 =====")
 
-    # 첫 번째 복제: 90도 회전 → yoke (_1)
-    duplicate_and_rotate(oEditor, side_united, "Z", 90)
-    yoke1_name = side_united + "_1"
+    # Y축 기준 90도씩 4개 복제 → _1, _2, _3 자동 생성
+    duplicate_and_rotate(oEditor, side_united, "Y", 90, 4)
 
-    # 두 번째 복제: 90도 회전 (누적 180도) → 왼쪽 사이드 레그 (_2)
-    duplicate_and_rotate(oEditor, side_united, "Z", 90)
-    side2_name = side_united + "_2"
-
-    # 세 번째 복제: 90도 회전 (누적 270도) → yoke (_3)
-    duplicate_and_rotate(oEditor, side_united, "Z", 90)
-    yoke2_name = side_united + "_3"
+    # 생성된 객체 이름
+    yoke1_name = side_united + "_1"  # 90도 회전 → yoke
+    side2_name = side_united + "_2"  # 180도 회전 → 왼쪽 사이드 레그
+    yoke2_name = side_united + "_3"  # 270도 회전 → yoke
+    # side_united + "_4"는 360도 (원본과 겹침)
 
     # ===== 6. MoveFaces로 표면 확장 =====
     print("\n===== 표면 확장 (Move Faces Along Normal) =====")
