@@ -213,8 +213,7 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
 
     # ===== 1. 각 레이어마다 직사각형 생성 (모두 원점 중심에 겹쳐짐) =====
     main_rects = []
-    side1_rects = []  # 오른쪽 사이드 레그
-    side2_rects = []  # 왼쪽 사이드 레그
+    side_rects = []  # 사이드 레그 (1개만)
 
     for i, row_data in enumerate(data):
         a = row_data['A']  # 메인 레그 X
@@ -229,17 +228,11 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
         move_object(oEditor, main_name, -a/2.0, -b/2.0, 0)
         main_rects.append(main_name)
 
-        # 사이드 레그 1 (오른쪽)
-        side1_name = "{}_Layer{}_Side1".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, c, b, side1_name)
-        move_object(oEditor, side1_name, -c/2.0 + gap, -b/2.0, 0)
-        side1_rects.append(side1_name)
-
-        # 사이드 레그 2 (왼쪽)
-        side2_name = "{}_Layer{}_Side2".format(name_prefix, i+1)
-        create_rectangle(oEditor, 0, 0, z_start, c, b, side2_name)
-        move_object(oEditor, side2_name, -c/2.0 - gap, -b/2.0, 0)
-        side2_rects.append(side2_name)
+        # 사이드 레그 (1개만 - 오른쪽에 배치)
+        side_name = "{}_Layer{}_Side".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, c, b, side_name)
+        move_object(oEditor, side_name, -c/2.0 + gap, -b/2.0, 0)
+        side_rects.append(side_name)
 
     # ===== 2. 각 레그별 평면 Unite =====
     print("\n===== Unite 작업 =====")
@@ -248,106 +241,19 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     main_united = "{}_MainLeg".format(name_prefix)
     unite_objects(oEditor, main_rects, main_united)
 
-    # 사이드 레그 1 Unite (오른쪽)
-    side1_united = "{}_Side1Leg".format(name_prefix)
-    unite_objects(oEditor, side1_rects, side1_united)
-
-    # 사이드 레그 2 Unite (왼쪽)
-    side2_united = "{}_Side2Leg".format(name_prefix)
-    unite_objects(oEditor, side2_rects, side2_united)
+    # 사이드 레그 Unite
+    side_united = "{}_SideLeg".format(name_prefix)
+    unite_objects(oEditor, side_rects, side_united)
 
     # ===== 3. 메인 레그와 사이드 레그 Sweep (E2만큼 +z 방향) =====
     print("\n===== Sweep 작업 =====")
     sweep_along_z(oEditor, main_united, window_height)
-    sweep_along_z(oEditor, side1_united, window_height)
-    sweep_along_z(oEditor, side2_united, window_height)
+    sweep_along_z(oEditor, side_united, window_height)
 
     # ===== 4. Sweep한 객체를 -E2/2만큼 z축 아래로 이동 =====
     print("\n===== 중심 맞추기 (Z축 이동) =====")
     move_object(oEditor, main_united, 0, 0, -window_height/2.0)
-    move_object(oEditor, side1_united, 0, 0, -window_height/2.0)
-    move_object(oEditor, side2_united, 0, 0, -window_height/2.0)
-
-    # ===== 5. 사이드 레그를 복사해서 요크 생성 =====
-    print("\n===== Yoke 생성 (사이드 레그 복사) =====")
-
-    # 상단 요크 생성 (side1을 복사)
-    oEditor.Copy(
-        [
-            "NAME:Selections",
-            "Selections:=", side1_united
-        ]
-    )
-    oEditor.Paste()
-    top_yoke_name = "{}_TopYoke".format(name_prefix)
-    # Paste 후 생성된 객체 이름은 "Core_Side1Leg_1"
-    pasted_name = side1_united + "_1"
-
-    # 이름 변경
-    oEditor.ChangeProperty(
-        [
-            "NAME:AllTabs",
-            [
-                "NAME:Geometry3DAttributeTab",
-                [
-                    "NAME:PropServers",
-                    pasted_name
-                ],
-                [
-                    "NAME:ChangedProps",
-                    [
-                        "NAME:Name",
-                        "Value:=", top_yoke_name
-                    ]
-                ]
-            ]
-        ]
-    )
-
-    # Y축 기준 90도 회전
-    rotate_object(oEditor, top_yoke_name, "Y", 90)
-
-    # 상단 위치로 이동: z = -gap + window_height/2
-    move_object(oEditor, top_yoke_name, 0, 0, -gap + window_height/2.0)
-
-    # 하단 요크 생성 (side1을 복사)
-    oEditor.Copy(
-        [
-            "NAME:Selections",
-            "Selections:=", side1_united
-        ]
-    )
-    oEditor.Paste()
-    bottom_yoke_name = "{}_BottomYoke".format(name_prefix)
-    # Paste 후 생성된 객체 이름은 "Core_Side1Leg_2"
-    pasted_name2 = side1_united + "_2"
-
-    # 이름 변경
-    oEditor.ChangeProperty(
-        [
-            "NAME:AllTabs",
-            [
-                "NAME:Geometry3DAttributeTab",
-                [
-                    "NAME:PropServers",
-                    pasted_name2
-                ],
-                [
-                    "NAME:ChangedProps",
-                    [
-                        "NAME:Name",
-                        "Value:=", bottom_yoke_name
-                    ]
-                ]
-            ]
-        ]
-    )
-
-    # Y축 기준 90도 회전
-    rotate_object(oEditor, bottom_yoke_name, "Y", 90)
-
-    # 하단 위치로 이동: z = gap - window_height/2
-    move_object(oEditor, bottom_yoke_name, 0, 0, gap - window_height/2.0)
+    move_object(oEditor, side_united, 0, 0, -window_height/2.0)
 
     # 뷰 맞추기
     oEditor.FitAll()
