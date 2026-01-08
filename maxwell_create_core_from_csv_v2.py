@@ -204,8 +204,11 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
     created_cores = []
 
     # 화면 업데이트 일시 중지 (성능 향상)
-    oEditor.SuspendUpdate()
-    print("\n화면 업데이트를 일시 중지했습니다. (성능 향상 모드)")
+    try:
+        oEditor.SuspendUpdate()
+        print("\n화면 업데이트를 일시 중지했습니다. (성능 향상 모드)")
+    except:
+        print("\n화면 업데이트 일시 중지가 지원되지 않습니다. (Maxwell 2021 R1)")
 
     # Z 시작 위치 계산 (원점 중심)
     z_start = -window_height / 2.0
@@ -344,8 +347,11 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
         print("  완료! 통합된 철심: {}".format(core_name))
 
     # 화면 업데이트 재개
-    oEditor.ResumeUpdate()
-    print("\n화면 업데이트를 재개했습니다.")
+    try:
+        oEditor.ResumeUpdate()
+        print("\n화면 업데이트를 재개했습니다.")
+    except:
+        pass  # SuspendUpdate가 없었다면 ResumeUpdate도 불필요
 
     # 뷰 맞추기
     oEditor.FitAll()
@@ -357,19 +363,20 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
 # 스크립트 실행
 # CSV 파일 경로 설정
-# 옵션 1: 하드코딩 경로 (가장 확실함)
-csv_file = r"C:\Users\YourUsername\Documents\koko8787\transformer_core_sample.csv"
+# 자동 경로 감지 (스크립트와 같은 폴더)
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except:
+    import sys
+    if len(sys.argv) > 0:
+        script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    else:
+        script_dir = os.getcwd()
 
-# 옵션 2: 자동 경로 감지 (주석 해제하려면 위 줄을 주석처리하고 아래 줄들의 주석을 해제)
-# try:
-#     script_dir = os.path.dirname(os.path.abspath(__file__))
-# except:
-#     import sys
-#     if len(sys.argv) > 0:
-#         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-#     else:
-#         script_dir = os.getcwd()
-# csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+
+# 하드코딩 옵션 (필요시 아래 줄의 주석을 제거하고 경로 수정)
+# csv_file = r"H:\ko.wonhee\Maxwell_3D_Modeling\transformer_core_sample.csv"
 
 print("CSV 파일 경로: {}".format(csv_file))
 print("CSV 파일 존재 여부: {}".format(os.path.exists(csv_file)))

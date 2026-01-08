@@ -143,8 +143,14 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     Set oEditor = oDesign.SetActiveEditor("3D Modeler")
 
     ' 화면 업데이트 일시 중지 (성능 향상)
+    On Error Resume Next
     oEditor.SuspendUpdate
-    oDesktop.AddMessage "", "", 0, "화면 업데이트를 일시 중지했습니다. (성능 향상 모드)"
+    If Err.Number = 0 Then
+        oDesktop.AddMessage "", "", 0, "화면 업데이트를 일시 중지했습니다. (성능 향상 모드)"
+    Else
+        oDesktop.AddMessage "", "", 0, "화면 업데이트 일시 중지가 지원되지 않습니다. (Maxwell 2021 R1)"
+    End If
+    On Error GoTo 0
 
     ' Z 시작 위치 계산 (원점 중심)
     zStart = -windowHeight / 2.0
@@ -447,8 +453,12 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     Next
 
     ' 화면 업데이트 재개
+    On Error Resume Next
     oEditor.ResumeUpdate
-    oDesktop.AddMessage "", "", 0, "화면 업데이트를 재개했습니다."
+    If Err.Number = 0 Then
+        oDesktop.AddMessage "", "", 0, "화면 업데이트를 재개했습니다."
+    End If
+    On Error GoTo 0
 
     ' 뷰 맞추기
     oEditor.FitAll
