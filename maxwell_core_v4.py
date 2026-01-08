@@ -112,39 +112,6 @@ def rotate_object(oEditor, obj_name, axis, angle_deg):
     print("  회전: {} → {} axis, {}deg".format(obj_name, axis, angle_deg))
 
 
-def duplicate_object(oEditor, obj_name, new_name):
-    """객체 복제"""
-    oEditor.Copy(
-        [
-            "NAME:Selections",
-            "Selections:=", obj_name
-        ]
-    )
-    oEditor.Paste()
-
-    # 복제된 객체는 _1 suffix로 생성됨
-    oEditor.ChangeProperty(
-        [
-            "NAME:AllTabs",
-            [
-                "NAME:Geometry3DAttributeTab",
-                [
-                    "NAME:PropServers",
-                    obj_name + "_1"
-                ],
-                [
-                    "NAME:ChangedProps",
-                    [
-                        "NAME:Name",
-                        "Value:=", new_name
-                    ]
-                ]
-            ]
-        ]
-    )
-    print("  복제: {} → {}".format(obj_name, new_name))
-
-
 def sweep_along_z(oEditor, obj_name, sweep_distance):
     """Z축 방향으로 Sweep"""
     oEditor.SweepAlongVector(
@@ -244,9 +211,10 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     # Z 시작 위치 (원점)
     z_start = 0.0
 
-    # ===== 1. 각 레이어마다 3개 직사각형 생성 (모두 원점 중심에 겹쳐짐) =====
+    # ===== 1. 각 레이어마다 직사각형 생성 (모두 원점 중심에 겹쳐짐) =====
     main_rects = []
     side_rects = []
+    yoke_rects = []  # Yoke용 별도 생성
 
     for i, row_data in enumerate(data):
         a = row_data['A']  # 메인 레그 X
@@ -273,6 +241,18 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
         move_object(oEditor, side2_name, -c/2.0 - gap, -b/2.0, 0)
         side_rects.append(side2_name)
 
+        # Yoke용 사이드 레그 1 (오른쪽) - 복제용
+        yoke1_name = "{}_Layer{}_Yoke1".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, c, b, yoke1_name)
+        move_object(oEditor, yoke1_name, -c/2.0 + gap, -b/2.0, 0)
+        yoke_rects.append(yoke1_name)
+
+        # Yoke용 사이드 레그 2 (왼쪽) - 복제용
+        yoke2_name = "{}_Layer{}_Yoke2".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, c, b, yoke2_name)
+        move_object(oEditor, yoke2_name, -c/2.0 - gap, -b/2.0, 0)
+        yoke_rects.append(yoke2_name)
+
     # ===== 2. 각 레그별 평면 Unite =====
     print("\n===== Unite 작업 =====")
 
@@ -284,11 +264,12 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     side_united = "{}_SideLeg_Plane".format(name_prefix)
     unite_objects(oEditor, side_rects, side_united)
 
-    # ===== 3. 사이드 레그 평면 복제 (yoke용) =====
-    print("\n===== 사이드 레그 복제 및 회전 =====")
+    # Yoke용 사이드 레그 Unite
     side_yoke_plane = "{}_SideYoke_Plane".format(name_prefix)
-    duplicate_object(oEditor, side_united, side_yoke_plane)
+    unite_objects(oEditor, yoke_rects, side_yoke_plane)
 
+    # ===== 3. Yoke용 평면 회전 =====
+    print("\n===== Yoke용 평면 회전 =====")
     # Y축 기준 90도 회전
     rotate_object(oEditor, side_yoke_plane, "Y", 90)
 
@@ -302,28 +283,59 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     move_object(oEditor, main_united, 0, 0, -window_height/2.0)
     move_object(oEditor, side_united, 0, 0, -window_height/2.0)
 
-    # ===== 6. Yoke 평면 복제 및 배치 =====
+    # ===== 6. Yoke 생성 및 배치 =====
     print("\n===== Yoke 생성 =====")
 
-    # +z 방향 yoke (상단)
+    # side_yoke_plane을 z축 이동: -gap + window_height/2 (상단 위치)
+    move_object(oEditor, side_yoke_plane, 0, 0, -gap + window_height/2.0)
+
+    # side_yoke_plane 이름을 top_yoke_name으로 변경
     top_yoke_name = "{}_TopYoke".format(name_prefix)
-    duplicate_object(oEditor, side_yoke_plane, top_yoke_name)
-    # z축 이동: -gap + window_height/2
-    move_object(oEditor, top_yoke_name, 0, 0, -gap + window_height/2.0)
-
-    # -z 방향 yoke (하단)
-    bottom_yoke_name = "{}_BottomYoke".format(name_prefix)
-    duplicate_object(oEditor, side_yoke_plane, bottom_yoke_name)
-    # z축 이동: -(-gap + window_height/2) = gap - window_height/2
-    move_object(oEditor, bottom_yoke_name, 0, 0, gap - window_height/2.0)
-
-    # 원본 side_yoke_plane 삭제
-    oEditor.Delete(
+    oEditor.ChangeProperty(
         [
-            "NAME:Selections",
-            "Selections:=", side_yoke_plane
+            "NAME:AllTabs",
+            [
+                "NAME:Geometry3DAttributeTab",
+                [
+                    "NAME:PropServers",
+                    side_yoke_plane
+                ],
+                [
+                    "NAME:ChangedProps",
+                    [
+                        "NAME:Name",
+                        "Value:=", top_yoke_name
+                    ]
+                ]
+            ]
         ]
     )
+
+    # 하단 yoke용 직사각형 다시 생성
+    print("\n===== 하단 Yoke용 직사각형 생성 =====")
+    bottom_yoke_rects = []
+    for i, row_data in enumerate(data):
+        c = row_data['C']
+        b = row_data['B']
+
+        # Yoke용 사이드 레그 1 (오른쪽)
+        yoke1_name = "{}_Layer{}_BottomYoke1".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, c, b, yoke1_name)
+        move_object(oEditor, yoke1_name, -c/2.0 + gap, -b/2.0, 0)
+        bottom_yoke_rects.append(yoke1_name)
+
+        # Yoke용 사이드 레그 2 (왼쪽)
+        yoke2_name = "{}_Layer{}_BottomYoke2".format(name_prefix, i+1)
+        create_rectangle(oEditor, 0, 0, z_start, c, b, yoke2_name)
+        move_object(oEditor, yoke2_name, -c/2.0 - gap, -b/2.0, 0)
+        bottom_yoke_rects.append(yoke2_name)
+
+    # Unite 및 회전
+    bottom_yoke_name = "{}_BottomYoke".format(name_prefix)
+    unite_objects(oEditor, bottom_yoke_rects, bottom_yoke_name)
+    rotate_object(oEditor, bottom_yoke_name, "Y", 90)
+    # z축 이동: gap - window_height/2
+    move_object(oEditor, bottom_yoke_name, 0, 0, gap - window_height/2.0)
 
     # ===== 7. Yoke Sweep (양방향으로 gap + c/2씩) =====
     print("\n===== Yoke Sweep =====")
