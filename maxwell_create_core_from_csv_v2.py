@@ -210,6 +210,10 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
     # Z 시작 위치 계산 (원점 중심)
     z_start = -window_height / 2.0
 
+    # Y 누적 위치 추적 (적층용)
+    cumulative_y = 0.0
+    prev_y = 0.0
+
     # 각 데이터 행마다 완전한 철심 생성
     for i, row_data in enumerate(data):
         x1 = row_data['X1']
@@ -218,14 +222,22 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
         print("\n레이어 {}: X1={}, X2={}, Y={}".format(i+1, x1, x2, y))
 
+        # 적층 Y 좌표 계산 (이전 레이어의 Y/2 + 현재 레이어의 Y/2)
+        if i == 0:
+            cumulative_y = 0.0  # 첫 번째 레이어는 원점
+        else:
+            cumulative_y += prev_y / 2.0 + y / 2.0
+
+        print("  적층 Y 위치: {}mm".format(cumulative_y))
+
         layer_rects = []
 
         # ===== 1. Main leg (중앙) - XY 평면에 Rectangle =====
         main_name = "{}_Layer{}_Main".format(name_prefix, i+1)
         # 원점을 중심으로 하는 rectangle (0,0)에서 시작하여 x1 x y 크기
         create_rectangle(oEditor, 0, 0, z_start, x1, y, main_name)
-        # 중심으로 이동: (-x1/2, -y/2, 0)
-        move_object(oEditor, main_name, -x1/2.0, -y/2.0, 0)
+        # 중심으로 이동: (-x1/2, cumulative_y - y/2, 0)
+        move_object(oEditor, main_name, -x1/2.0, cumulative_y - y/2.0, 0)
         layer_rects.append(main_name)
 
         # ===== 2. Side legs (양쪽 2개) - X,Y 좌표 교환으로 자동 회전 =====
@@ -233,17 +245,20 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
         left_side_name = "{}_Layer{}_LeftSide".format(name_prefix, i+1)
         # Y x X2 rectangle 생성 (X, Y 좌표 바꿈)
         create_rectangle(oEditor, 0, 0, z_start, y, x2, left_side_name)
-        # 중심 정렬 후 왼쪽으로 이동: x = -gap, y 중심
-        move_object(oEditor, left_side_name, -gap - y/2.0, -x2/2.0, 0)
+        # 중심 정렬 후 왼쪽으로 이동: x = -gap, y = cumulative_y - y/2
+        move_object(oEditor, left_side_name, -gap - y/2.0, cumulative_y - x2/2.0, 0)
         layer_rects.append(left_side_name)
 
         # Right side leg
         right_side_name = "{}_Layer{}_RightSide".format(name_prefix, i+1)
         # Y x X2 rectangle 생성 (X, Y 좌표 바꿈)
         create_rectangle(oEditor, 0, 0, z_start, y, x2, right_side_name)
-        # 중심 정렬 후 오른쪽으로 이동: x = +gap, y 중심
-        move_object(oEditor, right_side_name, gap - y/2.0, -x2/2.0, 0)
+        # 중심 정렬 후 오른쪽으로 이동: x = +gap, y = cumulative_y - y/2
+        move_object(oEditor, right_side_name, gap - y/2.0, cumulative_y - x2/2.0, 0)
         layer_rects.append(right_side_name)
+
+        # 다음 레이어를 위해 현재 Y 저장
+        prev_y = y
 
         # ===== 3. Yokes (상단/하단 2개) =====
         yoke_x_size = 2 * gap + x2
@@ -252,15 +267,15 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
         # Top yoke
         top_yoke_name = "{}_Layer{}_TopYoke".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, yoke_y_size, top_yoke_name)
-        # 상단으로 이동
-        move_object(oEditor, top_yoke_name, -yoke_x_size/2.0, y/2.0, 0)
+        # 상단으로 이동 (적층 위치 고려)
+        move_object(oEditor, top_yoke_name, -yoke_x_size/2.0, cumulative_y + y/2.0, 0)
         layer_rects.append(top_yoke_name)
 
         # Bottom yoke
         bottom_yoke_name = "{}_Layer{}_BottomYoke".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, yoke_y_size, bottom_yoke_name)
-        # 하단으로 이동
-        move_object(oEditor, bottom_yoke_name, -yoke_x_size/2.0, -y/2.0 - yoke_y_size, 0)
+        # 하단으로 이동 (적층 위치 고려)
+        move_object(oEditor, bottom_yoke_name, -yoke_x_size/2.0, cumulative_y - y/2.0 - yoke_y_size, 0)
         layer_rects.append(bottom_yoke_name)
 
         print("  Created 5 rectangles for layer {}".format(i+1))

@@ -149,6 +149,11 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
     ' Z 시작 위치 계산 (원점 중심)
     zStart = -windowHeight / 2.0
 
+    ' Y 누적 위치 추적 (적층용)
+    Dim cumulativeY, prevY
+    cumulativeY = 0.0
+    prevY = 0.0
+
     ' 각 데이터 행마다 완전한 철심 생성
     For i = 0 To rowCount - 1
         x1 = dataRows(i, 0)
@@ -156,6 +161,15 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
         y = dataRows(i, 2)
 
         oDesktop.AddMessage "", "", 0, "레이어 " & (i + 1) & ": X1=" & x1 & ", X2=" & x2 & ", Y=" & y
+
+        ' 적층 Y 좌표 계산 (이전 레이어의 Y/2 + 현재 레이어의 Y/2)
+        If i = 0 Then
+            cumulativeY = 0.0  ' 첫 번째 레이어는 원점
+        Else
+            cumulativeY = cumulativeY + prevY / 2.0 + y / 2.0
+        End If
+
+        oDesktop.AddMessage "", "", 0, "  적층 Y 위치: " & cumulativeY & "mm"
 
         ReDim arrRects(4)
         rectCount = 0
@@ -189,9 +203,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 중심으로 이동
+        ' 중심으로 이동 (적층 위치 고려)
         dx = -x1 / 2.0
-        dy = -y / 2.0
+        dy = cumulativeY - y / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", mainName, _
@@ -233,9 +247,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 중심 정렬 후 왼쪽으로 이동
+        ' 중심 정렬 후 왼쪽으로 이동 (적층 위치 고려)
         dx = -gap - y / 2.0
-        dy = -x2 / 2.0
+        dy = cumulativeY - x2 / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", leftSideName, _
@@ -277,9 +291,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 중심 정렬 후 오른쪽으로 이동
+        ' 중심 정렬 후 오른쪽으로 이동 (적층 위치 고려)
         dx = gap - y / 2.0
-        dy = -x2 / 2.0
+        dy = cumulativeY - x2 / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", rightSideName, _
@@ -322,9 +336,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 상단으로 이동
+        ' 상단으로 이동 (적층 위치 고려)
         dx = -yokeXSize / 2.0
-        dy = y / 2.0
+        dy = cumulativeY + y / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", topYokeName, _
@@ -365,9 +379,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 하단으로 이동
+        ' 하단으로 이동 (적층 위치 고려)
         dx = -yokeXSize / 2.0
-        dy = -y / 2.0 - yokeYSize
+        dy = cumulativeY - y / 2.0 - yokeYSize
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", bottomYokeName, _
@@ -379,6 +393,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
 
         arrRects(rectCount) = bottomYokeName
         rectCount = rectCount + 1
+
+        ' 다음 레이어를 위해 현재 Y 저장
+        prevY = y
 
         oDesktop.AddMessage "", "", 0, "  5개의 Rectangle 생성 완료"
 
