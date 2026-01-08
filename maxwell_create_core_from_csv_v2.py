@@ -356,14 +356,25 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
 
 
 # 스크립트 실행
-if __name__ == "__main__":
-    # CSV 파일 경로 (스크립트와 동일한 폴더)
+# CSV 파일 경로 (스크립트와 동일한 폴더)
+try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+except:
+    # Maxwell에서 실행할 때 __file__이 정의되지 않을 수 있음
+    import sys
+    if len(sys.argv) > 0:
+        script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    else:
+        script_dir = os.getcwd()
 
-    # 철심 생성
-    create_transformer_core_from_csv(
-        csv_file_path=csv_file,
-        material="steel_1008",
-        name_prefix="Core"
-    )
+csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+
+print("스크립트 디렉토리: {}".format(script_dir))
+print("CSV 파일 경로: {}".format(csv_file))
+
+# 철심 생성
+create_transformer_core_from_csv(
+    csv_file_path=csv_file,
+    material="steel_1008",
+    name_prefix="Core"
+)
