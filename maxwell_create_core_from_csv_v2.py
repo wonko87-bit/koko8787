@@ -244,41 +244,46 @@ def create_transformer_core_from_csv(csv_file_path, material="steel_1008", name_
         layer_rects.append(main_name)
 
         # ===== 2. Side legs (양쪽 2개) - X,Y 좌표 교환으로 자동 회전 =====
+        # Unite가 제대로 되도록 약간의 오버랩을 추가
+        overlap = 0.01
+
         # Left side leg
         left_side_name = "{}_Layer{}_LeftSide".format(name_prefix, i+1)
-        # Y x X2 rectangle 생성 (X, Y 좌표 바꿈)
-        create_rectangle(oEditor, 0, 0, z_start, y, x2, left_side_name)
+        # Y x X2 rectangle 생성 (X, Y 좌표 바꿈) - 약간 길게
+        create_rectangle(oEditor, 0, 0, z_start, y + 2*overlap, x2 + overlap, left_side_name)
         # 중심 정렬 후 왼쪽으로 이동: x = -gap, y = cumulative_y - y/2
-        move_object(oEditor, left_side_name, -gap - y/2.0, cumulative_y - x2/2.0, 0)
+        move_object(oEditor, left_side_name, -gap - (y + 2*overlap)/2.0, cumulative_y - (x2 + overlap)/2.0, 0)
         layer_rects.append(left_side_name)
 
         # Right side leg
         right_side_name = "{}_Layer{}_RightSide".format(name_prefix, i+1)
-        # Y x X2 rectangle 생성 (X, Y 좌표 바꿈)
-        create_rectangle(oEditor, 0, 0, z_start, y, x2, right_side_name)
+        # Y x X2 rectangle 생성 (X, Y 좌표 바꿈) - 약간 길게
+        create_rectangle(oEditor, 0, 0, z_start, y + 2*overlap, x2 + overlap, right_side_name)
         # 중심 정렬 후 오른쪽으로 이동: x = +gap, y = cumulative_y - y/2
-        move_object(oEditor, right_side_name, gap - y/2.0, cumulative_y - x2/2.0, 0)
+        move_object(oEditor, right_side_name, gap - (y + 2*overlap)/2.0, cumulative_y - (x2 + overlap)/2.0, 0)
         layer_rects.append(right_side_name)
 
         # 다음 레이어를 위해 현재 Y 저장
         prev_y = y
 
         # ===== 3. Yokes (상단/하단 2개) =====
+        # Unite가 제대로 되도록 약간의 오버랩을 추가 (0.01mm)
+        overlap = 0.01
         yoke_x_size = 2 * gap + x2
-        yoke_y_size = x2
+        yoke_y_size = x2 + overlap  # 약간 길게
 
         # Top yoke
         top_yoke_name = "{}_Layer{}_TopYoke".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, yoke_y_size, top_yoke_name)
-        # 상단으로 이동 (적층 위치 고려)
-        move_object(oEditor, top_yoke_name, -yoke_x_size/2.0, cumulative_y + y/2.0, 0)
+        # 상단으로 이동 (적층 위치 고려) - overlap만큼 안쪽으로
+        move_object(oEditor, top_yoke_name, -yoke_x_size/2.0, cumulative_y + y/2.0 - overlap/2.0, 0)
         layer_rects.append(top_yoke_name)
 
         # Bottom yoke
         bottom_yoke_name = "{}_Layer{}_BottomYoke".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, yoke_x_size, yoke_y_size, bottom_yoke_name)
-        # 하단으로 이동 (적층 위치 고려)
-        move_object(oEditor, bottom_yoke_name, -yoke_x_size/2.0, cumulative_y - y/2.0 - yoke_y_size, 0)
+        # 하단으로 이동 (적층 위치 고려) - overlap만큼 안쪽으로
+        move_object(oEditor, bottom_yoke_name, -yoke_x_size/2.0, cumulative_y - y/2.0 - yoke_y_size + overlap/2.0, 0)
         layer_rects.append(bottom_yoke_name)
 
         print("  Created 5 rectangles for layer {}".format(i+1))

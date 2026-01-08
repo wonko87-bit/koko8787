@@ -225,17 +225,21 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
         rectCount = rectCount + 1
 
         ' ===== 2. Left Side leg (X,Y 좌표 교환으로 자동 회전) =====
+        ' Unite가 제대로 되도록 약간의 오버랩을 추가
+        Dim overlap
+        overlap = 0.01
+
         leftSideName = namePrefix & "_Layer" & (i + 1) & "_LeftSide"
 
-        ' Y x X2 rectangle 생성 (X, Y 좌표 바꿈)
+        ' Y x X2 rectangle 생성 (X, Y 좌표 바꿈) - 약간 길게
         oEditor.CreateRectangle _
             Array("NAME:RectangleParameters", _
                 "IsCovered:=", True, _
                 "XStart:=", "0mm", _
                 "YStart:=", "0mm", _
                 "ZStart:=", zStart & "mm", _
-                "Width:=", y & "mm", _
-                "Height:=", x2 & "mm", _
+                "Width:=", (y + 2 * overlap) & "mm", _
+                "Height:=", (x2 + overlap) & "mm", _
                 "WhichAxis:=", "Z"), _
             Array("NAME:Attributes", _
                 "Name:=", leftSideName, _
@@ -254,8 +258,8 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "IsLightweight:=", False)
 
         ' 중심 정렬 후 왼쪽으로 이동 (적층 위치 고려)
-        dx = -gap - y / 2.0
-        dy = cumulativeY - x2 / 2.0
+        dx = -gap - (y + 2 * overlap) / 2.0
+        dy = cumulativeY - (x2 + overlap) / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", leftSideName, _
@@ -271,15 +275,15 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
         ' ===== 3. Right Side leg (X,Y 좌표 교환으로 자동 회전) =====
         rightSideName = namePrefix & "_Layer" & (i + 1) & "_RightSide"
 
-        ' Y x X2 rectangle 생성 (X, Y 좌표 바꿈)
+        ' Y x X2 rectangle 생성 (X, Y 좌표 바꿈) - 약간 길게
         oEditor.CreateRectangle _
             Array("NAME:RectangleParameters", _
                 "IsCovered:=", True, _
                 "XStart:=", "0mm", _
                 "YStart:=", "0mm", _
                 "ZStart:=", zStart & "mm", _
-                "Width:=", y & "mm", _
-                "Height:=", x2 & "mm", _
+                "Width:=", (y + 2 * overlap) & "mm", _
+                "Height:=", (x2 + overlap) & "mm", _
                 "WhichAxis:=", "Z"), _
             Array("NAME:Attributes", _
                 "Name:=", rightSideName, _
@@ -298,8 +302,8 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "IsLightweight:=", False)
 
         ' 중심 정렬 후 오른쪽으로 이동 (적층 위치 고려)
-        dx = gap - y / 2.0
-        dy = cumulativeY - x2 / 2.0
+        dx = gap - (y + 2 * overlap) / 2.0
+        dy = cumulativeY - (x2 + overlap) / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", rightSideName, _
@@ -313,8 +317,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
         rectCount = rectCount + 1
 
         ' ===== 4. Top Yoke =====
+        ' Unite가 제대로 되도록 약간의 오버랩을 추가
         yokeXSize = 2 * gap + x2
-        yokeYSize = x2
+        yokeYSize = x2 + overlap
         topYokeName = namePrefix & "_Layer" & (i + 1) & "_TopYoke"
 
         oEditor.CreateRectangle _
@@ -342,9 +347,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 상단으로 이동 (적층 위치 고려)
+        ' 상단으로 이동 (적층 위치 고려) - overlap만큼 안쪽으로
         dx = -yokeXSize / 2.0
-        dy = cumulativeY + y / 2.0
+        dy = cumulativeY + y / 2.0 - overlap / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", topYokeName, _
@@ -385,9 +390,9 @@ Sub CreateTransformerCoreFromCSV(csvFilePath, materialName, namePrefix)
                 "UseMaterialAppearance:=", False, _
                 "IsLightweight:=", False)
 
-        ' 하단으로 이동 (적층 위치 고려)
+        ' 하단으로 이동 (적층 위치 고려) - overlap만큼 안쪽으로
         dx = -yokeXSize / 2.0
-        dy = cumulativeY - y / 2.0 - yokeYSize
+        dy = cumulativeY - y / 2.0 - yokeYSize + overlap / 2.0
         oEditor.Move _
             Array("NAME:Selections", _
                 "Selections:=", bottomYokeName, _
