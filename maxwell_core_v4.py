@@ -225,6 +225,20 @@ def get_face_ids(oEditor, obj_name):
     return faces
 
 
+def get_face_by_position(oEditor, obj_name, x, y, z):
+    """특정 위치에 있는 면 ID를 가져옵니다"""
+    face_id = oEditor.GetFaceByPosition(
+        [
+            "NAME:FaceParameters",
+            "BodyName:=", obj_name,
+            "XPosition:=", "{}mm".format(x),
+            "YPosition:=", "{}mm".format(y),
+            "ZPosition:=", "{}mm".format(z)
+        ]
+    )
+    return face_id
+
+
 def create_core_from_csv(csv_file_path, name_prefix="Core"):
     """CSV 파일에서 변압기 철심을 생성 (V4)"""
     print("=" * 60)
@@ -334,51 +348,50 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
 
     # Main leg 상하부 표면 확장 (C2씩)
     print("\n메인 레그 표면 확장:")
-    main_faces = get_face_ids(oEditor, main_united)
-    for face_id in main_faces:
-        face_center = oEditor.GetFaceCenter(face_id)
-        # Z 좌표 확인하여 상부/하부 판단
-        z_coord = float(face_center[2].replace("mm", ""))
-        # 상부 (z > 0) 또는 하부 (z < 0)에 있는 평면
-        if abs(z_coord - window_height/2.0) < 0.1 or abs(z_coord + window_height/2.0) < 0.1:
-            move_faces_along_normal(oEditor, main_united, face_id, c_first)
+    # 상부 면 (z = window_height/2, 중심: 0, 0)
+    main_top_face = get_face_by_position(oEditor, main_united, 0, 0, window_height/2.0)
+    move_faces_along_normal(oEditor, main_united, main_top_face, c_first)
+    # 하부 면 (z = -window_height/2, 중심: 0, 0)
+    main_bottom_face = get_face_by_position(oEditor, main_united, 0, 0, -window_height/2.0)
+    move_faces_along_normal(oEditor, main_united, main_bottom_face, c_first)
 
     # 사이드 레그 1 (원본) 상하부 표면 확장 (C2씩)
     print("\n사이드 레그 1 표면 확장:")
-    side1_faces = get_face_ids(oEditor, side_united)
-    for face_id in side1_faces:
-        face_center = oEditor.GetFaceCenter(face_id)
-        z_coord = float(face_center[2].replace("mm", ""))
-        if abs(z_coord - window_height/2.0) < 0.1 or abs(z_coord + window_height/2.0) < 0.1:
-            move_faces_along_normal(oEditor, side_united, face_id, c_first)
+    # 상부 면 (z = window_height/2, 중심: gap, 0)
+    side1_top_face = get_face_by_position(oEditor, side_united, gap, 0, window_height/2.0)
+    move_faces_along_normal(oEditor, side_united, side1_top_face, c_first)
+    # 하부 면 (z = -window_height/2, 중심: gap, 0)
+    side1_bottom_face = get_face_by_position(oEditor, side_united, gap, 0, -window_height/2.0)
+    move_faces_along_normal(oEditor, side_united, side1_bottom_face, c_first)
 
     # 사이드 레그 2 (_2) 상하부 표면 확장 (C2씩)
     print("\n사이드 레그 2 표면 확장:")
-    side2_faces = get_face_ids(oEditor, side2_name)
-    for face_id in side2_faces:
-        face_center = oEditor.GetFaceCenter(face_id)
-        z_coord = float(face_center[2].replace("mm", ""))
-        if abs(z_coord - window_height/2.0) < 0.1 or abs(z_coord + window_height/2.0) < 0.1:
-            move_faces_along_normal(oEditor, side2_name, face_id, c_first)
+    # 상부 면 (z = window_height/2, 중심: -gap, 0)
+    side2_top_face = get_face_by_position(oEditor, side2_name, -gap, 0, window_height/2.0)
+    move_faces_along_normal(oEditor, side2_name, side2_top_face, c_first)
+    # 하부 면 (z = -window_height/2, 중심: -gap, 0)
+    side2_bottom_face = get_face_by_position(oEditor, side2_name, -gap, 0, -window_height/2.0)
+    move_faces_along_normal(oEditor, side2_name, side2_bottom_face, c_first)
 
     # Yoke 1 (_1) 좌우측 표면 확장
     print("\nYoke 1 표면 확장:")
-    yoke1_faces = get_face_ids(oEditor, yoke1_name)
-    for face_id in yoke1_faces:
-        face_center = oEditor.GetFaceCenter(face_id)
-        z_coord = float(face_center[2].replace("mm", ""))
-        # Yoke는 회전되어 있으므로 Z 좌표로 좌우 판단
-        if abs(z_coord - window_height/2.0) < 0.1 or abs(z_coord + window_height/2.0) < 0.1:
-            move_faces_along_normal(oEditor, yoke1_name, face_id, yoke_expand)
+    # 90도 회전되어 있으므로 원래 상하부였던 면이 좌우측이 됨
+    # 좌측 면 (원래 하부, 중심: 0, gap)
+    yoke1_left_face = get_face_by_position(oEditor, yoke1_name, 0, gap, window_height/2.0)
+    move_faces_along_normal(oEditor, yoke1_name, yoke1_left_face, yoke_expand)
+    # 우측 면 (원래 상부, 중심: 0, gap)
+    yoke1_right_face = get_face_by_position(oEditor, yoke1_name, 0, gap, -window_height/2.0)
+    move_faces_along_normal(oEditor, yoke1_name, yoke1_right_face, yoke_expand)
 
     # Yoke 2 (_3) 좌우측 표면 확장
     print("\nYoke 2 표면 확장:")
-    yoke2_faces = get_face_ids(oEditor, yoke2_name)
-    for face_id in yoke2_faces:
-        face_center = oEditor.GetFaceCenter(face_id)
-        z_coord = float(face_center[2].replace("mm", ""))
-        if abs(z_coord - window_height/2.0) < 0.1 or abs(z_coord + window_height/2.0) < 0.1:
-            move_faces_along_normal(oEditor, yoke2_name, face_id, yoke_expand)
+    # 270도 회전되어 있으므로 원래 상하부였던 면이 좌우측이 됨
+    # 좌측 면 (원래 상부, 중심: 0, -gap)
+    yoke2_left_face = get_face_by_position(oEditor, yoke2_name, 0, -gap, window_height/2.0)
+    move_faces_along_normal(oEditor, yoke2_name, yoke2_left_face, yoke_expand)
+    # 우측 면 (원래 하부, 중심: 0, -gap)
+    yoke2_right_face = get_face_by_position(oEditor, yoke2_name, 0, -gap, -window_height/2.0)
+    move_faces_along_normal(oEditor, yoke2_name, yoke2_right_face, yoke_expand)
 
     # 뷰 맞추기
     oEditor.FitAll()
