@@ -197,26 +197,34 @@ def duplicate_and_rotate(oEditor, obj_name, axis, angle_deg, num_clones):
 
 def move_faces_along_normal(oEditor, obj_name, face_id, offset_distance):
     """특정 면을 법선 방향으로 이동 (확장)"""
-    oEditor.MoveFaces(
-        [
-            "NAME:Selections",
-            "Selections:=", obj_name,
-            "NewPartsModelFlag:=", "Model"
-        ],
-        [
-            "NAME:Parameters",
+    if face_id is None:
+        print("  경고: Face ID가 None이므로 표면 확장을 건너뜁니다.")
+        return
+
+    try:
+        oEditor.MoveFaces(
             [
-                "NAME:MoveFacesParameters",
-                "MoveAlongNormalFlag:=", True,
-                "OffsetDistance:=", "{}mm".format(offset_distance),
-                "MoveVectorX:=", "0mm",
-                "MoveVectorY:=", "0mm",
-                "MoveVectorZ:=", "0mm",
-                "FacesToMove:=", [face_id]
+                "NAME:Selections",
+                "Selections:=", obj_name,
+                "NewPartsModelFlag:=", "Model"
+            ],
+            [
+                "NAME:Parameters",
+                [
+                    "NAME:MoveFacesParameters",
+                    "MoveAlongNormalFlag:=", True,
+                    "OffsetDistance:=", "{}mm".format(offset_distance),
+                    "MoveVectorX:=", "0mm",
+                    "MoveVectorY:=", "0mm",
+                    "MoveVectorZ:=", "0mm",
+                    "FacesToMove:=", [face_id]
+                ]
             ]
-        ]
-    )
-    print("  표면 확장: {} Face {} → {}mm".format(obj_name, face_id, offset_distance))
+        )
+        print("  표면 확장: {} Face {} → {}mm".format(obj_name, face_id, offset_distance))
+    except Exception as e:
+        print("  경고: 표면 확장 실패. Object: {}, Face: {}".format(obj_name, face_id))
+        print("  에러: {}".format(str(e)))
 
 
 def get_face_ids(oEditor, obj_name):
@@ -227,16 +235,21 @@ def get_face_ids(oEditor, obj_name):
 
 def get_face_by_position(oEditor, obj_name, x, y, z):
     """특정 위치에 있는 면 ID를 가져옵니다"""
-    face_id = oEditor.GetFaceByPosition(
-        [
-            "NAME:FaceParameters",
-            "BodyName:=", obj_name,
-            "XPosition:=", "{}mm".format(x),
-            "YPosition:=", "{}mm".format(y),
-            "ZPosition:=", "{}mm".format(z)
-        ]
-    )
-    return face_id
+    try:
+        face_id = oEditor.GetFaceByPosition(
+            [
+                "NAME:FaceParameters",
+                "BodyName:=", obj_name,
+                "XPosition:=", "{}mm".format(x),
+                "YPosition:=", "{}mm".format(y),
+                "ZPosition:=", "{}mm".format(z)
+            ]
+        )
+        return face_id
+    except Exception as e:
+        print("  경고: Face를 찾을 수 없습니다. Object: {}, Position: ({}, {}, {})".format(obj_name, x, y, z))
+        print("  에러: {}".format(str(e)))
+        return None
 
 
 def create_core_from_csv(csv_file_path, name_prefix="Core"):
