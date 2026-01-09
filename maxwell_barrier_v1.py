@@ -276,8 +276,23 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
                 # 내경 원 생성 (중심: 0, 0, 0)
                 create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
 
+                print("  [디버그] 생성된 객체 목록:")
+                all_objects = oEditor.GetObjectsInGroup("Solids")
+                print("    전체 Solids: {}".format(len(all_objects)))
+
                 # 외경원에서 내경원 빼기 (도넛 형태)
+                print("  [디버그] Subtract 전 - Outer: {}, Inner: {}".format(outer_circle_name, inner_circle_name))
                 subtract_objects(oEditor, outer_circle_name, inner_circle_name)
+
+                # Subtract 후 객체 확인
+                all_objects_after = oEditor.GetObjectsInGroup("Solids")
+                print("  [디버그] Subtract 후 - Solids 개수: {}".format(len(all_objects_after)))
+
+                # outer_circle_name이 여전히 존재하는지 확인
+                if outer_circle_name in all_objects_after:
+                    print("  [디버그] {} 객체 존재 확인 OK".format(outer_circle_name))
+                else:
+                    print("  [경고] {} 객체를 찾을 수 없습니다!".format(outer_circle_name))
 
                 # Z축으로 이동
                 move_object(oEditor, outer_circle_name, 0, 0, z_offset)
