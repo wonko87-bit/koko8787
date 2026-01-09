@@ -251,6 +251,14 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
                 print("  경고: Z 이동 또는 Sweep 거리가 없습니다. 건너뜁니다.")
                 continue
 
+            # 내경/외경 크기 체크
+            if inner_dia >= outer_dia:
+                print("  경고: 내경({})이 외경({})보다 크거나 같습니다. 건너뜁니다.".format(inner_dia, outer_dia))
+                continue
+            if inner_dia <= 0:
+                print("  경고: 내경({})이 0 이하입니다. 건너뜁니다.".format(inner_dia))
+                continue
+
             print("  내경: {}mm".format(inner_dia))
             print("  외경: {}mm".format(outer_dia))
             print("  Z 이동: {}mm".format(z_offset))
