@@ -269,42 +269,47 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
             outer_circle_name = "{}_Outer".format(barrier_name)
             inner_circle_name = "{}_Inner".format(barrier_name)
 
-            # 외경 원 생성 (중심: 0, 0, 0)
-            create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
+            try:
+                # 외경 원 생성 (중심: 0, 0, 0)
+                create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
 
-            # 내경 원 생성 (중심: 0, 0, 0)
-            create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
+                # 내경 원 생성 (중심: 0, 0, 0)
+                create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
 
-            # 외경원에서 내경원 빼기 (도넛 형태)
-            subtract_objects(oEditor, outer_circle_name, inner_circle_name)
+                # 외경원에서 내경원 빼기 (도넛 형태)
+                subtract_objects(oEditor, outer_circle_name, inner_circle_name)
 
-            # Z축으로 이동
-            move_object(oEditor, outer_circle_name, 0, 0, z_offset)
+                # Z축으로 이동
+                move_object(oEditor, outer_circle_name, 0, 0, z_offset)
 
-            # Z축 방향으로 Sweep
-            sweep_along_z(oEditor, outer_circle_name, sweep_dist)
+                # Z축 방향으로 Sweep
+                sweep_along_z(oEditor, outer_circle_name, sweep_dist)
 
-            # 최종 이름 변경
-            oEditor.ChangeProperty(
-                [
-                    "NAME:AllTabs",
+                # 최종 이름 변경
+                oEditor.ChangeProperty(
                     [
-                        "NAME:Geometry3DAttributeTab",
+                        "NAME:AllTabs",
                         [
-                            "NAME:PropServers",
-                            outer_circle_name
-                        ],
-                        [
-                            "NAME:ChangedProps",
+                            "NAME:Geometry3DAttributeTab",
                             [
-                                "NAME:Name",
-                                "Value:=", barrier_name
+                                "NAME:PropServers",
+                                outer_circle_name
+                            ],
+                            [
+                                "NAME:ChangedProps",
+                                [
+                                    "NAME:Name",
+                                    "Value:=", barrier_name
+                                ]
                             ]
                         ]
                     ]
-                ]
-            )
-            print("  완성: {}".format(barrier_name))
+                )
+                print("  완성: {}".format(barrier_name))
+            except Exception as e:
+                print("  오류 발생: {}".format(str(e)))
+                print("  배리어 {}를 건너뛰고 계속 진행합니다.".format(cylinder_count))
+                continue
 
     # 뷰 맞추기
     oEditor.FitAll()
