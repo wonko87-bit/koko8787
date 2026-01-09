@@ -179,15 +179,30 @@ def create_coils_from_csv(csv_file_path, name_prefix="Coil"):
     print("Maxwell 3D - 코일 생성 V1")
     print("=" * 60)
 
+    print("\nCSV 파일 읽기 시작...")
     # CSV 데이터 읽기
     coil_data, num_coils = read_csv_data(csv_file_path)
 
+    print("읽은 데이터: num_coils={}, coil_data 길이={}".format(num_coils, len(coil_data) if coil_data else 0))
+
     if not coil_data or num_coils is None:
         print("오류: CSV 파일에서 데이터를 읽을 수 없습니다.")
+        print("  - num_coils: {}".format(num_coils))
+        print("  - coil_data: {}".format(coil_data))
         return
 
     print("\nCSV 데이터:")
     print("  원기둥 수량: {}".format(num_coils))
+
+    # 각 코일의 데이터 출력
+    for i, data in enumerate(coil_data):
+        print("  원기둥 {}: 내경={}, 외경={}, Z이동={}, Sweep={}".format(
+            i+1,
+            data.get('inner_diameter'),
+            data.get('outer_diameter'),
+            data.get('z_offset'),
+            data.get('sweep_distance')
+        ))
 
     # Maxwell 프로젝트 및 디자인 가져오기
     oProject = oDesktop.GetActiveProject()
@@ -206,6 +221,15 @@ def create_coils_from_csv(csv_file_path, name_prefix="Coil"):
     # 각 원기둥 생성
     for i, data in enumerate(coil_data):
         print("\n===== 원기둥 {} 생성 =====".format(i+1))
+
+        # 데이터 유효성 체크
+        if data['inner_diameter'] is None or data['outer_diameter'] is None:
+            print("  경고: 내경 또는 외경이 없습니다. 건너뜁니다.")
+            continue
+        if data['z_offset'] is None or data['sweep_distance'] is None:
+            print("  경고: Z 이동 또는 Sweep 거리가 없습니다. 건너뜁니다.")
+            continue
+
         print("  내경: {}mm".format(data['inner_diameter']))
         print("  외경: {}mm".format(data['outer_diameter']))
         print("  Z 이동: {}mm".format(data['z_offset']))
@@ -216,18 +240,23 @@ def create_coils_from_csv(csv_file_path, name_prefix="Coil"):
         outer_circle_name = "{}_Outer".format(coil_name)
         inner_circle_name = "{}_Inner".format(coil_name)
 
+        print("  외경 원 생성 중...")
         # 외경 원 생성 (중심: 0, 0, 0)
         create_circle(oEditor, 0, 0, 0, data['outer_diameter']/2.0, outer_circle_name)
 
+        print("  내경 원 생성 중...")
         # 내경 원 생성 (중심: 0, 0, 0)
         create_circle(oEditor, 0, 0, 0, data['inner_diameter']/2.0, inner_circle_name)
 
+        print("  Subtract 작업 중...")
         # 외경원에서 내경원 빼기 (도넛 형태)
         subtract_objects(oEditor, outer_circle_name, inner_circle_name)
 
+        print("  Z축 이동 중...")
         # Z축으로 이동
         move_object(oEditor, outer_circle_name, 0, 0, data['z_offset'])
 
+        print("  Sweep 작업 중...")
         # Z축 방향으로 Sweep
         sweep_along_z(oEditor, outer_circle_name, data['sweep_distance'])
 
@@ -262,22 +291,35 @@ def create_coils_from_csv(csv_file_path, name_prefix="Coil"):
 
 
 # 스크립트 실행
+print("\n" + "=" * 60)
+print("스크립트 실행 시작")
+print("=" * 60)
+
 try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    print("스크립트 디렉토리 (__file__): {}".format(script_dir))
 except:
     import sys
     if len(sys.argv) > 0:
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        print("스크립트 디렉토리 (sys.argv[0]): {}".format(script_dir))
     else:
         script_dir = os.getcwd()
+        print("스크립트 디렉토리 (getcwd): {}".format(script_dir))
 
 csv_file = os.path.join(script_dir, "CoilDim.csv")
 
-print("CSV 파일 경로: {}".format(csv_file))
+print("\nCSV 파일 경로: {}".format(csv_file))
 print("CSV 파일 존재 여부: {}".format(os.path.exists(csv_file)))
 
-# 코일 생성
-create_coils_from_csv(
-    csv_file_path=csv_file,
-    name_prefix="Coil"
-)
+if not os.path.exists(csv_file):
+    print("\n오류: CoilDim.csv 파일을 찾을 수 없습니다!")
+    print("다음 위치에 파일이 있어야 합니다: {}".format(csv_file))
+else:
+    print("\n코일 생성 함수 호출 중...")
+    # 코일 생성
+    create_coils_from_csv(
+        csv_file_path=csv_file,
+        name_prefix="Coil"
+    )
+    print("\n스크립트 실행 완료!")
