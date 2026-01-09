@@ -22,7 +22,16 @@ def read_csv_data(csv_file_path):
 
         # C2 셀 (row 1, col 2): 원기둥 수량
         if len(rows) > 1 and len(rows[1]) > 2:
-            num_coils = int(float(rows[1][2]))
+            try:
+                if rows[1][2].strip():  # 빈 문자열이 아닌 경우만
+                    num_coils = int(float(rows[1][2]))
+            except (ValueError, AttributeError):
+                print("경고: C2 셀에서 원기둥 수량을 읽을 수 없습니다.")
+                return [], None
+
+        if num_coils is None or num_coils <= 0:
+            print("경고: 유효한 원기둥 수량이 없습니다.")
+            return [], None
 
         # 각 원기둥 데이터 읽기
         for i in range(num_coils):
@@ -32,22 +41,38 @@ def read_csv_data(csv_file_path):
             # C9/F9/I9 (row 8, col): Sweep 거리
             sweep_distance = None
             if len(rows) > 8 and len(rows[8]) > col_idx:
-                sweep_distance = float(rows[8][col_idx])
+                try:
+                    if rows[8][col_idx].strip():
+                        sweep_distance = float(rows[8][col_idx])
+                except (ValueError, AttributeError):
+                    pass
 
             # C10/F10/I10 (row 9, col): Z축 이동 거리
             z_offset = None
             if len(rows) > 9 and len(rows[9]) > col_idx:
-                z_offset = float(rows[9][col_idx])
+                try:
+                    if rows[9][col_idx].strip():
+                        z_offset = float(rows[9][col_idx])
+                except (ValueError, AttributeError):
+                    pass
 
             # C12/F12/I12 (row 11, col): 내경
             inner_diameter = None
             if len(rows) > 11 and len(rows[11]) > col_idx:
-                inner_diameter = float(rows[11][col_idx])
+                try:
+                    if rows[11][col_idx].strip():
+                        inner_diameter = float(rows[11][col_idx])
+                except (ValueError, AttributeError):
+                    pass
 
             # C13/F13/I13 (row 12, col): 외경
             outer_diameter = None
             if len(rows) > 12 and len(rows[12]) > col_idx:
-                outer_diameter = float(rows[12][col_idx])
+                try:
+                    if rows[12][col_idx].strip():
+                        outer_diameter = float(rows[12][col_idx])
+                except (ValueError, AttributeError):
+                    pass
 
             coil_data.append({
                 'sweep_distance': sweep_distance,
