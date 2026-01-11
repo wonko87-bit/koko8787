@@ -270,11 +270,17 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
             inner_circle_name = "{}_Inner".format(barrier_name)
 
             try:
-                # 외경 원 생성 (중심: 0, 0, 0)
-                create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
+                # 13번 배리어 특별 처리 (Maxwell 버그 회피)
+                z_create = 0.0
+                if cylinder_count == 13:
+                    print("  [특별처리] 13번 배리어 - 약간 다른 위치에 생성")
+                    z_create = 0.001  # 0.001mm 위에 생성
 
-                # 내경 원 생성 (중심: 0, 0, 0)
-                create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
+                # 외경 원 생성
+                create_circle(oEditor, 0, 0, z_create, outer_dia/2.0, outer_circle_name)
+
+                # 내경 원 생성
+                create_circle(oEditor, 0, 0, z_create, inner_dia/2.0, inner_circle_name)
 
                 print("  [디버그] 생성된 객체 목록:")
                 all_objects = oEditor.GetObjectsInGroup("Solids")
@@ -294,8 +300,9 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
                 else:
                     print("  [경고] {} 객체를 찾을 수 없습니다!".format(outer_circle_name))
 
-                # Z축으로 이동
-                move_object(oEditor, outer_circle_name, 0, 0, z_offset)
+                # Z축으로 이동 (z_create만큼 보정)
+                actual_z_offset = z_offset - z_create
+                move_object(oEditor, outer_circle_name, 0, 0, actual_z_offset)
 
                 # Z축 방향으로 Sweep
                 sweep_along_z(oEditor, outer_circle_name, sweep_dist)
