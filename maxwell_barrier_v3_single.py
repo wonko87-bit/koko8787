@@ -102,36 +102,24 @@ def read_csv_data(csv_file_path):
 
 
 def create_rectangle_xz(oEditor, inner_radius, outer_radius, height, name):
-    """XZ 평면에 직사각형 생성 (도넛 단면) - Polyline 5개 점"""
-    # 직사각형 5개 점 (XZ 평면, Y=0, Z=0에서 시작):
-    # 점1: (inner_radius, 0, 0)
-    # 점2: (inner_radius, 0, height)
-    # 점3: (outer_radius, 0, height)
-    # 점4: (outer_radius, 0, 0)
-    # 점5: (inner_radius, 0, 0) - 닫힌 도형
+    """XZ 평면에 직사각형 생성 (도넛 단면) - Rectangle API"""
+    # XZ 평면 (Y축 수직) 직사각형
+    # 위치: (inner_radius, 0, 0)
+    # 너비: outer_radius - inner_radius (X 방향)
+    # 높이: height (Z 방향)
 
-    points = [
-        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "0mm"],
-        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "{}mm".format(height)],
-        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "{}mm".format(height)],
-        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "0mm"],
-        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "0mm"]
-    ]
+    width = outer_radius - inner_radius
 
-    oEditor.CreatePolyline(
+    oEditor.CreateRectangle(
         [
-            "NAME:PolylineParameters",
-            "IsPolylineCovered:=", True,
-            "IsPolylineClosed:=", True,
-            ["NAME:PolylinePoints"] + points,
-            [
-                "NAME:PolylineSegments",
-                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 0, "NoOfPoints:=", 2],
-                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 1, "NoOfPoints:=", 2],
-                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 2, "NoOfPoints:=", 2],
-                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 3, "NoOfPoints:=", 2],
-                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 4, "NoOfPoints:=", 2]
-            ]
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(inner_radius),
+            "YStart:=", "0mm",
+            "ZStart:=", "0mm",
+            "Width:=", "{}mm".format(width),
+            "Height:=", "{}mm".format(height),
+            "WhichAxis:=", "Y"  # XZ 평면 (Y축에 수직)
         ],
         [
             "NAME:Attributes",
@@ -151,7 +139,8 @@ def create_rectangle_xz(oEditor, inner_radius, outer_radius, height, name):
             "IsLightweight:=", False
         ]
     )
-    print("  생성: {} (XZ 평면 Polyline 직사각형, 5개 점)".format(name))
+    print("  생성: {} (XZ 평면 Rectangle, 위치=({},0,0), 너비={}, 높이={})".format(
+        name, inner_radius, width, height))
 
 
 def sweep_around_z_axis(oEditor, obj_name, angle_deg=360):
@@ -272,11 +261,9 @@ def create_single_barrier(csv_file_path, barrier_number=13, name_prefix="Barrier
     try:
         # 1. XZ 평면에 직사각형 생성 (Z=0에서 시작)
         print("  [1] XZ 평면에 직사각형 생성 (Z=0)")
-        print("      점1: ({}, 0, 0)".format(inner_radius))
-        print("      점2: ({}, 0, {})".format(inner_radius, height))
-        print("      점3: ({}, 0, {})".format(outer_radius, height))
-        print("      점4: ({}, 0, 0)".format(outer_radius))
-        print("      점5: ({}, 0, 0)".format(inner_radius))
+        print("      시작점: ({}, 0, 0)".format(inner_radius))
+        print("      너비(X): {}".format(outer_radius - inner_radius))
+        print("      높이(Z): {}".format(height))
         create_rectangle_xz(oEditor, inner_radius, outer_radius, height, rect_name)
 
         # 2. Z축 중심으로 360도 회전 (도넛 생성)
