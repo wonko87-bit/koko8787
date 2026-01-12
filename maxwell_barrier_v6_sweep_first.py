@@ -304,25 +304,30 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
 
             try:
                 # === V6 방식: Circle → Move → Sweep → Subtract ===
+                # 핵심: 내경 원통을 외경 원통보다 살짝 길게 만들어 확실히 관통
+
+                TOLERANCE = 2.0  # 내경 원통을 앞뒤로 2mm씩 더 길게
 
                 # 1. 외경 원 생성
-                log("  [1] 외경 원 생성")
+                log("  [1] 외경 원 생성 (Z={})".format(z_offset))
                 create_circle(oEditor, 0, 0, z_offset, outer_dia/2.0, outer_cylinder_name)
 
                 # 2. 외경 원 Sweep (원통 생성)
-                log("  [2] 외경 원 Sweep")
+                log("  [2] 외경 원 Sweep ({}mm)".format(sweep_dist))
                 sweep_along_z(oEditor, outer_cylinder_name, sweep_dist)
 
-                # 3. 내경 원 생성 (같은 Z 위치)
-                log("  [3] 내경 원 생성")
-                create_circle(oEditor, 0, 0, z_offset, inner_dia/2.0, inner_cylinder_name)
+                # 3. 내경 원 생성 (살짝 아래에서 시작)
+                inner_z_start = z_offset - TOLERANCE
+                log("  [3] 내경 원 생성 (Z={}, 외경보다 {}mm 아래)".format(inner_z_start, TOLERANCE))
+                create_circle(oEditor, 0, 0, inner_z_start, inner_dia/2.0, inner_cylinder_name)
 
-                # 4. 내경 원 Sweep (원통 생성)
-                log("  [4] 내경 원 Sweep")
-                sweep_along_z(oEditor, inner_cylinder_name, sweep_dist)
+                # 4. 내경 원 Sweep (원통 생성, 앞뒤로 여유 있게)
+                inner_sweep_dist = sweep_dist + (TOLERANCE * 2)
+                log("  [4] 내경 원 Sweep ({}mm, 외경보다 {}mm 길게)".format(inner_sweep_dist, TOLERANCE * 2))
+                sweep_along_z(oEditor, inner_cylinder_name, inner_sweep_dist)
 
                 # 5. 외경 원통에서 내경 원통 빼기 (Solid - Solid = Solid)
-                log("  [5] Subtract (Solid - Solid)")
+                log("  [5] Subtract (Solid - Solid, 내경이 외경 관통)")
                 subtract_objects(oEditor, outer_cylinder_name, inner_cylinder_name)
 
                 # 최종 이름 변경
