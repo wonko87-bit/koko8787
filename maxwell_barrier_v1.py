@@ -169,24 +169,53 @@ def move_object(oEditor, obj_name, dx, dy, dz):
 
 
 def sweep_along_z(oEditor, obj_name, sweep_distance):
-    """Z축 방향으로 Sweep"""
-    oEditor.SweepAlongVector(
-        [
-            "NAME:Selections",
-            "Selections:=", obj_name,
-            "NewPartsModelFlag:=", "Model"
-        ],
-        [
-            "NAME:VectorSweepParameters",
-            "DraftAngle:=", "0deg",
-            "DraftType:=", "Round",
-            "CheckFaceFaceIntersection:=", False,
-            "SweepVectorX:=", "0mm",
-            "SweepVectorY:=", "0mm",
-            "SweepVectorZ:=", "{}mm".format(sweep_distance)
-        ]
-    )
-    print("  Sweep: {} → Z축 {}mm".format(obj_name, sweep_distance))
+    """Z축 방향으로 Sweep (2675mm 제한 회피)"""
+    MAX_SWEEP = 2675.0  # Maxwell의 Sweep 제한
+
+    if sweep_distance > MAX_SWEEP:
+        # 여러 번 나누어 sweep
+        num_sweeps = int(sweep_distance / MAX_SWEEP) + 1
+        sweep_per_step = sweep_distance / num_sweeps
+
+        print("  Sweep: {} → Z축 {}mm ({}번 나누어 실행)".format(obj_name, sweep_distance, num_sweeps))
+
+        for i in range(num_sweeps):
+            oEditor.SweepAlongVector(
+                [
+                    "NAME:Selections",
+                    "Selections:=", obj_name,
+                    "NewPartsModelFlag:=", "Model"
+                ],
+                [
+                    "NAME:VectorSweepParameters",
+                    "DraftAngle:=", "0deg",
+                    "DraftType:=", "Round",
+                    "CheckFaceFaceIntersection:=", False,
+                    "SweepVectorX:=", "0mm",
+                    "SweepVectorY:=", "0mm",
+                    "SweepVectorZ:=", "{}mm".format(sweep_per_step)
+                ]
+            )
+            print("    단계 {}/{}: {}mm sweep".format(i+1, num_sweeps, sweep_per_step))
+    else:
+        # 일반 sweep
+        oEditor.SweepAlongVector(
+            [
+                "NAME:Selections",
+                "Selections:=", obj_name,
+                "NewPartsModelFlag:=", "Model"
+            ],
+            [
+                "NAME:VectorSweepParameters",
+                "DraftAngle:=", "0deg",
+                "DraftType:=", "Round",
+                "CheckFaceFaceIntersection:=", False,
+                "SweepVectorX:=", "0mm",
+                "SweepVectorY:=", "0mm",
+                "SweepVectorZ:=", "{}mm".format(sweep_distance)
+            ]
+        )
+        print("  Sweep: {} → Z축 {}mm".format(obj_name, sweep_distance))
 
 
 def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
@@ -229,28 +258,12 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
 
     # 각 그룹의 원통 생성
     cylinder_count = 0
-    skipped_barrier_13 = None  # 13번 배리어 데이터 저장
 
     for group_idx, group in enumerate(groups):
         print("\n===== 그룹 {} 처리 시작 =====".format(group_idx + 1))
 
         for cyl_idx in range(group['num_cylinders']):
             cylinder_count += 1
-
-            # 13번은 건너뛰고 나중에 처리
-            if cylinder_count == 13:
-                print("\n--- 원통 {} (그룹 {}, 원통 {}) - 나중에 처리 예정 ---".format(
-                    cylinder_count, group_idx + 1, cyl_idx + 1
-                ))
-                skipped_barrier_13 = {
-                    'group_idx': group_idx,
-                    'cyl_idx': cyl_idx,
-                    'inner_dia': group['inner_diameters'][cyl_idx],
-                    'outer_dia': group['outer_diameters'][cyl_idx],
-                    'z_offset': group['z_offsets'][cyl_idx],
-                    'sweep_dist': group['sweep_distances'][cyl_idx]
-                }
-                continue
 
             print("\n--- 원통 {} (그룹 {}, 원통 {}) ---".format(
                 cylinder_count, group_idx + 1, cyl_idx + 1
@@ -328,67 +341,6 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
                 print("  오류 발생: {}".format(str(e)))
                 print("  배리어 {}를 건너뛰고 계속 진행합니다.".format(cylinder_count))
                 continue
-
-    # 13번 배리어를 마지막에 생성 시도
-    if skipped_barrier_13:
-        print("\n" + "=" * 60)
-        print("13번 배리어를 마지막에 생성 시도")
-        print("=" * 60)
-
-        barrier_name = "{}_{}".format(name_prefix, 13)
-        outer_circle_name = "{}_Outer".format(barrier_name)
-        inner_circle_name = "{}_Inner".format(barrier_name)
-
-        inner_dia = skipped_barrier_13['inner_dia']
-        outer_dia = skipped_barrier_13['outer_dia']
-        z_offset = skipped_barrier_13['z_offset']
-        sweep_dist = skipped_barrier_13['sweep_dist']
-
-        print("  내경: {}mm".format(inner_dia))
-        print("  외경: {}mm".format(outer_dia))
-        print("  Z 이동: {}mm".format(z_offset))
-        print("  Sweep: {}mm".format(sweep_dist))
-
-        try:
-            # 외경 원 생성
-            create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
-
-            # 내경 원 생성
-            create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
-
-            # 외경원에서 내경원 빼기
-            subtract_objects(oEditor, outer_circle_name, inner_circle_name)
-
-            # Z축으로 이동
-            move_object(oEditor, outer_circle_name, 0, 0, z_offset)
-
-            # Z축 방향으로 Sweep
-            sweep_along_z(oEditor, outer_circle_name, sweep_dist)
-
-            # 최종 이름 변경
-            oEditor.ChangeProperty(
-                [
-                    "NAME:AllTabs",
-                    [
-                        "NAME:Geometry3DAttributeTab",
-                        [
-                            "NAME:PropServers",
-                            outer_circle_name
-                        ],
-                        [
-                            "NAME:ChangedProps",
-                            [
-                                "NAME:Name",
-                                "Value:=", barrier_name
-                            ]
-                        ]
-                    ]
-                ]
-            )
-            print("  완성: {}".format(barrier_name))
-        except Exception as e:
-            print("  오류 발생: {}".format(str(e)))
-            print("  13번 배리어를 생성할 수 없습니다.")
 
     # 뷰 맞추기
     oEditor.FitAll()

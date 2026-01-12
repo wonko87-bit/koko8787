@@ -153,24 +153,53 @@ def move_object(oEditor, obj_name, dx, dy, dz):
 
 
 def sweep_along_z(oEditor, obj_name, sweep_distance):
-    """Z축 방향으로 Sweep"""
-    oEditor.SweepAlongVector(
-        [
-            "NAME:Selections",
-            "Selections:=", obj_name,
-            "NewPartsModelFlag:=", "Model"
-        ],
-        [
-            "NAME:VectorSweepParameters",
-            "DraftAngle:=", "0deg",
-            "DraftType:=", "Round",
-            "CheckFaceFaceIntersection:=", False,
-            "SweepVectorX:=", "0mm",
-            "SweepVectorY:=", "0mm",
-            "SweepVectorZ:=", "{}mm".format(sweep_distance)
-        ]
-    )
-    print("  Sweep: {} → Z축 {}mm".format(obj_name, sweep_distance))
+    """Z축 방향으로 Sweep (2675mm 제한 회피)"""
+    MAX_SWEEP = 2675.0  # Maxwell의 Sweep 제한
+
+    if sweep_distance > MAX_SWEEP:
+        # 여러 번 나누어 sweep
+        num_sweeps = int(sweep_distance / MAX_SWEEP) + 1
+        sweep_per_step = sweep_distance / num_sweeps
+
+        print("  Sweep: {} → Z축 {}mm ({}번 나누어 실행)".format(obj_name, sweep_distance, num_sweeps))
+
+        for i in range(num_sweeps):
+            oEditor.SweepAlongVector(
+                [
+                    "NAME:Selections",
+                    "Selections:=", obj_name,
+                    "NewPartsModelFlag:=", "Model"
+                ],
+                [
+                    "NAME:VectorSweepParameters",
+                    "DraftAngle:=", "0deg",
+                    "DraftType:=", "Round",
+                    "CheckFaceFaceIntersection:=", False,
+                    "SweepVectorX:=", "0mm",
+                    "SweepVectorY:=", "0mm",
+                    "SweepVectorZ:=", "{}mm".format(sweep_per_step)
+                ]
+            )
+            print("    단계 {}/{}: {}mm sweep".format(i+1, num_sweeps, sweep_per_step))
+    else:
+        # 일반 sweep
+        oEditor.SweepAlongVector(
+            [
+                "NAME:Selections",
+                "Selections:=", obj_name,
+                "NewPartsModelFlag:=", "Model"
+            ],
+            [
+                "NAME:VectorSweepParameters",
+                "DraftAngle:=", "0deg",
+                "DraftType:=", "Round",
+                "CheckFaceFaceIntersection:=", False,
+                "SweepVectorX:=", "0mm",
+                "SweepVectorY:=", "0mm",
+                "SweepVectorZ:=", "{}mm".format(sweep_distance)
+            ]
+        )
+        print("  Sweep: {} → Z축 {}mm".format(obj_name, sweep_distance))
 
 
 def create_coils_from_csv(csv_file_path, name_prefix="Coil"):
