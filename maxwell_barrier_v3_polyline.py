@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Maxwell 3D - 배리어 생성 진단 버전
-Barrier 13 문제 진단을 위한 특수 버전
+Maxwell 3D - 배리어 생성 V3 (Polyline Circle 방식)
+IsCovered=False로 설정하여 Sheet body로 생성
 """
 
 import ScriptEnv
@@ -101,12 +101,12 @@ def read_csv_data(csv_file_path):
     return groups
 
 
-def create_circle(oEditor, x_center, y_center, z_start, radius, name):
-    """XY 평면에 Circle 생성"""
+def create_circle_polyline(oEditor, x_center, y_center, z_start, radius, name):
+    """XY 평면에 Polyline Circle 생성 (Sheet body)"""
     oEditor.CreateCircle(
         [
             "NAME:CircleParameters",
-            "IsCovered:=", True,
+            "IsCovered:=", False,  # Polyline circle (Sheet body)
             "XCenter:=", "{}mm".format(x_center),
             "YCenter:=", "{}mm".format(y_center),
             "ZCenter:=", "{}mm".format(z_start),
@@ -132,41 +132,23 @@ def create_circle(oEditor, x_center, y_center, z_start, radius, name):
             "IsLightweight:=", False
         ]
     )
-    print("  생성: {}".format(name))
+    print("  생성 (Polyline): {}".format(name))
 
 
-def get_object_type(oEditor, obj_name):
-    """객체 타입 확인 (Solid, Sheet, Line)"""
-    try:
-        solids = oEditor.GetObjectsInGroup("Solids")
-        sheets = oEditor.GetObjectsInGroup("Sheets")
-        lines = oEditor.GetObjectsInGroup("Lines")
-
-        if obj_name in solids:
-            return "Solid"
-        elif obj_name in sheets:
-            return "Sheet"
-        elif obj_name in lines:
-            return "Line"
-        else:
-            return "Unknown"
-    except:
-        return "Error"
+def cover_lines(oEditor, line_names):
+    """Polyline을 Sheet로 변환"""
+    oEditor.CoverLines(
+        [
+            "NAME:Selections",
+            "Selections:=", ",".join(line_names),
+            "NewPartsModelFlag:=", "Model"
+        ]
+    )
+    print("  CoverLines: {}".format(line_names))
 
 
 def subtract_objects(oEditor, blank_name, tool_name):
     """Blank에서 Tool을 빼기"""
-    print("  [진단] Subtract 시작: Blank={}, Tool={}".format(blank_name, tool_name))
-
-    # Subtract 전 객체 존재 및 타입 확인
-    all_objects = oEditor.GetObjectsInGroup("Solids")
-    blank_type = get_object_type(oEditor, blank_name)
-    tool_type = get_object_type(oEditor, tool_name)
-
-    print("  [진단] 현재 Solid 객체 목록: {}".format(all_objects))
-    print("  [진단] Blank '{}' 타입: {}".format(blank_name, blank_type))
-    print("  [진단] Tool '{}' 타입: {}".format(tool_name, tool_type))
-
     oEditor.Subtract(
         [
             "NAME:Selections",
@@ -178,15 +160,7 @@ def subtract_objects(oEditor, blank_name, tool_name):
             "KeepOriginals:=", False
         ]
     )
-
-    # Subtract 후 결과 타입 확인
-    result_type = get_object_type(oEditor, blank_name)
-    print("  [진단] Subtract 완료. 결과 타입: {}".format(result_type))
-
-    if result_type == "Sheet":
-        print("  [경고] Subtract 결과가 Sheet입니다! Solid여야 정상입니다!")
-    elif result_type == "Solid":
-        print("  [확인] Subtract 결과가 Solid입니다. 정상입니다.")
+    print("  Subtract: {} - {}".format(blank_name, tool_name))
 
 
 def move_object(oEditor, obj_name, dx, dy, dz):
@@ -211,12 +185,6 @@ def sweep_along_z(oEditor, obj_name, sweep_distance):
     """Z축 방향으로 Sweep (2675mm 제한 회피)"""
     MAX_SWEEP = 2675.0  # Maxwell의 Sweep 제한
 
-    print("  [진단] Sweep 시작: 객체={}, 거리={}mm".format(obj_name, sweep_distance))
-
-    # Sweep 전 객체 타입 확인
-    pre_sweep_type = get_object_type(oEditor, obj_name)
-    print("  [진단] Sweep 전 객체 타입: {}".format(pre_sweep_type))
-
     if sweep_distance > MAX_SWEEP:
         # 여러 번 나누어 sweep
         num_sweeps = int(sweep_distance / MAX_SWEEP) + 1
@@ -225,7 +193,6 @@ def sweep_along_z(oEditor, obj_name, sweep_distance):
         print("  Sweep: {} → Z축 {}mm ({}번 나누어 실행)".format(obj_name, sweep_distance, num_sweeps))
 
         for i in range(num_sweeps):
-            print("  [진단] Sweep 단계 {}/{}: {}mm".format(i+1, num_sweeps, sweep_per_step))
             oEditor.SweepAlongVector(
                 [
                     "NAME:Selections",
@@ -242,7 +209,7 @@ def sweep_along_z(oEditor, obj_name, sweep_distance):
                     "SweepVectorZ:=", "{}mm".format(sweep_per_step)
                 ]
             )
-            print("    단계 {}/{}: {}mm sweep 완료".format(i+1, num_sweeps, sweep_per_step))
+            print("    단계 {}/{}: {}mm sweep".format(i+1, num_sweeps, sweep_per_step))
     else:
         # 일반 sweep
         oEditor.SweepAlongVector(
@@ -261,89 +228,13 @@ def sweep_along_z(oEditor, obj_name, sweep_distance):
                 "SweepVectorZ:=", "{}mm".format(sweep_distance)
             ]
         )
-        print("  Sweep: {} → Z축 {}mm 완료".format(obj_name, sweep_distance))
-
-    # Sweep 후 객체 타입 확인
-    post_sweep_type = get_object_type(oEditor, obj_name)
-    print("  [진단] Sweep 후 객체 타입: {}".format(post_sweep_type))
-
-    if post_sweep_type == "Sheet":
-        print("  [경고] Sweep 후에도 Sheet입니다! Solid여야 정상입니다!")
-    elif post_sweep_type == "Solid":
-        print("  [확인] Sweep 후 Solid입니다. 정상입니다.")
+        print("  Sweep: {} → Z축 {}mm".format(obj_name, sweep_distance))
 
 
-def create_single_barrier(oEditor, barrier_num, inner_dia, outer_dia, z_offset, sweep_dist, name_prefix="Barrier"):
-    """단일 배리어 생성 (진단용)"""
-    print("\n" + "="*60)
-    print("배리어 {} 생성 시작".format(barrier_num))
+def create_barriers_polyline(csv_file_path, name_prefix="Barrier"):
+    """CSV 파일에서 배리어를 생성 (Polyline 방식)"""
     print("="*60)
-    print("  내경: {}mm (반지름: {}mm)".format(inner_dia, inner_dia/2.0))
-    print("  외경: {}mm (반지름: {}mm)".format(outer_dia, outer_dia/2.0))
-    print("  Z 이동: {}mm".format(z_offset))
-    print("  Sweep: {}mm".format(sweep_dist))
-    print("  반지름 차이: {}mm".format((outer_dia - inner_dia)/2.0))
-
-    barrier_name = "{}_{}_TEST".format(name_prefix, barrier_num)
-    outer_circle_name = "{}_Outer".format(barrier_name)
-    inner_circle_name = "{}_Inner".format(barrier_name)
-
-    # 외경 원 생성
-    print("\n[1단계] 외경 원 생성")
-    create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
-
-    # 내경 원 생성
-    print("\n[2단계] 내경 원 생성")
-    create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
-
-    # Subtract 전 상태 확인
-    print("\n[3단계] Subtract 준비")
-    print("  외경 원 이름: {}".format(outer_circle_name))
-    print("  내경 원 이름: {}".format(inner_circle_name))
-
-    # 외경원에서 내경원 빼기
-    subtract_objects(oEditor, outer_circle_name, inner_circle_name)
-
-    # Z축으로 이동
-    print("\n[4단계] Z축 이동")
-    move_object(oEditor, outer_circle_name, 0, 0, z_offset)
-
-    # Sweep
-    print("\n[5단계] Sweep")
-    sweep_along_z(oEditor, outer_circle_name, sweep_dist)
-
-    # 최종 이름 변경
-    print("\n[6단계] 이름 변경")
-    oEditor.ChangeProperty(
-        [
-            "NAME:AllTabs",
-            [
-                "NAME:Geometry3DAttributeTab",
-                [
-                    "NAME:PropServers",
-                    outer_circle_name
-                ],
-                [
-                    "NAME:ChangedProps",
-                    [
-                        "NAME:Name",
-                        "Value:=", barrier_name
-                    ]
-                ]
-            ]
-        ]
-    )
-    print("  최종 이름: {}".format(barrier_name))
-    print("\n" + "="*60)
-    print("배리어 {} 생성 완료!".format(barrier_num))
-    print("="*60)
-
-
-def create_barriers_diagnostic(csv_file_path, target_barrier=13, name_prefix="Barrier"):
-    """특정 배리어만 생성하여 진단"""
-    print("="*60)
-    print("Maxwell 3D - 배리어 진단 모드")
-    print("대상 배리어: {}".format(target_barrier))
+    print("Maxwell 3D - 배리어 생성 V3 (Polyline)")
     print("="*60)
 
     # CSV 데이터 읽기
@@ -353,44 +244,13 @@ def create_barriers_diagnostic(csv_file_path, target_barrier=13, name_prefix="Ba
         print("오류: CSV 파일에서 데이터를 읽을 수 없습니다.")
         return
 
-    # 모든 배리어 데이터를 평탄화
-    all_barriers = []
-    cylinder_count = 0
-
-    for group_idx, group in enumerate(groups):
-        for cyl_idx in range(group['num_cylinders']):
-            cylinder_count += 1
-
-            inner_dia = group['inner_diameters'][cyl_idx]
-            outer_dia = group['outer_diameters'][cyl_idx]
-            z_offset = group['z_offsets'][cyl_idx]
-            sweep_dist = group['sweep_distances'][cyl_idx]
-
-            all_barriers.append({
-                'num': cylinder_count,
-                'inner_dia': inner_dia,
-                'outer_dia': outer_dia,
-                'z_offset': z_offset,
-                'sweep_dist': sweep_dist
-            })
-
-    print("\n총 {} 개의 배리어 데이터를 찾았습니다.".format(len(all_barriers)))
-
-    # 목표 배리어 주변 정보 출력
-    if target_barrier <= len(all_barriers):
-        print("\n배리어 비교:")
-        for i in range(max(0, target_barrier-3), min(len(all_barriers), target_barrier+2)):
-            b = all_barriers[i]
-            marker = " <-- 목표" if b['num'] == target_barrier else ""
-            print("  배리어 {}: 내경={}, 외경={}, Z={}, Sweep={}{}".format(
-                b['num'], b['inner_dia'], b['outer_dia'], b['z_offset'], b['sweep_dist'], marker
-            ))
+    print("\n총 {} 개의 그룹을 찾았습니다.".format(len(groups)))
 
     # Maxwell 프로젝트 설정
     oProject = oDesktop.GetActiveProject()
     if oProject is None:
         oProject = oDesktop.NewProject()
-        print("\n새 프로젝트를 생성했습니다.")
+        print("새 프로젝트를 생성했습니다.")
 
     oDesign = oProject.GetActiveDesign()
     if oDesign is None:
@@ -400,41 +260,103 @@ def create_barriers_diagnostic(csv_file_path, target_barrier=13, name_prefix="Ba
 
     oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    # 목표 배리어만 생성
-    if target_barrier <= len(all_barriers):
-        b = all_barriers[target_barrier - 1]
+    # 각 그룹의 원통 생성
+    cylinder_count = 0
 
-        if b['inner_dia'] is None or b['outer_dia'] is None:
-            print("\n오류: 배리어 {} 데이터가 불완전합니다.".format(target_barrier))
-            return
-        if b['z_offset'] is None or b['sweep_dist'] is None:
-            print("\n오류: 배리어 {} 데이터가 불완전합니다.".format(target_barrier))
-            return
-        if b['inner_dia'] >= b['outer_dia']:
-            print("\n오류: 배리어 {} 내경이 외경보다 큽니다.".format(target_barrier))
-            return
+    for group_idx, group in enumerate(groups):
+        print("\n===== 그룹 {} 처리 시작 =====".format(group_idx + 1))
 
-        create_single_barrier(
-            oEditor,
-            b['num'],
-            b['inner_dia'],
-            b['outer_dia'],
-            b['z_offset'],
-            b['sweep_dist'],
-            name_prefix
-        )
-    else:
-        print("\n오류: 배리어 {}는 존재하지 않습니다. (최대: {})".format(target_barrier, len(all_barriers)))
+        for cyl_idx in range(group['num_cylinders']):
+            cylinder_count += 1
+
+            print("\n--- 원통 {} (그룹 {}, 원통 {}) ---".format(
+                cylinder_count, group_idx + 1, cyl_idx + 1
+            ))
+
+            # 데이터 유효성 체크
+            inner_dia = group['inner_diameters'][cyl_idx]
+            outer_dia = group['outer_diameters'][cyl_idx]
+            z_offset = group['z_offsets'][cyl_idx]
+            sweep_dist = group['sweep_distances'][cyl_idx]
+
+            if inner_dia is None or outer_dia is None:
+                print("  경고: 내경 또는 외경이 없습니다. 건너뜁니다.")
+                continue
+            if z_offset is None or sweep_dist is None:
+                print("  경고: Z 이동 또는 Sweep 거리가 없습니다. 건너뜁니다.")
+                continue
+            if inner_dia >= outer_dia:
+                print("  경고: 내경이 외경보다 큽니다. 건너뜁니다.")
+                continue
+            if inner_dia <= 0:
+                print("  경고: 내경이 0 이하입니다. 건너뜁니다.")
+                continue
+
+            print("  내경: {}mm".format(inner_dia))
+            print("  외경: {}mm".format(outer_dia))
+            print("  Z 이동: {}mm".format(z_offset))
+            print("  Sweep: {}mm".format(sweep_dist))
+
+            # 원통 이름
+            barrier_name = "{}_{}".format(name_prefix, cylinder_count)
+            outer_circle_name = "{}_Outer".format(barrier_name)
+            inner_circle_name = "{}_Inner".format(barrier_name)
+
+            try:
+                # Polyline circle 생성
+                create_circle_polyline(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
+                create_circle_polyline(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
+
+                # Polyline을 Sheet로 변환
+                cover_lines(oEditor, [outer_circle_name, inner_circle_name])
+
+                # 외경원에서 내경원 빼기
+                subtract_objects(oEditor, outer_circle_name, inner_circle_name)
+
+                # Z축으로 이동
+                move_object(oEditor, outer_circle_name, 0, 0, z_offset)
+
+                # Z축 방향으로 Sweep
+                sweep_along_z(oEditor, outer_circle_name, sweep_dist)
+
+                # 최종 이름 변경
+                oEditor.ChangeProperty(
+                    [
+                        "NAME:AllTabs",
+                        [
+                            "NAME:Geometry3DAttributeTab",
+                            [
+                                "NAME:PropServers",
+                                outer_circle_name
+                            ],
+                            [
+                                "NAME:ChangedProps",
+                                [
+                                    "NAME:Name",
+                                    "Value:=", barrier_name
+                                ]
+                            ]
+                        ]
+                    ]
+                )
+                print("  완성: {}".format(barrier_name))
+
+            except Exception as e:
+                print("  오류 발생: {}".format(str(e)))
+                print("  배리어 {}를 건너뛰고 계속 진행합니다.".format(cylinder_count))
+                continue
 
     # 뷰 맞추기
     oEditor.FitAll()
 
-    print("\n진단 완료!")
+    print("\n" + "="*60)
+    print("완료! 총 {} 개의 배리어를 생성했습니다.".format(cylinder_count))
+    print("="*60)
 
 
 # 스크립트 실행
 print("\n" + "="*60)
-print("배리어 진단 스크립트 시작")
+print("스크립트 실행 시작")
 print("="*60)
 
 try:
@@ -458,7 +380,9 @@ if not os.path.exists(csv_file):
     print("\n오류: BarrierDim.csv 파일을 찾을 수 없습니다!")
     print("다음 위치에 파일이 있어야 합니다: {}".format(csv_file))
 else:
-    # 여기서 숫자를 바꿔서 다른 배리어도 테스트 가능
-    # 예: create_barriers_diagnostic(csv_file, target_barrier=12)
-    create_barriers_diagnostic(csv_file, target_barrier=13, name_prefix="Barrier")
+    print("\n배리어 생성 함수 호출 중 (Polyline 방식)...")
+    create_barriers_polyline(
+        csv_file_path=csv_file,
+        name_prefix="Barrier"
+    )
     print("\n스크립트 실행 완료!")
