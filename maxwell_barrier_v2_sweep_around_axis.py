@@ -160,12 +160,13 @@ def sweep_around_z_axis(oEditor, obj_name, angle_deg=360):
             "NewPartsModelFlag:=", "Model"
         ],
         [
-            "NAME:SweepAroundAxisParameters",
-            "WhichAxis:=", "Z",
-            "AngleStr:=", "{}deg".format(angle_deg),
+            "NAME:AxisSweepParameters",
             "DraftAngle:=", "0deg",
             "DraftType:=", "Round",
-            "CheckFaceFaceIntersection:=", False
+            "CheckFaceFaceIntersection:=", False,
+            "SweepAxis:=", "Z",
+            "SweepAngle:=", "{}deg".format(angle_deg),
+            "NumOfSegments:=", "0"
         ]
     )
     print("  회전: {} → Z축 중심 {}도".format(obj_name, angle_deg))
