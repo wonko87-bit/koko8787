@@ -101,19 +101,21 @@ def read_csv_data(csv_file_path):
     return groups
 
 
-def create_rectangle_xz(oEditor, inner_radius, outer_radius, z_start, z_end, name):
-    """XZ 평면에 직사각형 생성 (도넛 단면) - Polyline 방식"""
-    # 직사각형 4개 점 (XZ 평면, Y=0):
-    # 점1: (inner_radius, 0, z_start)
-    # 점2: (outer_radius, 0, z_start)
-    # 점3: (outer_radius, 0, z_end)
-    # 점4: (inner_radius, 0, z_end)
+def create_rectangle_xz(oEditor, inner_radius, outer_radius, height, name):
+    """XZ 평면에 직사각형 생성 (도넛 단면) - Polyline 5개 점"""
+    # 직사각형 5개 점 (XZ 평면, Y=0, Z=0에서 시작):
+    # 점1: (inner_radius, 0, 0)
+    # 점2: (inner_radius, 0, height)
+    # 점3: (outer_radius, 0, height)
+    # 점4: (outer_radius, 0, 0)
+    # 점5: (inner_radius, 0, 0) - 닫힌 도형
 
     points = [
-        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_start)],
-        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_start)],
-        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_end)],
-        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_end)]
+        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "0mm"],
+        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "{}mm".format(height)],
+        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "{}mm".format(height)],
+        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "0mm"],
+        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "0mm"]
     ]
 
     oEditor.CreatePolyline(
@@ -127,7 +129,8 @@ def create_rectangle_xz(oEditor, inner_radius, outer_radius, z_start, z_end, nam
                 ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 0, "NoOfPoints:=", 2],
                 ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 1, "NoOfPoints:=", 2],
                 ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 2, "NoOfPoints:=", 2],
-                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 3, "NoOfPoints:=", 2]
+                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 3, "NoOfPoints:=", 2],
+                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 4, "NoOfPoints:=", 2]
             ]
         ],
         [
@@ -148,7 +151,7 @@ def create_rectangle_xz(oEditor, inner_radius, outer_radius, z_start, z_end, nam
             "IsLightweight:=", False
         ]
     )
-    print("  생성: {} (XZ 평면 Polyline 직사각형)".format(name))
+    print("  생성: {} (XZ 평면 Polyline 직사각형, 5개 점)".format(name))
 
 
 def sweep_around_z_axis(oEditor, obj_name, angle_deg=360):
@@ -170,6 +173,24 @@ def sweep_around_z_axis(oEditor, obj_name, angle_deg=360):
         ]
     )
     print("  회전: {} → Z축 중심 {}도".format(obj_name, angle_deg))
+
+
+def move_object(oEditor, obj_name, dx, dy, dz):
+    """객체를 이동"""
+    oEditor.Move(
+        [
+            "NAME:Selections",
+            "Selections:=", obj_name,
+            "NewPartsModelFlag:=", "Model"
+        ],
+        [
+            "NAME:TranslateParameters",
+            "TranslateVectorX:=", "{}mm".format(dx),
+            "TranslateVectorY:=", "{}mm".format(dy),
+            "TranslateVectorZ:=", "{}mm".format(dz)
+        ]
+    )
+    print("  이동: {} → (dX={}, dY={}, dZ={})".format(obj_name, dx, dy, dz))
 
 
 def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
@@ -252,29 +273,31 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
 
             print("  내경: {}mm (반지름: {}mm)".format(inner_dia, inner_dia/2.0))
             print("  외경: {}mm (반지름: {}mm)".format(outer_dia, outer_dia/2.0))
-            print("  Z 시작: {}mm".format(z_offset))
-            print("  Z 끝: {}mm".format(z_offset + sweep_dist))
             print("  높이: {}mm".format(sweep_dist))
+            print("  Z offset: {}mm".format(z_offset))
 
             # 원통 이름
             barrier_name = "{}_{}".format(name_prefix, cylinder_count)
             rect_name = "{}_Rect".format(barrier_name)
 
             try:
-                # === V2 방식: Rectangle → SweepAroundAxis ===
+                # === V2 방식: Rectangle → SweepAroundAxis → Move ===
 
-                # 1. XZ 평면에 직사각형 생성 (도넛 단면)
-                print("  [1] XZ 평면에 직사각형 생성")
+                # 1. XZ 평면에 직사각형 생성 (Z=0에서 시작, 도넛 단면)
+                print("  [1] XZ 평면에 직사각형 생성 (Z=0)")
                 inner_radius = inner_dia / 2.0
                 outer_radius = outer_dia / 2.0
-                z_start = z_offset
-                z_end = z_offset + sweep_dist
+                height = sweep_dist
 
-                create_rectangle_xz(oEditor, inner_radius, outer_radius, z_start, z_end, rect_name)
+                create_rectangle_xz(oEditor, inner_radius, outer_radius, height, rect_name)
 
                 # 2. Z축 중심으로 360도 회전 (도넛 생성)
                 print("  [2] Z축 중심으로 360도 회전")
                 sweep_around_z_axis(oEditor, rect_name, 360)
+
+                # 3. Z축 offset만큼 평행 이동
+                print("  [3] Z축 offset만큼 평행 이동")
+                move_object(oEditor, rect_name, 0, 0, z_offset)
 
                 # 최종 이름 변경
                 oEditor.ChangeProperty(
