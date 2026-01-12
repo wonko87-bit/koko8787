@@ -270,42 +270,63 @@ def create_barriers_from_csv(csv_file_path, name_prefix="Barrier"):
             inner_circle_name = "{}_Inner".format(barrier_name)
 
             try:
-                # 13번 배리어 특별 처리 (Maxwell 버그 회피)
-                z_create = 0.0
+                # 13번 배리어 특별 처리 - 다른 방법 시도
                 if cylinder_count == 13:
-                    print("  [특별처리] 13번 배리어 - 약간 다른 위치에 생성")
-                    z_create = 0.001  # 0.001mm 위에 생성
+                    print("  [특별처리] 13번 배리어 - 순서 변경 방식 사용")
 
-                # 외경 원 생성
-                create_circle(oEditor, 0, 0, z_create, outer_dia/2.0, outer_circle_name)
+                    # 방법: 외경 원만 먼저 만들고 sweep한 다음, 내경 원을 sweep하고 subtract
+                    # 외경 원 생성
+                    create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
 
-                # 내경 원 생성
-                create_circle(oEditor, 0, 0, z_create, inner_dia/2.0, inner_circle_name)
+                    # Z축으로 이동
+                    move_object(oEditor, outer_circle_name, 0, 0, z_offset)
 
-                print("  [디버그] 생성된 객체 목록:")
-                all_objects = oEditor.GetObjectsInGroup("Solids")
-                print("    전체 Solids: {}".format(len(all_objects)))
+                    # Z축 방향으로 Sweep
+                    sweep_along_z(oEditor, outer_circle_name, sweep_dist)
 
-                # 외경원에서 내경원 빼기 (도넛 형태)
-                print("  [디버그] Subtract 전 - Outer: {}, Inner: {}".format(outer_circle_name, inner_circle_name))
-                subtract_objects(oEditor, outer_circle_name, inner_circle_name)
+                    # 이제 내경 원 생성
+                    create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
 
-                # Subtract 후 객체 확인
-                all_objects_after = oEditor.GetObjectsInGroup("Solids")
-                print("  [디버그] Subtract 후 - Solids 개수: {}".format(len(all_objects_after)))
+                    # 내경도 같은 위치로 이동
+                    move_object(oEditor, inner_circle_name, 0, 0, z_offset)
 
-                # outer_circle_name이 여전히 존재하는지 확인
-                if outer_circle_name in all_objects_after:
-                    print("  [디버그] {} 객체 존재 확인 OK".format(outer_circle_name))
+                    # 내경도 sweep
+                    sweep_along_z(oEditor, inner_circle_name, sweep_dist)
+
+                    # 마지막으로 subtract
+                    subtract_objects(oEditor, outer_circle_name, inner_circle_name)
+
                 else:
-                    print("  [경고] {} 객체를 찾을 수 없습니다!".format(outer_circle_name))
+                    # 일반 배리어 처리 (기존 방식)
+                    # 외경 원 생성
+                    create_circle(oEditor, 0, 0, 0, outer_dia/2.0, outer_circle_name)
 
-                # Z축으로 이동 (z_create만큼 보정)
-                actual_z_offset = z_offset - z_create
-                move_object(oEditor, outer_circle_name, 0, 0, actual_z_offset)
+                    # 내경 원 생성
+                    create_circle(oEditor, 0, 0, 0, inner_dia/2.0, inner_circle_name)
 
-                # Z축 방향으로 Sweep
-                sweep_along_z(oEditor, outer_circle_name, sweep_dist)
+                    print("  [디버그] 생성된 객체 목록:")
+                    all_objects = oEditor.GetObjectsInGroup("Solids")
+                    print("    전체 Solids: {}".format(len(all_objects)))
+
+                    # 외경원에서 내경원 빼기 (도넛 형태)
+                    print("  [디버그] Subtract 전 - Outer: {}, Inner: {}".format(outer_circle_name, inner_circle_name))
+                    subtract_objects(oEditor, outer_circle_name, inner_circle_name)
+
+                    # Subtract 후 객체 확인
+                    all_objects_after = oEditor.GetObjectsInGroup("Solids")
+                    print("  [디버그] Subtract 후 - Solids 개수: {}".format(len(all_objects_after)))
+
+                    # outer_circle_name이 여전히 존재하는지 확인
+                    if outer_circle_name in all_objects_after:
+                        print("  [디버그] {} 객체 존재 확인 OK".format(outer_circle_name))
+                    else:
+                        print("  [경고] {} 객체를 찾을 수 없습니다!".format(outer_circle_name))
+
+                    # Z축으로 이동
+                    move_object(oEditor, outer_circle_name, 0, 0, z_offset)
+
+                    # Z축 방향으로 Sweep
+                    sweep_along_z(oEditor, outer_circle_name, sweep_dist)
 
                 # 최종 이름 변경
                 oEditor.ChangeProperty(
