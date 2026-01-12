@@ -102,23 +102,33 @@ def read_csv_data(csv_file_path):
 
 
 def create_rectangle_xz(oEditor, inner_radius, outer_radius, z_start, z_end, name):
-    """XZ 평면에 직사각형 생성 (도넛 단면)"""
-    # 직사각형 4개 점:
+    """XZ 평면에 직사각형 생성 (도넛 단면) - Polyline 방식"""
+    # 직사각형 4개 점 (XZ 평면, Y=0):
     # 점1: (inner_radius, 0, z_start)
     # 점2: (outer_radius, 0, z_start)
     # 점3: (outer_radius, 0, z_end)
     # 점4: (inner_radius, 0, z_end)
 
-    oEditor.CreateRectangle(
+    points = [
+        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_start)],
+        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_start)],
+        ["NAME:PLPoint", "X:=", "{}mm".format(outer_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_end)],
+        ["NAME:PLPoint", "X:=", "{}mm".format(inner_radius), "Y:=", "0mm", "Z:=", "{}mm".format(z_end)]
+    ]
+
+    oEditor.CreatePolyline(
         [
-            "NAME:RectangleParameters",
-            "IsCovered:=", True,
-            "XStart:=", "{}mm".format(inner_radius),
-            "YStart:=", "0mm",
-            "ZStart:=", "{}mm".format(z_start),
-            "Width:=", "{}mm".format(outer_radius - inner_radius),
-            "Height:=", "{}mm".format(z_end - z_start),
-            "WhichAxis:=", "Y"  # XZ 평면 (Y축에 수직)
+            "NAME:PolylineParameters",
+            "IsPolylineCovered:=", True,
+            "IsPolylineClosed:=", True,
+            ["NAME:PolylinePoints"] + points,
+            [
+                "NAME:PolylineSegments",
+                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 0, "NoOfPoints:=", 2],
+                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 1, "NoOfPoints:=", 2],
+                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 2, "NoOfPoints:=", 2],
+                ["NAME:PLSegment", "SegmentType:=", "Line", "StartIndex:=", 3, "NoOfPoints:=", 2]
+            ]
         ],
         [
             "NAME:Attributes",
@@ -138,7 +148,7 @@ def create_rectangle_xz(oEditor, inner_radius, outer_radius, z_start, z_end, nam
             "IsLightweight:=", False
         ]
     )
-    print("  생성: {} (XZ 평면 직사각형)".format(name))
+    print("  생성: {} (XZ 평면 Polyline 직사각형)".format(name))
 
 
 def sweep_around_z_axis(oEditor, obj_name, angle_deg=360):
