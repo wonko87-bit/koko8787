@@ -15,10 +15,20 @@ import os
 def read_angling_csv(csv_file_path):
     """CSV 파일에서 앵글링 데이터를 읽어옵니다."""
     anglings = []
+    x_offset = 0.0
 
     with open(csv_file_path, 'r') as f:
         reader = csv.reader(f)
         rows = list(reader)
+
+    # B2 셀에서 X축 offset 읽기 (행 인덱스 1, 열 인덱스 1)
+    try:
+        if len(rows) > 1 and len(rows[1]) > 1 and rows[1][1].strip():
+            x_offset = float(rows[1][1].strip())
+            print("X축 offset: {}mm".format(x_offset))
+    except (ValueError, IndexError):
+        print("B2 셀에서 X축 offset을 읽을 수 없습니다. 기본값 0 사용")
+        x_offset = 0.0
 
     # 4행부터 시작 (인덱스 3)
     for i in range(3, len(rows)):
@@ -64,7 +74,7 @@ def read_angling_csv(csv_file_path):
             print("경고: {}행 데이터 읽기 오류: {}".format(i+1, str(e)))
             continue
 
-    return anglings
+    return anglings, x_offset
 
 
 def create_circle_xz(oEditor, center_x, center_z, radius, name):
@@ -176,7 +186,7 @@ def unite_objects(oEditor, parts_list):
     )
 
 
-def create_angling_boolean(oEditor, angling_data, name):
+def create_angling_boolean(oEditor, angling_data, name, x_offset=0.0):
     """Boolean 연산으로 앵글링 생성
 
     방법:
@@ -195,13 +205,13 @@ def create_angling_boolean(oEditor, angling_data, name):
     r_outer = r_inner + thickness
     x_bar_len = angling_data['x_bar_length']
     z_bar_len = angling_data['z_bar_length']
-    ref_x = angling_data['ref_x']
+    ref_x = angling_data['ref_x'] + x_offset  # X축 offset 적용
     ref_z = angling_data['ref_z']
 
     print("  사분면: {}, 내측R: {}, 외측R: {}".format(quadrant, r_inner, r_outer))
     print("  X막대: {}, Z막대: {}, 기준점: ({}, 0, {})".format(x_bar_len, z_bar_len, ref_x, ref_z))
 
-    # 사분면별 원 중심 계산
+    # 사분면별 원 중심 계산 (X축 offset 이미 ref_x에 적용됨)
     if quadrant == 1:
         center_x = ref_x - r_outer
         center_z = ref_z - r_outer
@@ -379,7 +389,7 @@ def create_anglings_from_csv(csv_file_path, name_prefix="Angling"):
     print("=" * 60)
 
     print("\nCSV 파일 읽기 시작...")
-    anglings = read_angling_csv(csv_file_path)
+    anglings, x_offset = read_angling_csv(csv_file_path)
 
     print("읽은 앵글링 수: {}".format(len(anglings)))
 
@@ -411,7 +421,7 @@ def create_anglings_from_csv(csv_file_path, name_prefix="Angling"):
         angling_name = "{}_{}".format(name_prefix, idx + 1)
 
         try:
-            create_angling_boolean(oEditor, angling, angling_name)
+            create_angling_boolean(oEditor, angling, angling_name, x_offset)
             success_count += 1
         except Exception as e:
             print("  [오류] 앵글링 {} 생성 실패: {}".format(idx + 1, str(e)))
