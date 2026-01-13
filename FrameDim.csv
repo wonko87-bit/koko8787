@@ -1,0 +1,5 @@
+Ref_X,Ref_Z,Thickness,Width,Height,Fillet_Q1,Fillet_Q2,Fillet_Q3,Fillet_Q4
+,,,,,,,,,
+,,,,,,,,,
+10,10,5,100,80,10,8,5,12
+50,120,8,150,100,15,15,10,10
