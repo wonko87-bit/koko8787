@@ -272,60 +272,69 @@ def create_angling_boolean(oEditor, angling_data, name):
 
     # 6. X축, Z축 막대 Rectangle 생성
     # 각 사분면별로 원호 끝에 정확히 연결되도록 계산
+    # 막대는 원호의 내측과 외측 사이(두께 구간)에 연결됨
 
-    # X축 막대
+    # X축 막대 (X방향으로 뻗는 수평 막대)
     if quadrant == 1:
-        # ┘ 형태: 90도 끝(위쪽)에서 -X 방향
-        x_bar_x = ref_x - r_outer - x_bar_len
-        x_bar_z = ref_z - thickness
+        # ┘ 형태: 위쪽(90도)에서 -X 방향으로 연장
+        # 원호 끝: center_x 위치, Z는 center_z + r_inner ~ center_z + r_outer
+        x_bar_x = center_x - x_bar_len
+        x_bar_z = center_z + r_inner
         x_bar_w = x_bar_len
         x_bar_h = thickness
     elif quadrant == 2:
-        # └ 형태: 270도 끝(아래쪽)에서 -X 방향
-        x_bar_x = ref_x - r_outer - x_bar_len
-        x_bar_z = ref_z
+        # └ 형태: 아래쪽(270도)에서 -X 방향으로 연장
+        # 원호 끝: center_x 위치, Z는 center_z - r_outer ~ center_z - r_inner
+        x_bar_x = center_x - x_bar_len
+        x_bar_z = center_z - r_outer
         x_bar_w = x_bar_len
         x_bar_h = thickness
     elif quadrant == 3:
-        # ┌ 형태: 270도 끝(아래쪽)에서 +X 방향
-        x_bar_x = ref_x + r_outer
-        x_bar_z = ref_z
+        # ┌ 형태: 아래쪽(270도)에서 +X 방향으로 연장
+        # 원호 끝: center_x 위치, Z는 center_z - r_outer ~ center_z - r_inner
+        x_bar_x = center_x
+        x_bar_z = center_z - r_outer
         x_bar_w = x_bar_len
         x_bar_h = thickness
     else:  # quadrant == 4
-        # ┐ 형태: 90도 끝(위쪽)에서 +X 방향
-        x_bar_x = ref_x + r_outer
-        x_bar_z = ref_z - thickness
+        # ┐ 형태: 위쪽(90도)에서 +X 방향으로 연장
+        # 원호 끝: center_x 위치, Z는 center_z + r_inner ~ center_z + r_outer
+        x_bar_x = center_x
+        x_bar_z = center_z + r_inner
         x_bar_w = x_bar_len
         x_bar_h = thickness
 
     x_bar_name = name + "_XBar"
     create_rectangle_xz(oEditor, x_bar_x, x_bar_z, x_bar_w, x_bar_h, x_bar_name)
-    print("  [6] X축 막대 생성")
+    print("  [6] X축 막대 생성: XStart={}, ZStart={}, W={}, H={}".format(x_bar_x, x_bar_z, x_bar_w, x_bar_h))
 
-    # Z축 막대
+    # Z축 막대 (Z방향으로 뻗는 수직 막대)
     if quadrant == 1:
-        # ┘ 형태: 0도 끝(오른쪽)에서 -Z 방향
-        z_bar_x = ref_x - thickness
-        z_bar_z = ref_z - r_outer - z_bar_len
+        # ┘ 형태: 오른쪽(0도)에서 -Z 방향으로 연장
+        # 원호 끝: X는 center_x + r_inner ~ center_x + r_outer, center_z 위치
+        z_bar_x = center_x + r_inner
+        z_bar_z = center_z - z_bar_len
         z_bar_w = thickness
         z_bar_h = z_bar_len
     elif quadrant == 2:
-        # └ 형태: 0도 끝(오른쪽)에서 +Z 방향
-        z_bar_x = ref_x - thickness
-        z_bar_z = ref_z + r_outer
+        # └ 형태: 오른쪽(0도)에서 +Z 방향으로 연장
+        # 원호 끝: X는 center_x + r_inner ~ center_x + r_outer, center_z 위치
+        z_bar_x = center_x + r_inner
+        z_bar_z = center_z
         z_bar_w = thickness
         z_bar_h = z_bar_len
     elif quadrant == 3:
-        # ┌ 형태: 180도 끝(왼쪽)에서 +Z 방향
-        z_bar_x = ref_x
-        z_bar_z = ref_z + r_outer
+        # ┌ 형태: 왼쪽(180도)에서 +Z 방향으로 연장
+        # 원호 끝: X는 center_x - r_outer ~ center_x - r_inner, center_z 위치
+        z_bar_x = center_x - r_outer
+        z_bar_z = center_z
         z_bar_w = thickness
         z_bar_h = z_bar_len
     else:  # quadrant == 4
-        # ┐ 형태: 180도 끝(왼쪽)에서 -Z 방향
-        z_bar_x = ref_x
-        z_bar_z = ref_z - r_outer - z_bar_len
+        # ┐ 형태: 왼쪽(180도)에서 -Z 방향으로 연장
+        # 원호 끝: X는 center_x - r_outer ~ center_x - r_inner, center_z 위치
+        z_bar_x = center_x - r_outer
+        z_bar_z = center_z - z_bar_len
         z_bar_w = thickness
         z_bar_h = z_bar_len
 
