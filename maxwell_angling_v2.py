@@ -233,7 +233,7 @@ def create_angling_shape(oEditor, angling_data, name):
     # PolylinePoints 생성
     point_list = []
     for i, (x, y, z) in enumerate(polyline_points):
-        point_list.extend([
+        point_list.append([
             "NAME:PLPoint",
             "X:=", "{}mm".format(x),
             "Y:=", "{}mm".format(y),
@@ -243,7 +243,7 @@ def create_angling_shape(oEditor, angling_data, name):
     # PolylineSegments 생성 (모두 직선)
     segment_list = []
     for i in range(len(polyline_points) - 1):
-        segment_list.extend([
+        segment_list.append([
             "NAME:PLSegment",
             "SegmentType:=", "Line",
             "StartIndex:=", i,
