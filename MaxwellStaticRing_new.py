@@ -129,19 +129,30 @@ def create_rectangle_xz(oEditor, x_start, z_start, width, height, name):
     )
 
 
-def get_vertex_at_position(oEditor, obj_name, target_x, target_z, tolerance=0.1):
+def get_vertex_at_position(oEditor, obj_name, target_x, target_z, tolerance=1.0):
     """특정 위치의 vertex ID 찾기"""
     try:
         vertices = oEditor.GetVertexIDsFromObject(obj_name)
+        print("    찾은 vertex 수: {}".format(len(vertices)))
+
         for vid in vertices:
             pos = oEditor.GetVertexPosition(obj_name, vid)
             x_pos = pos[0]
+            y_pos = pos[1]
             z_pos = pos[2]
 
-            if abs(x_pos - target_x) < tolerance and abs(z_pos - target_z) < tolerance:
+            print("      Vertex {}: ({:.2f}, {:.2f}, {:.2f})".format(vid, x_pos, y_pos, z_pos))
+
+            # XZ 평면이므로 Y≈0이고, X, Z가 목표 좌표와 일치
+            if abs(y_pos) < 0.5 and abs(x_pos - target_x) < tolerance and abs(z_pos - target_z) < tolerance:
+                print("    -> 목표 좌표 ({:.2f}, {:.2f})와 일치! Vertex ID={}".format(target_x, target_z, vid))
                 return vid
+
+        print("    [경고] 목표 좌표 ({:.2f}, {:.2f})에 해당하는 vertex를 찾지 못했습니다.".format(target_x, target_z))
     except Exception as e:
-        print("    [경고] Vertex 찾기 실패: {}".format(str(e)))
+        print("    [오류] Vertex 찾기 실패: {}".format(str(e)))
+        import traceback
+        traceback.print_exc()
     return None
 
 
