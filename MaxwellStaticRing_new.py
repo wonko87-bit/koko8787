@@ -11,6 +11,7 @@ oDesktop.RestoreWindow()
 
 import csv
 import os
+from collections import Counter
 
 
 def read_staticring_csv(csv_file_path):
@@ -201,6 +202,18 @@ def subtract_objects(oEditor, blank_name, tool_name):
     )
 
 
+def get_common_fillet_value(fillet_q1, fillet_q2, fillet_q3, fillet_q4):
+    """4개 fillet 값 중 가장 많이 나타나는 값 반환 (3개 이상 같은 값)"""
+    fillets = [fillet_q1, fillet_q2, fillet_q3, fillet_q4]
+    counter = Counter(fillets)
+    most_common = counter.most_common(1)[0]
+
+    # 가장 많이 나타나는 값이 3개 이상이면 그 값 반환
+    if most_common[1] >= 3:
+        return most_common[0]
+    return None
+
+
 def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     """Static Ring 생성
 
@@ -210,6 +223,9 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     3. 작은 직사각형 생성
     4. 내부 fillet 적용
     5. Subtract (큰 직사각형 - 작은 직사각형)
+
+    주의: 4개 fillet 값 중 3개가 같고 1개가 다른 경우,
+          다른 1개는 무시하고 같은 3개만 적용
     """
 
     ref_x = ring_data['ref_x'] + x_offset  # X축 offset 적용
@@ -246,6 +262,11 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     # 2. 외부 fillet 적용 (각 코너별로)
     print("  [2] 외부 Fillet 적용 중...")
 
+    # 4개 fillet 값 중 가장 많이 나타나는 값 찾기 (3개 이상)
+    outer_common = get_common_fillet_value(outer_fillet_q1, outer_fillet_q2, outer_fillet_q3, outer_fillet_q4)
+    if outer_common is not None:
+        print("    가장 많이 나타나는 외부 fillet 값: {}mm (나머지는 무시)".format(outer_common))
+
     # 4개 코너 좌표 계산
     corner_q1 = (ref_x + width, ref_z + height)  # 우상단
     corner_q2 = (ref_x, ref_z + height)          # 좌상단
@@ -253,37 +274,46 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     corner_q4 = (ref_x + width, ref_z)           # 우하단
 
     # 각 코너의 vertex 찾아서 개별적으로 fillet 적용
+    # 단, outer_common 값과 같은 것만 적용
     # Q3부터 시작 (좌하단)
-    if outer_fillet_q3 > 0:
+    if outer_fillet_q3 > 0 and (outer_common is None or outer_fillet_q3 == outer_common):
         vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q3[0], corner_q3[1])
         if vid:
             fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q3)
         else:
             print("    [경고] Q3 코너 vertex를 찾을 수 없습니다.")
+    elif outer_common is not None and outer_fillet_q3 != outer_common:
+        print("    Q3 fillet 스킵 (값이 다름: {} != {})".format(outer_fillet_q3, outer_common))
 
     # Q4 (우하단)
-    if outer_fillet_q4 > 0:
+    if outer_fillet_q4 > 0 and (outer_common is None or outer_fillet_q4 == outer_common):
         vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q4[0], corner_q4[1])
         if vid:
             fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q4)
         else:
             print("    [경고] Q4 코너 vertex를 찾을 수 없습니다.")
+    elif outer_common is not None and outer_fillet_q4 != outer_common:
+        print("    Q4 fillet 스킵 (값이 다름: {} != {})".format(outer_fillet_q4, outer_common))
 
     # Q2 (좌상단)
-    if outer_fillet_q2 > 0:
+    if outer_fillet_q2 > 0 and (outer_common is None or outer_fillet_q2 == outer_common):
         vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q2[0], corner_q2[1])
         if vid:
             fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q2)
         else:
             print("    [경고] Q2 코너 vertex를 찾을 수 없습니다.")
+    elif outer_common is not None and outer_fillet_q2 != outer_common:
+        print("    Q2 fillet 스킵 (값이 다름: {} != {})".format(outer_fillet_q2, outer_common))
 
     # Q1 (우상단)
-    if outer_fillet_q1 > 0:
+    if outer_fillet_q1 > 0 and (outer_common is None or outer_fillet_q1 == outer_common):
         vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q1[0], corner_q1[1])
         if vid:
             fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q1)
         else:
             print("    [경고] Q1 코너 vertex를 찾을 수 없습니다.")
+    elif outer_common is not None and outer_fillet_q1 != outer_common:
+        print("    Q1 fillet 스킵 (값이 다름: {} != {})".format(outer_fillet_q1, outer_common))
 
     # 3. 작은 직사각형 생성
     inner_width = width - 2 * thickness
@@ -302,6 +332,11 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     # 4. 내부 fillet 적용 (각 코너별로)
     print("  [4] 내부 Fillet 적용 중...")
 
+    # 4개 fillet 값 중 가장 많이 나타나는 값 찾기 (3개 이상)
+    inner_common = get_common_fillet_value(inner_fillet_q1, inner_fillet_q2, inner_fillet_q3, inner_fillet_q4)
+    if inner_common is not None:
+        print("    가장 많이 나타나는 내부 fillet 값: {}mm (나머지는 무시)".format(inner_common))
+
     # 내부 직사각형 4개 코너 좌표
     inner_corner_q1 = (inner_x + inner_width, inner_z + inner_height)  # 우상단
     inner_corner_q2 = (inner_x, inner_z + inner_height)                # 좌상단
@@ -309,36 +344,44 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     inner_corner_q4 = (inner_x + inner_width, inner_z)                 # 우하단
 
     # Q3부터 시작 (좌하단)
-    if inner_fillet_q3 > 0:
+    if inner_fillet_q3 > 0 and (inner_common is None or inner_fillet_q3 == inner_common):
         vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q3[0], inner_corner_q3[1])
         if vid:
             fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q3)
         else:
             print("    [경고] 내부 Q3 코너 vertex를 찾을 수 없습니다.")
+    elif inner_common is not None and inner_fillet_q3 != inner_common:
+        print("    내부 Q3 fillet 스킵 (값이 다름: {} != {})".format(inner_fillet_q3, inner_common))
 
     # Q4 (우하단)
-    if inner_fillet_q4 > 0:
+    if inner_fillet_q4 > 0 and (inner_common is None or inner_fillet_q4 == inner_common):
         vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q4[0], inner_corner_q4[1])
         if vid:
             fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q4)
         else:
             print("    [경고] 내부 Q4 코너 vertex를 찾을 수 없습니다.")
+    elif inner_common is not None and inner_fillet_q4 != inner_common:
+        print("    내부 Q4 fillet 스킵 (값이 다름: {} != {})".format(inner_fillet_q4, inner_common))
 
     # Q2 (좌상단)
-    if inner_fillet_q2 > 0:
+    if inner_fillet_q2 > 0 and (inner_common is None or inner_fillet_q2 == inner_common):
         vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q2[0], inner_corner_q2[1])
         if vid:
             fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q2)
         else:
             print("    [경고] 내부 Q2 코너 vertex를 찾을 수 없습니다.")
+    elif inner_common is not None and inner_fillet_q2 != inner_common:
+        print("    내부 Q2 fillet 스킵 (값이 다름: {} != {})".format(inner_fillet_q2, inner_common))
 
     # Q1 (우상단)
-    if inner_fillet_q1 > 0:
+    if inner_fillet_q1 > 0 and (inner_common is None or inner_fillet_q1 == inner_common):
         vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q1[0], inner_corner_q1[1])
         if vid:
             fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q1)
         else:
             print("    [경고] 내부 Q1 코너 vertex를 찾을 수 없습니다.")
+    elif inner_common is not None and inner_fillet_q1 != inner_common:
+        print("    내부 Q1 fillet 스킵 (값이 다름: {} != {})".format(inner_fillet_q1, inner_common))
 
     # 5. Subtract
     subtract_objects(oEditor, outer_rect_name, inner_rect_name)
