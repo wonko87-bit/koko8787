@@ -280,29 +280,29 @@ def create_angling_boolean(oEditor, angling_data, name):
         # 원호 끝: center_x 위치, Z는 center_z + r_inner ~ center_z + r_outer
         x_bar_x = center_x - x_bar_len
         x_bar_z = center_z + r_inner
-        x_bar_w = x_bar_len
-        x_bar_h = thickness
+        x_bar_w = thickness  # Z방향 크기
+        x_bar_h = x_bar_len  # X방향 크기
     elif quadrant == 2:
         # └ 형태: 아래쪽(270도)에서 -X 방향으로 연장
         # 원호 끝: center_x 위치, Z는 center_z - r_outer ~ center_z - r_inner
         x_bar_x = center_x - x_bar_len
         x_bar_z = center_z - r_outer
-        x_bar_w = x_bar_len
-        x_bar_h = thickness
+        x_bar_w = thickness
+        x_bar_h = x_bar_len
     elif quadrant == 3:
         # ┌ 형태: 아래쪽(270도)에서 +X 방향으로 연장
         # 원호 끝: center_x 위치, Z는 center_z - r_outer ~ center_z - r_inner
         x_bar_x = center_x
         x_bar_z = center_z - r_outer
-        x_bar_w = x_bar_len
-        x_bar_h = thickness
+        x_bar_w = thickness
+        x_bar_h = x_bar_len
     else:  # quadrant == 4
         # ┐ 형태: 위쪽(90도)에서 +X 방향으로 연장
         # 원호 끝: center_x 위치, Z는 center_z + r_inner ~ center_z + r_outer
         x_bar_x = center_x
         x_bar_z = center_z + r_inner
-        x_bar_w = x_bar_len
-        x_bar_h = thickness
+        x_bar_w = thickness
+        x_bar_h = x_bar_len
 
     x_bar_name = name + "_XBar"
     create_rectangle_xz(oEditor, x_bar_x, x_bar_z, x_bar_w, x_bar_h, x_bar_name)
@@ -314,29 +314,29 @@ def create_angling_boolean(oEditor, angling_data, name):
         # 원호 끝: X는 center_x + r_inner ~ center_x + r_outer, center_z 위치
         z_bar_x = center_x + r_inner
         z_bar_z = center_z - z_bar_len
-        z_bar_w = thickness
-        z_bar_h = z_bar_len
+        z_bar_w = z_bar_len  # Z방향 크기
+        z_bar_h = thickness  # X방향 크기
     elif quadrant == 2:
         # └ 형태: 오른쪽(0도)에서 +Z 방향으로 연장
         # 원호 끝: X는 center_x + r_inner ~ center_x + r_outer, center_z 위치
         z_bar_x = center_x + r_inner
         z_bar_z = center_z
-        z_bar_w = thickness
-        z_bar_h = z_bar_len
+        z_bar_w = z_bar_len
+        z_bar_h = thickness
     elif quadrant == 3:
         # ┌ 형태: 왼쪽(180도)에서 +Z 방향으로 연장
         # 원호 끝: X는 center_x - r_outer ~ center_x - r_inner, center_z 위치
         z_bar_x = center_x - r_outer
         z_bar_z = center_z
-        z_bar_w = thickness
-        z_bar_h = z_bar_len
+        z_bar_w = z_bar_len
+        z_bar_h = thickness
     else:  # quadrant == 4
         # ┐ 형태: 왼쪽(180도)에서 -Z 방향으로 연장
         # 원호 끝: X는 center_x - r_outer ~ center_x - r_inner, center_z 위치
         z_bar_x = center_x - r_outer
         z_bar_z = center_z - z_bar_len
-        z_bar_w = thickness
-        z_bar_h = z_bar_len
+        z_bar_w = z_bar_len
+        z_bar_h = thickness
 
     z_bar_name = name + "_ZBar"
     create_rectangle_xz(oEditor, z_bar_x, z_bar_z, z_bar_w, z_bar_h, z_bar_name)
