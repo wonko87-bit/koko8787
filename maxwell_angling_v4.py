@@ -271,25 +271,31 @@ def create_angling_boolean(oEditor, angling_data, name):
     print("  [5] Intersect: 사분원 생성")
 
     # 6. X축, Z축 막대 Rectangle 생성
+    # 각 사분면별로 원호 끝에 정확히 연결되도록 계산
+
     # X축 막대
     if quadrant == 1:
-        x_bar_x = ref_x - x_bar_len
-        x_bar_z = ref_z - r_outer
+        # ┘ 형태: 90도 끝(위쪽)에서 -X 방향
+        x_bar_x = ref_x - r_outer - x_bar_len
+        x_bar_z = ref_z - thickness
         x_bar_w = x_bar_len
         x_bar_h = thickness
     elif quadrant == 2:
-        x_bar_x = ref_x - x_bar_len
-        x_bar_z = ref_z + r_inner
+        # └ 형태: 270도 끝(아래쪽)에서 -X 방향
+        x_bar_x = ref_x - r_outer - x_bar_len
+        x_bar_z = ref_z
         x_bar_w = x_bar_len
         x_bar_h = thickness
     elif quadrant == 3:
-        x_bar_x = ref_x
-        x_bar_z = ref_z + r_inner
+        # ┌ 형태: 270도 끝(아래쪽)에서 +X 방향
+        x_bar_x = ref_x + r_outer
+        x_bar_z = ref_z
         x_bar_w = x_bar_len
         x_bar_h = thickness
     else:  # quadrant == 4
-        x_bar_x = ref_x
-        x_bar_z = ref_z - r_outer
+        # ┐ 형태: 90도 끝(위쪽)에서 +X 방향
+        x_bar_x = ref_x + r_outer
+        x_bar_z = ref_z - thickness
         x_bar_w = x_bar_len
         x_bar_h = thickness
 
@@ -299,22 +305,26 @@ def create_angling_boolean(oEditor, angling_data, name):
 
     # Z축 막대
     if quadrant == 1:
-        z_bar_x = ref_x - r_outer
+        # ┘ 형태: 0도 끝(오른쪽)에서 -Z 방향
+        z_bar_x = ref_x - thickness
         z_bar_z = ref_z - r_outer - z_bar_len
         z_bar_w = thickness
         z_bar_h = z_bar_len
     elif quadrant == 2:
-        z_bar_x = ref_x - r_outer
+        # └ 형태: 0도 끝(오른쪽)에서 +Z 방향
+        z_bar_x = ref_x - thickness
         z_bar_z = ref_z + r_outer
         z_bar_w = thickness
         z_bar_h = z_bar_len
     elif quadrant == 3:
-        z_bar_x = ref_x + r_inner
+        # ┌ 형태: 180도 끝(왼쪽)에서 +Z 방향
+        z_bar_x = ref_x
         z_bar_z = ref_z + r_outer
         z_bar_w = thickness
         z_bar_h = z_bar_len
     else:  # quadrant == 4
-        z_bar_x = ref_x + r_inner
+        # ┐ 형태: 180도 끝(왼쪽)에서 -Z 방향
+        z_bar_x = ref_x
         z_bar_z = ref_z - r_outer - z_bar_len
         z_bar_w = thickness
         z_bar_h = z_bar_len
