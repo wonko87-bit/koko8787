@@ -129,35 +129,50 @@ def create_rectangle_xz(oEditor, x_start, z_start, width, height, name):
     )
 
 
-def fillet_all_corners(oEditor, obj_name, radius):
-    """모든 코너에 동일한 반경으로 fillet 적용"""
-    if radius <= 0:
-        return
-
-    # 모든 버텍스 가져오기
+def get_vertex_at_position(oEditor, obj_name, target_x, target_z, tolerance=0.1):
+    """특정 위치의 vertex ID 찾기"""
     try:
         vertices = oEditor.GetVertexIDsFromObject(obj_name)
-        if vertices:
-            oEditor.Fillet(
-                [
-                    "NAME:Selections",
-                    "Selections:=", obj_name,
-                    "NewPartsModelFlag:=", "Model"
-                ],
+        for vid in vertices:
+            pos = oEditor.GetVertexPosition(obj_name, vid)
+            x_pos = pos[0]
+            z_pos = pos[2]
+
+            if abs(x_pos - target_x) < tolerance and abs(z_pos - target_z) < tolerance:
+                return vid
+    except Exception as e:
+        print("    [경고] Vertex 찾기 실패: {}".format(str(e)))
+    return None
+
+
+def fillet_vertex(oEditor, obj_name, vertex_id, radius):
+    """특정 vertex에 fillet 적용"""
+    if radius <= 0 or vertex_id is None:
+        return False
+
+    try:
+        oEditor.Fillet(
+            [
+                "NAME:Selections",
+                "Selections:=", obj_name,
+                "NewPartsModelFlag:=", "Model"
+            ],
+            [
+                "NAME:FilletParameters",
                 [
                     "NAME:FilletParameters",
-                    [
-                        "NAME:FilletParameters",
-                        "Edges:=", [],
-                        "Vertices:=", [int(v) for v in vertices],
-                        "Radius:=", "{}mm".format(radius),
-                        "Setback:=", "0mm"
-                    ]
+                    "Edges:=", [],
+                    "Vertices:=", [int(vertex_id)],
+                    "Radius:=", "{}mm".format(radius),
+                    "Setback:=", "0mm"
                 ]
-            )
-            print("    Fillet 적용: r={}mm (모든 코너)".format(radius))
+            ]
+        )
+        print("    Fillet 적용: vertex={}, r={}mm".format(vertex_id, radius))
+        return True
     except Exception as e:
-        print("    [경고] Fillet 적용 실패: {}".format(str(e)))
+        print("    [경고] Fillet 적용 실패: vertex={}, r={}, 오류={}".format(vertex_id, radius, str(e)))
+        return False
 
 
 def subtract_objects(oEditor, blank_name, tool_name):
@@ -217,11 +232,47 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     create_rectangle_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
     print("  [1] 큰 직사각형 생성")
 
-    # 2. 외부 fillet 적용
-    # 간단한 방법: 평균값으로 모든 코너에 동일하게 적용
-    avg_outer_fillet = (outer_fillet_q1 + outer_fillet_q2 + outer_fillet_q3 + outer_fillet_q4) / 4.0
-    print("  [2] 외부 Fillet 적용 중... (평균 r={})".format(avg_outer_fillet))
-    fillet_all_corners(oEditor, outer_rect_name, avg_outer_fillet)
+    # 2. 외부 fillet 적용 (각 코너별로)
+    print("  [2] 외부 Fillet 적용 중...")
+
+    # 4개 코너 좌표 계산
+    corner_q1 = (ref_x + width, ref_z + height)  # 우상단
+    corner_q2 = (ref_x, ref_z + height)          # 좌상단
+    corner_q3 = (ref_x, ref_z)                    # 좌하단
+    corner_q4 = (ref_x + width, ref_z)           # 우하단
+
+    # 각 코너의 vertex 찾아서 개별적으로 fillet 적용
+    # Q3부터 시작 (좌하단)
+    if outer_fillet_q3 > 0:
+        vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q3[0], corner_q3[1])
+        if vid:
+            fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q3)
+        else:
+            print("    [경고] Q3 코너 vertex를 찾을 수 없습니다.")
+
+    # Q4 (우하단)
+    if outer_fillet_q4 > 0:
+        vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q4[0], corner_q4[1])
+        if vid:
+            fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q4)
+        else:
+            print("    [경고] Q4 코너 vertex를 찾을 수 없습니다.")
+
+    # Q2 (좌상단)
+    if outer_fillet_q2 > 0:
+        vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q2[0], corner_q2[1])
+        if vid:
+            fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q2)
+        else:
+            print("    [경고] Q2 코너 vertex를 찾을 수 없습니다.")
+
+    # Q1 (우상단)
+    if outer_fillet_q1 > 0:
+        vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q1[0], corner_q1[1])
+        if vid:
+            fillet_vertex(oEditor, outer_rect_name, vid, outer_fillet_q1)
+        else:
+            print("    [경고] Q1 코너 vertex를 찾을 수 없습니다.")
 
     # 3. 작은 직사각형 생성
     inner_width = width - 2 * thickness
@@ -237,10 +288,46 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     create_rectangle_xz(oEditor, inner_x, inner_z, inner_width, inner_height, inner_rect_name)
     print("  [3] 작은 직사각형 생성: W={}, H={}".format(inner_width, inner_height))
 
-    # 4. 내부 fillet 적용
-    avg_inner_fillet = (inner_fillet_q1 + inner_fillet_q2 + inner_fillet_q3 + inner_fillet_q4) / 4.0
-    print("  [4] 내부 Fillet 적용 중... (평균 r={})".format(avg_inner_fillet))
-    fillet_all_corners(oEditor, inner_rect_name, avg_inner_fillet)
+    # 4. 내부 fillet 적용 (각 코너별로)
+    print("  [4] 내부 Fillet 적용 중...")
+
+    # 내부 직사각형 4개 코너 좌표
+    inner_corner_q1 = (inner_x + inner_width, inner_z + inner_height)  # 우상단
+    inner_corner_q2 = (inner_x, inner_z + inner_height)                # 좌상단
+    inner_corner_q3 = (inner_x, inner_z)                                # 좌하단
+    inner_corner_q4 = (inner_x + inner_width, inner_z)                 # 우하단
+
+    # Q3부터 시작 (좌하단)
+    if inner_fillet_q3 > 0:
+        vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q3[0], inner_corner_q3[1])
+        if vid:
+            fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q3)
+        else:
+            print("    [경고] 내부 Q3 코너 vertex를 찾을 수 없습니다.")
+
+    # Q4 (우하단)
+    if inner_fillet_q4 > 0:
+        vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q4[0], inner_corner_q4[1])
+        if vid:
+            fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q4)
+        else:
+            print("    [경고] 내부 Q4 코너 vertex를 찾을 수 없습니다.")
+
+    # Q2 (좌상단)
+    if inner_fillet_q2 > 0:
+        vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q2[0], inner_corner_q2[1])
+        if vid:
+            fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q2)
+        else:
+            print("    [경고] 내부 Q2 코너 vertex를 찾을 수 없습니다.")
+
+    # Q1 (우상단)
+    if inner_fillet_q1 > 0:
+        vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q1[0], inner_corner_q1[1])
+        if vid:
+            fillet_vertex(oEditor, inner_rect_name, vid, inner_fillet_q1)
+        else:
+            print("    [경고] 내부 Q1 코너 vertex를 찾을 수 없습니다.")
 
     # 5. Subtract
     subtract_objects(oEditor, outer_rect_name, inner_rect_name)
