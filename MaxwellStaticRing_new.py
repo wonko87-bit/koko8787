@@ -232,7 +232,7 @@ def finalize_static_ring(oEditor, outer_name, inner_name, final_name):
 
 
 def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
-    """CSV 파일에서 Static Ring들을 생성 (내부/외부 분리)"""
+    """CSV 파일에서 Static Ring들을 생성 (fillet 없이 직사각형만)"""
     rings, x_offset = read_staticring_csv(csv_file_path)
 
     if not rings:
@@ -250,9 +250,6 @@ def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
 
     oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    inner_fillet_radius = 2.0  # 내부 직사각형 fillet
-    outer_fillet_radius = 6.0  # 외부 직사각형 fillet
-
     # 단계 1: 모든 내부 직사각형 생성
     inner_names = []
     for idx, ring in enumerate(rings):
@@ -263,15 +260,7 @@ def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
         except:
             inner_names.append(None)
 
-    # 단계 2: 모든 내부 직사각형에 fillet 적용
-    for inner_name in inner_names:
-        if inner_name:
-            try:
-                fillet_all_vertices(oEditor, inner_name, inner_fillet_radius)
-            except:
-                pass
-
-    # 단계 3: 모든 외부 직사각형 생성
+    # 단계 2: 모든 외부 직사각형 생성
     outer_names = []
     for idx, ring in enumerate(rings):
         ring_name = "{}_{}".format(name_prefix, idx + 1)
@@ -281,15 +270,7 @@ def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
         except:
             outer_names.append(None)
 
-    # 단계 4: 모든 외부 직사각형에 fillet 적용
-    for outer_name in outer_names:
-        if outer_name:
-            try:
-                fillet_all_vertices(oEditor, outer_name, outer_fillet_radius)
-            except:
-                pass
-
-    # 단계 5: 각각 subtract 및 이름 변경
+    # 단계 3: 각각 subtract 및 이름 변경
     for idx in range(len(rings)):
         if outer_names[idx] and inner_names[idx]:
             try:
