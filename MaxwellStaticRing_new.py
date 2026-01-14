@@ -102,11 +102,15 @@ def create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, name):
 
     Points: Q3(좌하) -> Q4(우하) -> Q1(우상) -> Q2(좌상) -> Q3(close)
     """
+    print("    [DEBUG] Polyline 생성 시작: ref_x={}, ref_z={}, width={}, height={}".format(ref_x, ref_z, width, height))
+
     # 4개 코너 좌표
     q3 = (ref_x, 0, ref_z)                    # 좌하단
     q4 = (ref_x + height, 0, ref_z)          # 우하단
     q1 = (ref_x + height, 0, ref_z + width)  # 우상단
     q2 = (ref_x, 0, ref_z + width)           # 좌상단
+
+    print("    [DEBUG] 코너 좌표: Q3={}, Q4={}, Q1={}, Q2={}".format(q3, q4, q1, q2))
 
     # PolylineParameters 생성
     polyline_params = [
@@ -135,6 +139,8 @@ def create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, name):
             "Z:=", "{}mm".format(pt[2])
         ])
 
+    print("    [DEBUG] Points 추가 완료: {} 개".format(len(points_array) - 1))
+
     # PolylineSegments에 세그먼트 추가 (모두 Line)
     segments_array = polyline_params[4]
     for i in range(4):
@@ -145,26 +151,36 @@ def create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, name):
             "NoOfPoints:=", 2
         ])
 
-    oEditor.CreatePolyline(
-        polyline_params,
-        [
-            "NAME:Attributes",
-            "Name:=", name,
-            "Flags:=", "",
-            "Color:=", "(143 175 143)",
-            "Transparency:=", 0.4,
-            "PartCoordinateSystem:=", "Global",
-            "UDMId:=", "",
-            "MaterialValue:=", "\"vacuum\"",
-            "SurfaceMaterialValue:=", "\"\"",
-            "SolveInside:=", True,
-            "ShellElement:=", False,
-            "ShellElementThickness:=", "0mm",
-            "IsMaterialEditable:=", True,
-            "UseMaterialAppearance:=", False,
-            "IsLightweight:=", False
-        ]
-    )
+    print("    [DEBUG] Segments 추가 완료: {} 개".format(len(segments_array) - 1))
+    print("    [DEBUG] CreatePolyline 호출 시작...")
+
+    try:
+        oEditor.CreatePolyline(
+            polyline_params,
+            [
+                "NAME:Attributes",
+                "Name:=", name,
+                "Flags:=", "",
+                "Color:=", "(143 175 143)",
+                "Transparency:=", 0.4,
+                "PartCoordinateSystem:=", "Global",
+                "UDMId:=", "",
+                "MaterialValue:=", "\"vacuum\"",
+                "SurfaceMaterialValue:=", "\"\"",
+                "SolveInside:=", True,
+                "ShellElement:=", False,
+                "ShellElementThickness:=", "0mm",
+                "IsMaterialEditable:=", True,
+                "UseMaterialAppearance:=", False,
+                "IsLightweight:=", False
+            ]
+        )
+        print("    [DEBUG] Polyline 생성 성공: {}".format(name))
+    except Exception as e:
+        print("    [ERROR] Polyline 생성 실패: {}".format(str(e)))
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def get_vertex_at_position(oEditor, obj_name, target_x, target_z, tolerance=1.0):
