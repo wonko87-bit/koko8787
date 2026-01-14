@@ -183,19 +183,19 @@ def subtract_objects(oEditor, blank_name, tool_name):
 def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name):
     """
     사분원 기반 filleted rectangle 생성 (원점 기준)
-    width: Z방향, height: X방향
+    width: X방향, height: Z방향
     r1: Q1(우상), r2: Q2(좌상), r3: Q3(좌하), r4: Q4(우하)
 
-    꼭지점: Q3(0,0), Q4(height,0), Q2(0,width), Q1(height,width)
+    꼭지점: Q3(0,0), Q4(width,0), Q2(0,height), Q1(width,height)
     """
     parts = []
     big_size = max(width, height) + 100  # 충분히 큰 값
 
     # 각 꼭지점에서 내측으로 반경만큼 이동한 원의 중심
     c_q3 = (r3, r3)                    # 좌하단
-    c_q4 = (height - r4, r4)           # 우하단
-    c_q2 = (r2, width - r2)            # 좌상단
-    c_q1 = (height - r1, width - r1)   # 우상단
+    c_q4 = (width - r4, r4)            # 우하단
+    c_q2 = (r2, height - r2)           # 좌상단
+    c_q1 = (width - r1, height - r1)   # 우상단
 
     # Q3: 3사분면 사분원 (좌하단, 외곽 방향)
     if r3 > 0:
@@ -254,37 +254,37 @@ def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name)
         parts.append(circ_name)
 
     # 직선 부분들을 사각형으로 채우기
-    # 하단 (Q3와 Q4 사이) - 두 사분원을 연결
-    if height > r3 + r4:
+    # 하단 (Q3와 Q4 사이, Z=0 부근) - 두 사분원을 연결
+    if width > r3 + r4:
         rect_name = base_name + "_Bottom"
-        bottom_height = max(r3, r4)  # 두 반경 중 큰 값까지 채움
-        create_rectangle_xz(oEditor, r3, 0, height - r3 - r4, bottom_height, rect_name)
+        bottom_z_size = max(r3, r4)  # 두 반경 중 큰 값까지 채움
+        create_rectangle_xz(oEditor, r3, 0, width - r3 - r4, bottom_z_size, rect_name)
         parts.append(rect_name)
 
-    # 우측 (Q4와 Q1 사이)
-    if width > r4 + r1:
+    # 우측 (Q4와 Q1 사이, X=width 부근)
+    if height > r4 + r1:
         rect_name = base_name + "_Right"
-        create_rectangle_xz(oEditor, height - r4, r4, r4, width - r4 - r1, rect_name)
+        create_rectangle_xz(oEditor, width - r4, r4, r4, height - r4 - r1, rect_name)
         parts.append(rect_name)
 
-    # 상단 (Q1과 Q2 사이) - 두 사분원을 연결
-    if height > r1 + r2:
+    # 상단 (Q2와 Q1 사이, Z=height 부근) - 두 사분원을 연결
+    if width > r1 + r2:
         rect_name = base_name + "_Top"
-        top_height = max(r1, r2)  # 두 반경 중 큰 값만큼 두께
-        create_rectangle_xz(oEditor, r2, width - top_height, height - r1 - r2, top_height, rect_name)
+        top_z_size = max(r1, r2)  # 두 반경 중 큰 값만큼 두께
+        create_rectangle_xz(oEditor, r2, height - top_z_size, width - r1 - r2, top_z_size, rect_name)
         parts.append(rect_name)
 
-    # 좌측 (Q2와 Q3 사이)
-    if width > r2 + r3:
+    # 좌측 (Q3와 Q2 사이, X=0 부근)
+    if height > r2 + r3:
         rect_name = base_name + "_Left"
-        create_rectangle_xz(oEditor, 0, r3, r2, width - r2 - r3, rect_name)
+        create_rectangle_xz(oEditor, 0, r3, r2, height - r2 - r3, rect_name)
         parts.append(rect_name)
 
     # 중앙 큰 사각형 - 모든 사분원을 피해서 중앙 채우기
     center_x_start = max(r2, r3)
-    center_x_size = height - max(r2, r3) - max(r1, r4)
+    center_x_size = width - max(r2, r3) - max(r1, r4)
     center_z_start = max(r3, r4)
-    center_z_size = width - max(r3, r4) - max(r1, r2)
+    center_z_size = height - max(r3, r4) - max(r1, r2)
     if center_x_size > 0 and center_z_size > 0:
         rect_name = base_name + "_Center"
         create_rectangle_xz(oEditor, center_x_start, center_z_start, center_x_size, center_z_size, rect_name)
