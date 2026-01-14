@@ -167,42 +167,46 @@ def subtract_objects(oEditor, blank_name, tool_name):
     )
 
 
-def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
-    """Static Ring 생성 - 단순화 버전"""
+def create_inner_rectangle(oEditor, ring_data, name, x_offset=0.0):
+    """내부 직사각형만 생성 (fillet 미적용)"""
     ref_x = ring_data['ref_x'] + x_offset
     ref_z = ring_data['ref_z']
     thickness = ring_data['thickness']
     width = ring_data['width']
     height = ring_data['height']
 
-    fillet_radius = 2.0  # 고정값
-
-    # 1. 큰 직사각형 생성
-    outer_rect_name = name + "_Outer"
-    create_rectangle_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
-
-    # 2. 외부 직사각형 모든 vertex에 fillet 적용
-    fillet_all_vertices(oEditor, outer_rect_name, fillet_radius)
-
-    # 3. 작은 직사각형 생성
     inner_width = width - 2 * thickness
     inner_height = height - 2 * thickness
     inner_x = ref_x + thickness
     inner_z = ref_z + thickness
 
     if inner_width <= 0 or inner_height <= 0:
-        return
+        return None
 
     inner_rect_name = name + "_Inner"
     create_rectangle_xz(oEditor, inner_x, inner_z, inner_width, inner_height, inner_rect_name)
+    return inner_rect_name
 
-    # 4. 내부 직사각형 모든 vertex에 fillet 적용
-    fillet_all_vertices(oEditor, inner_rect_name, fillet_radius)
 
-    # 5. Subtract
-    subtract_objects(oEditor, outer_rect_name, inner_rect_name)
+def create_outer_rectangle(oEditor, ring_data, name, x_offset=0.0):
+    """외부 직사각형만 생성 (fillet 미적용)"""
+    ref_x = ring_data['ref_x'] + x_offset
+    ref_z = ring_data['ref_z']
+    width = ring_data['width']
+    height = ring_data['height']
 
-    # 최종 이름 변경
+    outer_rect_name = name + "_Outer"
+    create_rectangle_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
+    return outer_rect_name
+
+
+def finalize_static_ring(oEditor, outer_name, inner_name, final_name):
+    """Subtract 후 이름 변경"""
+    if inner_name is None:
+        return
+
+    subtract_objects(oEditor, outer_name, inner_name)
+
     try:
         oEditor.ChangeProperty(
             [
@@ -211,13 +215,13 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
                     "NAME:Geometry3DAttributeTab",
                     [
                         "NAME:PropServers",
-                        outer_rect_name
+                        outer_name
                     ],
                     [
                         "NAME:ChangedProps",
                         [
                             "NAME:Name",
-                            "Value:=", name
+                            "Value:=", final_name
                         ]
                     ]
                 ]
@@ -228,7 +232,7 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
 
 
 def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
-    """CSV 파일에서 Static Ring들을 생성"""
+    """CSV 파일에서 Static Ring들을 생성 (내부/외부 분리)"""
     rings, x_offset = read_staticring_csv(csv_file_path)
 
     if not rings:
@@ -246,13 +250,53 @@ def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
 
     oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    # 각 Static Ring 생성
+    inner_fillet_radius = 2.0  # 내부 직사각형 fillet
+    outer_fillet_radius = 6.0  # 외부 직사각형 fillet
+
+    # 단계 1: 모든 내부 직사각형 생성
+    inner_names = []
     for idx, ring in enumerate(rings):
         ring_name = "{}_{}".format(name_prefix, idx + 1)
         try:
-            create_static_ring(oEditor, ring, ring_name, x_offset)
+            inner_name = create_inner_rectangle(oEditor, ring, ring_name, x_offset)
+            inner_names.append(inner_name)
         except:
-            continue
+            inner_names.append(None)
+
+    # 단계 2: 모든 내부 직사각형에 fillet 적용
+    for inner_name in inner_names:
+        if inner_name:
+            try:
+                fillet_all_vertices(oEditor, inner_name, inner_fillet_radius)
+            except:
+                pass
+
+    # 단계 3: 모든 외부 직사각형 생성
+    outer_names = []
+    for idx, ring in enumerate(rings):
+        ring_name = "{}_{}".format(name_prefix, idx + 1)
+        try:
+            outer_name = create_outer_rectangle(oEditor, ring, ring_name, x_offset)
+            outer_names.append(outer_name)
+        except:
+            outer_names.append(None)
+
+    # 단계 4: 모든 외부 직사각형에 fillet 적용
+    for outer_name in outer_names:
+        if outer_name:
+            try:
+                fillet_all_vertices(oEditor, outer_name, outer_fillet_radius)
+            except:
+                pass
+
+    # 단계 5: 각각 subtract 및 이름 변경
+    for idx in range(len(rings)):
+        if outer_names[idx] and inner_names[idx]:
+            try:
+                ring_name = "{}_{}".format(name_prefix, idx + 1)
+                finalize_static_ring(oEditor, outer_names[idx], inner_names[idx], ring_name)
+            except:
+                pass
 
     # 뷰 맞추기
     try:
