@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Maxwell 3D - Static Ring 생성 (단순화 버전)
-Rectangle + 모든 vertex 한번에 fillet
+Maxwell 3D - Static Ring 생성 (원 기반 사분원 방식)
+각 모서리에 원을 그려 사분원으로 자르고 연결
 """
 
 import ScriptEnv
@@ -13,19 +13,7 @@ import os
 
 
 def read_staticring_csv(csv_file_path):
-    """CSV 파일에서 Static Ring 데이터를 읽어옵니다.
-
-    변수 순서 (A4~I4):
-    1. X 기준 좌표 (큰 직사각형 좌하단 X)
-    2. Z 기준 좌표 (큰 직사각형 좌하단 Z)
-    3. 두께 (큰 직사각형과 작은 직사각형 사이 거리)
-    4. 큰 직사각형 X축 방향 길이
-    5. 큰 직사각형 Z축 방향 길이
-    6. 1사분면 꼭지점 내부 fillet radius (우상단)
-    7. 2사분면 꼭지점 내부 fillet radius (좌상단)
-    8. 3사분면 꼭지점 내부 fillet radius (좌하단)
-    9. 4사분면 꼭지점 내부 fillet radius (우하단)
-    """
+    """CSV 파일에서 Static Ring 데이터를 읽어옵니다."""
     rings = []
     x_offset = 0.0
 
@@ -33,26 +21,21 @@ def read_staticring_csv(csv_file_path):
         reader = csv.reader(f)
         rows = list(reader)
 
-    # B2 셀에서 X축 offset 읽기 (행 인덱스 1, 열 인덱스 1)
+    # B2 셀에서 X축 offset 읽기
     try:
         if len(rows) > 1 and len(rows[1]) > 1 and rows[1][1].strip():
             x_offset = float(rows[1][1].strip())
-            print("X축 offset: {}mm".format(x_offset))
-    except (ValueError, IndexError):
-        print("B2 셀에서 X축 offset을 읽을 수 없습니다. 기본값 0 사용")
+    except:
         x_offset = 0.0
 
-    # 4행부터 시작 (인덱스 3)
+    # 4행부터 시작
     for i in range(3, len(rows)):
         row = rows[i]
-
-        # 빈 행 체크
         if not row or all(not cell.strip() for cell in row):
             break
 
         try:
             if len(row) < 9:
-                print("경고: {}행에 데이터가 부족합니다. (9개 필요, {}개 있음)".format(i+1, len(row)))
                 continue
 
             ref_x = float(row[0].strip()) if row[0].strip() else None
@@ -65,9 +48,7 @@ def read_staticring_csv(csv_file_path):
             inner_fillet_q3 = float(row[7].strip()) if row[7].strip() else None
             inner_fillet_q4 = float(row[8].strip()) if row[8].strip() else None
 
-            # 데이터 유효성 검사
             if None in [ref_x, ref_z, thickness, width, height, inner_fillet_q1, inner_fillet_q2, inner_fillet_q3, inner_fillet_q4]:
-                print("경고: {}행에 빈 데이터가 있습니다.".format(i+1))
                 continue
 
             rings.append({
@@ -76,37 +57,29 @@ def read_staticring_csv(csv_file_path):
                 'thickness': thickness,
                 'width': width,
                 'height': height,
-                'inner_fillet_q1': inner_fillet_q1,  # 우상단 내부
-                'inner_fillet_q2': inner_fillet_q2,  # 좌상단 내부
-                'inner_fillet_q3': inner_fillet_q3,  # 좌하단 내부
-                'inner_fillet_q4': inner_fillet_q4,  # 우하단 내부
-                'row_num': i + 1
+                'r1': inner_fillet_q1,
+                'r2': inner_fillet_q2,
+                'r3': inner_fillet_q3,
+                'r4': inner_fillet_q4
             })
-
-        except (ValueError, IndexError) as e:
-            print("경고: {}행 데이터 읽기 오류: {}".format(i+1, str(e)))
+        except:
             continue
 
     return rings, x_offset
 
 
-def create_rectangle_xz(oEditor, x_start, z_start, width, height, name):
-    """XZ 평면에 Rectangle 생성
-
-    주의: WhichAxis="Y"일 때
-    - Width = Z방향 크기
-    - Height = X방향 크기
-    """
-    oEditor.CreateRectangle(
+def create_circle_xz(oEditor, center_x, center_z, radius, name):
+    """XZ 평면에 Circle 생성"""
+    oEditor.CreateCircle(
         [
-            "NAME:RectangleParameters",
+            "NAME:CircleParameters",
             "IsCovered:=", True,
-            "XStart:=", "{}mm".format(x_start),
-            "YStart:=", "0mm",
-            "ZStart:=", "{}mm".format(z_start),
-            "Width:=", "{}mm".format(height),   # Z방향
-            "Height:=", "{}mm".format(width),   # X방향
-            "WhichAxis:=", "Y"  # XZ 평면
+            "XCenter:=", "{}mm".format(center_x),
+            "YCenter:=", "0mm",
+            "ZCenter:=", "{}mm".format(center_z),
+            "Radius:=", "{}mm".format(radius),
+            "WhichAxis:=", "Y",
+            "NumSegments:=", "0"
         ],
         [
             "NAME:Attributes",
@@ -128,32 +101,72 @@ def create_rectangle_xz(oEditor, x_start, z_start, width, height, name):
     )
 
 
-def fillet_all_vertices(oEditor, obj_name, radius):
-    """객체의 모든 vertex에 동일한 fillet 적용"""
-    vertices = oEditor.GetVertexIDsFromObject(obj_name)
-    vertex_ids = [int(vid) for vid in vertices]
-
-    oEditor.Fillet(
+def create_rectangle_xz(oEditor, x_start, z_start, x_size, z_size, name):
+    """XZ 평면에 Rectangle 생성 (x_size=X방향, z_size=Z방향)"""
+    oEditor.CreateRectangle(
         [
-            "NAME:Selections",
-            "Selections:=", obj_name,
-            "NewPartsModelFlag:=", "Model"
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(x_start),
+            "YStart:=", "0mm",
+            "ZStart:=", "{}mm".format(z_start),
+            "Width:=", "{}mm".format(z_size),   # Z방향
+            "Height:=", "{}mm".format(x_size),  # X방향
+            "WhichAxis:=", "Y"
         ],
         [
-            "NAME:FilletParameters",
-            [
-                "NAME:FilletParameters",
-                "Edges:=", [],
-                "Vertices:=", vertex_ids,
-                "Radius:=", "{}mm".format(radius),
-                "Setback:=", "0mm"
-            ]
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0.4,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
+
+
+def intersect_objects(oEditor, blank_name, tool_name):
+    """Boolean Intersect"""
+    oEditor.Intersect(
+        [
+            "NAME:Selections",
+            "Blank Parts:=", blank_name,
+            "Tool Parts:=", tool_name
+        ],
+        [
+            "NAME:IntersectParameters",
+            "KeepOriginals:=", False
+        ]
+    )
+
+
+def unite_objects(oEditor, obj_names):
+    """Boolean Unite"""
+    if len(obj_names) < 2:
+        return
+    oEditor.Unite(
+        [
+            "NAME:Selections",
+            "Selections:=", ",".join(obj_names)
+        ],
+        [
+            "NAME:UniteParameters",
+            "KeepOriginals:=", False
         ]
     )
 
 
 def subtract_objects(oEditor, blank_name, tool_name):
-    """Boolean Subtract: blank - tool"""
+    """Boolean Subtract"""
     oEditor.Subtract(
         [
             "NAME:Selections",
@@ -167,78 +180,122 @@ def subtract_objects(oEditor, blank_name, tool_name):
     )
 
 
-def create_inner_rectangle(oEditor, ring_data, name, x_offset=0.0):
-    """내부 직사각형만 생성 (fillet 미적용)"""
-    ref_x = ring_data['ref_x'] + x_offset
-    ref_z = ring_data['ref_z']
-    thickness = ring_data['thickness']
-    width = ring_data['width']
-    height = ring_data['height']
+def create_filleted_rectangle(oEditor, ref_x, ref_z, width, height, r1, r2, r3, r4, base_name):
+    """
+    사분원 기반 filleted rectangle 생성
+    width: Z방향, height: X방향
+    r1: Q1(우상), r2: Q2(좌상), r3: Q3(좌하), r4: Q4(우하)
+    """
+    parts = []
 
-    inner_width = width - 2 * thickness
-    inner_height = height - 2 * thickness
-    inner_x = ref_x + thickness
-    inner_z = ref_z + thickness
+    # 각 꼭지점에서 내측으로 반경만큼 이동한 원의 중심
+    c_q3 = (ref_x + r3, ref_z + r3)           # 좌하단
+    c_q4 = (ref_x + height - r4, ref_z + r4) # 우하단
+    c_q2 = (ref_x + r2, ref_z + width - r2)  # 좌상단
+    c_q1 = (ref_x + height - r1, ref_z + width - r1)  # 우상단
 
-    if inner_width <= 0 or inner_height <= 0:
-        return None
+    # Q3: 1사분면 사분원 (오른쪽 위)
+    if r3 > 0:
+        circ_name = base_name + "_C_Q3"
+        rect_name = base_name + "_R_Q3"
+        create_circle_xz(oEditor, c_q3[0], c_q3[1], r3, circ_name)
+        create_rectangle_xz(oEditor, c_q3[0], c_q3[1], r3, r3, rect_name)
+        intersect_objects(oEditor, circ_name, rect_name)
+        parts.append(circ_name)
 
-    inner_rect_name = name + "_Inner"
-    create_rectangle_xz(oEditor, inner_x, inner_z, inner_width, inner_height, inner_rect_name)
-    return inner_rect_name
+    # Q4: 2사분면 사분원 (왼쪽 위)
+    if r4 > 0:
+        circ_name = base_name + "_C_Q4"
+        rect_name = base_name + "_R_Q4"
+        create_circle_xz(oEditor, c_q4[0], c_q4[1], r4, circ_name)
+        create_rectangle_xz(oEditor, c_q4[0] - r4, c_q4[1], r4, r4, rect_name)
+        intersect_objects(oEditor, circ_name, rect_name)
+        parts.append(circ_name)
 
+    # Q2: 4사분면 사분원 (오른쪽 아래)
+    if r2 > 0:
+        circ_name = base_name + "_C_Q2"
+        rect_name = base_name + "_R_Q2"
+        create_circle_xz(oEditor, c_q2[0], c_q2[1], r2, circ_name)
+        create_rectangle_xz(oEditor, c_q2[0], c_q2[1] - r2, r2, r2, rect_name)
+        intersect_objects(oEditor, circ_name, rect_name)
+        parts.append(circ_name)
 
-def create_outer_rectangle(oEditor, ring_data, name, x_offset=0.0):
-    """외부 직사각형만 생성 (fillet 미적용)"""
-    ref_x = ring_data['ref_x'] + x_offset
-    ref_z = ring_data['ref_z']
-    width = ring_data['width']
-    height = ring_data['height']
+    # Q1: 3사분면 사분원 (왼쪽 아래)
+    if r1 > 0:
+        circ_name = base_name + "_C_Q1"
+        rect_name = base_name + "_R_Q1"
+        create_circle_xz(oEditor, c_q1[0], c_q1[1], r1, circ_name)
+        create_rectangle_xz(oEditor, c_q1[0] - r1, c_q1[1] - r1, r1, r1, rect_name)
+        intersect_objects(oEditor, circ_name, rect_name)
+        parts.append(circ_name)
 
-    outer_rect_name = name + "_Outer"
-    create_rectangle_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
-    return outer_rect_name
+    # 직선 부분 (4개 사각형)
+    # 하단 (Q3와 Q4 사이)
+    bottom_x_start = ref_x + r3
+    bottom_x_size = height - r3 - r4
+    bottom_z_start = ref_z
+    bottom_z_size = min(r3, r4)
+    if bottom_x_size > 0 and bottom_z_size > 0:
+        rect_name = base_name + "_Bottom"
+        create_rectangle_xz(oEditor, bottom_x_start, bottom_z_start, bottom_x_size, bottom_z_size, rect_name)
+        parts.append(rect_name)
 
+    # 우측 (Q4와 Q1 사이)
+    right_x_start = ref_x + height - max(r4, r1)
+    right_x_size = max(r4, r1)
+    right_z_start = ref_z + r4
+    right_z_size = width - r4 - r1
+    if right_x_size > 0 and right_z_size > 0:
+        rect_name = base_name + "_Right"
+        create_rectangle_xz(oEditor, right_x_start, right_z_start, right_x_size, right_z_size, rect_name)
+        parts.append(rect_name)
 
-def finalize_static_ring(oEditor, outer_name, inner_name, final_name):
-    """Subtract 후 이름 변경"""
-    if inner_name is None:
-        return
+    # 상단 (Q1과 Q2 사이)
+    top_x_start = ref_x + r2
+    top_x_size = height - r2 - r1
+    top_z_start = ref_z + width - min(r1, r2)
+    top_z_size = min(r1, r2)
+    if top_x_size > 0 and top_z_size > 0:
+        rect_name = base_name + "_Top"
+        create_rectangle_xz(oEditor, top_x_start, top_z_start, top_x_size, top_z_size, rect_name)
+        parts.append(rect_name)
 
-    subtract_objects(oEditor, outer_name, inner_name)
+    # 좌측 (Q2와 Q3 사이)
+    left_x_start = ref_x
+    left_x_size = min(r2, r3)
+    left_z_start = ref_z + r3
+    left_z_size = width - r3 - r2
+    if left_x_size > 0 and left_z_size > 0:
+        rect_name = base_name + "_Left"
+        create_rectangle_xz(oEditor, left_x_start, left_z_start, left_x_size, left_z_size, rect_name)
+        parts.append(rect_name)
 
-    try:
-        oEditor.ChangeProperty(
-            [
-                "NAME:AllTabs",
-                [
-                    "NAME:Geometry3DAttributeTab",
-                    [
-                        "NAME:PropServers",
-                        outer_name
-                    ],
-                    [
-                        "NAME:ChangedProps",
-                        [
-                            "NAME:Name",
-                            "Value:=", final_name
-                        ]
-                    ]
-                ]
-            ]
-        )
-    except:
-        pass
+    # 중앙 큰 사각형
+    center_x_start = ref_x + min(r2, r3)
+    center_x_size = height - min(r2, r3) - min(r1, r4)
+    center_z_start = ref_z + min(r3, r4)
+    center_z_size = width - min(r3, r4) - min(r1, r2)
+    if center_x_size > 0 and center_z_size > 0:
+        rect_name = base_name + "_Center"
+        create_rectangle_xz(oEditor, center_x_start, center_z_start, center_x_size, center_z_size, rect_name)
+        parts.append(rect_name)
+
+    # 모든 파트 Unite
+    if len(parts) > 0:
+        unite_objects(oEditor, parts)
+        return parts[0]
+
+    return None
 
 
 def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
-    """CSV 파일에서 Static Ring들을 생성 (fillet 없이 직사각형만)"""
+    """CSV 파일에서 Static Ring들을 생성"""
     rings, x_offset = read_staticring_csv(csv_file_path)
 
     if not rings:
         return
 
-    # Maxwell 프로젝트 및 디자인 가져오기
     oProject = oDesktop.GetActiveProject()
     if oProject is None:
         oProject = oDesktop.NewProject()
@@ -250,34 +307,70 @@ def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
 
     oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-    # 단계 1: 모든 내부 직사각형 생성
-    inner_names = []
     for idx, ring in enumerate(rings):
         ring_name = "{}_{}".format(name_prefix, idx + 1)
-        try:
-            inner_name = create_inner_rectangle(oEditor, ring, ring_name, x_offset)
-            inner_names.append(inner_name)
-        except:
-            inner_names.append(None)
 
-    # 단계 2: 모든 외부 직사각형 생성
-    outer_names = []
-    for idx, ring in enumerate(rings):
-        ring_name = "{}_{}".format(name_prefix, idx + 1)
         try:
-            outer_name = create_outer_rectangle(oEditor, ring, ring_name, x_offset)
-            outer_names.append(outer_name)
-        except:
-            outer_names.append(None)
+            ref_x = ring['ref_x'] + x_offset
+            ref_z = ring['ref_z']
+            width = ring['width']
+            height = ring['height']
+            thickness = ring['thickness']
 
-    # 단계 3: 각각 subtract 및 이름 변경
-    for idx in range(len(rings)):
-        if outer_names[idx] and inner_names[idx]:
-            try:
-                ring_name = "{}_{}".format(name_prefix, idx + 1)
-                finalize_static_ring(oEditor, outer_names[idx], inner_names[idx], ring_name)
-            except:
-                pass
+            r1 = ring['r1']
+            r2 = ring['r2']
+            r3 = ring['r3']
+            r4 = ring['r4']
+
+            # 외부 filleted rectangle
+            outer_name = ring_name + "_Outer"
+            outer = create_filleted_rectangle(oEditor, ref_x, ref_z, width, height, r1, r2, r3, r4, outer_name)
+
+            # 내부 filleted rectangle (반경 - 두께)
+            inner_r1 = max(0, r1 - thickness)
+            inner_r2 = max(0, r2 - thickness)
+            inner_r3 = max(0, r3 - thickness)
+            inner_r4 = max(0, r4 - thickness)
+
+            inner_x = ref_x + thickness
+            inner_z = ref_z + thickness
+            inner_width = width - 2 * thickness
+            inner_height = height - 2 * thickness
+
+            if inner_width > 0 and inner_height > 0:
+                inner_name = ring_name + "_Inner"
+                inner = create_filleted_rectangle(oEditor, inner_x, inner_z, inner_width, inner_height,
+                                                 inner_r1, inner_r2, inner_r3, inner_r4, inner_name)
+
+                # Subtract
+                if outer and inner:
+                    subtract_objects(oEditor, outer, inner)
+
+                    # 이름 변경
+                    try:
+                        oEditor.ChangeProperty(
+                            [
+                                "NAME:AllTabs",
+                                [
+                                    "NAME:Geometry3DAttributeTab",
+                                    [
+                                        "NAME:PropServers",
+                                        outer
+                                    ],
+                                    [
+                                        "NAME:ChangedProps",
+                                        [
+                                            "NAME:Name",
+                                            "Value:=", ring_name
+                                        ]
+                                    ]
+                                ]
+                            ]
+                        )
+                    except:
+                        pass
+        except:
+            continue
 
     # 뷰 맞추기
     try:
