@@ -189,6 +189,7 @@ def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name)
     꼭지점: Q3(0,0), Q4(height,0), Q2(0,width), Q1(height,width)
     """
     parts = []
+    big_size = max(width, height) + 100  # 충분히 큰 값
 
     # 각 꼭지점에서 내측으로 반경만큼 이동한 원의 중심
     c_q3 = (r3, r3)                    # 좌하단
@@ -199,41 +200,57 @@ def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name)
     # Q3: 3사분면 사분원 (좌하단, 외곽 방향)
     if r3 > 0:
         circ_name = base_name + "_C_Q3"
-        rect_name = base_name + "_R_Q3"
         create_circle_xz(oEditor, c_q3[0], c_q3[1], r3, circ_name)
-        # 3사분면: 중심에서 왼쪽 아래
-        create_rectangle_xz(oEditor, c_q3[0] - r3, c_q3[1] - r3, r3, r3, rect_name)
-        intersect_objects(oEditor, circ_name, rect_name)
+        # 우측 제거 (x >= 중심)
+        rect_right = base_name + "_R_Q3_Right"
+        create_rectangle_xz(oEditor, c_q3[0], 0, big_size, big_size, rect_right)
+        subtract_objects(oEditor, circ_name, rect_right)
+        # 상측 제거 (z >= 중심)
+        rect_top = base_name + "_R_Q3_Top"
+        create_rectangle_xz(oEditor, 0, c_q3[1], big_size, big_size, rect_top)
+        subtract_objects(oEditor, circ_name, rect_top)
         parts.append(circ_name)
 
     # Q4: 4사분면 사분원 (우하단, 외곽 방향)
     if r4 > 0:
         circ_name = base_name + "_C_Q4"
-        rect_name = base_name + "_R_Q4"
         create_circle_xz(oEditor, c_q4[0], c_q4[1], r4, circ_name)
-        # 4사분면: 중심에서 오른쪽 아래
-        create_rectangle_xz(oEditor, c_q4[0], c_q4[1] - r4, r4, r4, rect_name)
-        intersect_objects(oEditor, circ_name, rect_name)
+        # 좌측 제거 (x < 중심)
+        rect_left = base_name + "_R_Q4_Left"
+        create_rectangle_xz(oEditor, 0, 0, c_q4[0], big_size, rect_left)
+        subtract_objects(oEditor, circ_name, rect_left)
+        # 상측 제거 (z >= 중심)
+        rect_top = base_name + "_R_Q4_Top"
+        create_rectangle_xz(oEditor, 0, c_q4[1], big_size, big_size, rect_top)
+        subtract_objects(oEditor, circ_name, rect_top)
         parts.append(circ_name)
 
     # Q2: 2사분면 사분원 (좌상단, 외곽 방향)
     if r2 > 0:
         circ_name = base_name + "_C_Q2"
-        rect_name = base_name + "_R_Q2"
         create_circle_xz(oEditor, c_q2[0], c_q2[1], r2, circ_name)
-        # 2사분면: 중심에서 왼쪽 위
-        create_rectangle_xz(oEditor, c_q2[0] - r2, c_q2[1], r2, r2, rect_name)
-        intersect_objects(oEditor, circ_name, rect_name)
+        # 우측 제거 (x >= 중심)
+        rect_right = base_name + "_R_Q2_Right"
+        create_rectangle_xz(oEditor, c_q2[0], 0, big_size, big_size, rect_right)
+        subtract_objects(oEditor, circ_name, rect_right)
+        # 하측 제거 (z < 중심)
+        rect_bottom = base_name + "_R_Q2_Bottom"
+        create_rectangle_xz(oEditor, 0, 0, big_size, c_q2[1], rect_bottom)
+        subtract_objects(oEditor, circ_name, rect_bottom)
         parts.append(circ_name)
 
     # Q1: 1사분면 사분원 (우상단, 외곽 방향)
     if r1 > 0:
         circ_name = base_name + "_C_Q1"
-        rect_name = base_name + "_R_Q1"
         create_circle_xz(oEditor, c_q1[0], c_q1[1], r1, circ_name)
-        # 1사분면: 중심에서 오른쪽 위
-        create_rectangle_xz(oEditor, c_q1[0], c_q1[1], r1, r1, rect_name)
-        intersect_objects(oEditor, circ_name, rect_name)
+        # 좌측 제거 (x < 중심)
+        rect_left = base_name + "_R_Q1_Left"
+        create_rectangle_xz(oEditor, 0, 0, c_q1[0], big_size, rect_left)
+        subtract_objects(oEditor, circ_name, rect_left)
+        # 하측 제거 (z < 중심)
+        rect_bottom = base_name + "_R_Q1_Bottom"
+        create_rectangle_xz(oEditor, 0, 0, big_size, c_q1[1], rect_bottom)
+        subtract_objects(oEditor, circ_name, rect_bottom)
         parts.append(circ_name)
 
     # 직선 부분들을 사각형으로 채우기
