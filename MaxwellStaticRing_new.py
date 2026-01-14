@@ -215,9 +215,9 @@ def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name)
     if r4 > 0:
         circ_name = base_name + "_C_Q4"
         create_circle_xz(oEditor, c_q4[0], c_q4[1], r4, circ_name)
-        # 좌측 제거 (x < 중심)
+        # 좌측 제거 (x < 중심) - 음수 영역까지 커버
         rect_left = base_name + "_R_Q4_Left"
-        create_rectangle_xz(oEditor, 0, 0, c_q4[0], big_size, rect_left)
+        create_rectangle_xz(oEditor, c_q4[0] - big_size, 0, big_size, big_size, rect_left)
         subtract_objects(oEditor, circ_name, rect_left)
         # 상측 제거 (z >= 중심)
         rect_top = base_name + "_R_Q4_Top"
@@ -233,9 +233,9 @@ def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name)
         rect_right = base_name + "_R_Q2_Right"
         create_rectangle_xz(oEditor, c_q2[0], 0, big_size, big_size, rect_right)
         subtract_objects(oEditor, circ_name, rect_right)
-        # 하측 제거 (z < 중심)
+        # 하측 제거 (z < 중심) - 음수 영역까지 커버
         rect_bottom = base_name + "_R_Q2_Bottom"
-        create_rectangle_xz(oEditor, 0, 0, big_size, c_q2[1], rect_bottom)
+        create_rectangle_xz(oEditor, 0, c_q2[1] - big_size, big_size, big_size, rect_bottom)
         subtract_objects(oEditor, circ_name, rect_bottom)
         parts.append(circ_name)
 
@@ -243,13 +243,13 @@ def create_filleted_rectangle(oEditor, width, height, r1, r2, r3, r4, base_name)
     if r1 > 0:
         circ_name = base_name + "_C_Q1"
         create_circle_xz(oEditor, c_q1[0], c_q1[1], r1, circ_name)
-        # 좌측 제거 (x < 중심)
+        # 좌측 제거 (x < 중심) - 음수 영역까지 커버
         rect_left = base_name + "_R_Q1_Left"
-        create_rectangle_xz(oEditor, 0, 0, c_q1[0], big_size, rect_left)
+        create_rectangle_xz(oEditor, c_q1[0] - big_size, 0, big_size, big_size, rect_left)
         subtract_objects(oEditor, circ_name, rect_left)
-        # 하측 제거 (z < 중심)
+        # 하측 제거 (z < 중심) - 음수 영역까지 커버
         rect_bottom = base_name + "_R_Q1_Bottom"
-        create_rectangle_xz(oEditor, 0, 0, big_size, c_q1[1], rect_bottom)
+        create_rectangle_xz(oEditor, 0, c_q1[1] - big_size, big_size, big_size, rect_bottom)
         subtract_objects(oEditor, circ_name, rect_bottom)
         parts.append(circ_name)
 
