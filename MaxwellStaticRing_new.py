@@ -108,20 +108,37 @@ def create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, name):
     q1 = (ref_x + height, 0, ref_z + width)  # 우상단
     q2 = (ref_x, 0, ref_z + width)           # 좌상단
 
-    # PolylinePoints 생성
-    point_list = []
+    # PolylineParameters 생성
+    polyline_params = [
+        "NAME:PolylineParameters",
+        "IsPolylineCovered:=", True,
+        "IsPolylineClosed:=", True,
+        [
+            "NAME:PolylinePoints"
+        ],
+        [
+            "NAME:PolylineSegments"
+        ],
+        [
+            "NAME:PolylineXSection",
+            "XSectionType:=", "None"
+        ]
+    ]
+
+    # PolylinePoints에 점 추가
+    points_array = polyline_params[3]
     for pt in [q3, q4, q1, q2]:
-        point_list.append([
+        points_array.append([
             "NAME:PLPoint",
             "X:=", "{}mm".format(pt[0]),
             "Y:=", "{}mm".format(pt[1]),
             "Z:=", "{}mm".format(pt[2])
         ])
 
-    # PolylineSegments 생성 (모두 Line)
-    segment_list = []
+    # PolylineSegments에 세그먼트 추가 (모두 Line)
+    segments_array = polyline_params[4]
     for i in range(4):
-        segment_list.append([
+        segments_array.append([
             "NAME:PLSegment",
             "SegmentType:=", "Line",
             "StartIndex:=", i,
@@ -129,23 +146,7 @@ def create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, name):
         ])
 
     oEditor.CreatePolyline(
-        [
-            "NAME:PolylineParameters",
-            "IsPolylineCovered:=", True,
-            "IsPolylineClosed:=", True,
-            [
-                "NAME:PolylinePoints",
-                point_list
-            ],
-            [
-                "NAME:PolylineSegments",
-                segment_list
-            ],
-            [
-                "NAME:PolylineXSection",
-                "XSectionType:=", "None"
-            ]
-        ],
+        polyline_params,
         [
             "NAME:Attributes",
             "Name:=", name,
