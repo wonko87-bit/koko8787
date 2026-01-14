@@ -98,130 +98,53 @@ def read_staticring_csv(csv_file_path):
     return rings, x_offset
 
 
-def create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, name):
-    """XZ 평면에 Polyline으로 Closed Rectangle 생성
+def create_rectangle_xz(oEditor, x_start, z_start, width, height, name):
+    """XZ 평면에 Rectangle 생성
 
-    Args:
-        ref_x, ref_z: 좌하단 기준점
-        width: Z 방향 크기
-        height: X 방향 크기
-
-    Points: Q3(좌하) -> Q4(우하) -> Q1(우상) -> Q2(좌상) -> Q3(close)
+    주의: WhichAxis="Y"일 때
+    - Width = Z방향 크기
+    - Height = X방향 크기
     """
-    log("    [DEBUG] Polyline 생성 시작: ref_x={}, ref_z={}, width={}, height={}".format(ref_x, ref_z, width, height))
-
-    # 4개 코너 좌표
-    q3 = (ref_x, 0, ref_z)                    # 좌하단
-    q4 = (ref_x + height, 0, ref_z)          # 우하단
-    q1 = (ref_x + height, 0, ref_z + width)  # 우상단
-    q2 = (ref_x, 0, ref_z + width)           # 좌상단
-
-    log("    [DEBUG] 코너 좌표: Q3={}, Q4={}, Q1={}, Q2={}".format(q3, q4, q1, q2))
-
-    # PolylineParameters 생성
-    polyline_params = [
-        "NAME:PolylineParameters",
-        "IsPolylineCovered:=", True,
-        "IsPolylineClosed:=", True,
+    oEditor.CreateRectangle(
         [
-            "NAME:PolylinePoints"
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(x_start),
+            "YStart:=", "0mm",
+            "ZStart:=", "{}mm".format(z_start),
+            "Width:=", "{}mm".format(height),   # Z방향
+            "Height:=", "{}mm".format(width),   # X방향
+            "WhichAxis:=", "Y"  # XZ 평면
         ],
         [
-            "NAME:PolylineSegments"
-        ],
-        [
-            "NAME:PolylineXSection",
-            "XSectionType:=", "None"
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0.4,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
         ]
-    ]
-
-    # PolylinePoints에 점 추가
-    points_array = polyline_params[3]
-    for pt in [q3, q4, q1, q2]:
-        points_array.append([
-            "NAME:PLPoint",
-            "X:=", "{}mm".format(pt[0]),
-            "Y:=", "{}mm".format(pt[1]),
-            "Z:=", "{}mm".format(pt[2])
-        ])
-
-    log("    [DEBUG] Points 추가 완료: {} 개".format(len(points_array) - 1))
-
-    # PolylineSegments에 세그먼트 추가 (모두 Line)
-    segments_array = polyline_params[4]
-    for i in range(4):
-        segments_array.append([
-            "NAME:PLSegment",
-            "SegmentType:=", "Line",
-            "StartIndex:=", i,
-            "NoOfPoints:=", 2
-        ])
-
-    log("    [DEBUG] Segments 추가 완료: {} 개".format(len(segments_array) - 1))
-    log("    [DEBUG] CreatePolyline 호출 시작...")
-
-    try:
-        oEditor.CreatePolyline(
-            polyline_params,
-            [
-                "NAME:Attributes",
-                "Name:=", name,
-                "Flags:=", "",
-                "Color:=", "(143 175 143)",
-                "Transparency:=", 0.4,
-                "PartCoordinateSystem:=", "Global",
-                "UDMId:=", "",
-                "MaterialValue:=", "\"vacuum\"",
-                "SurfaceMaterialValue:=", "\"\"",
-                "SolveInside:=", True,
-                "ShellElement:=", False,
-                "ShellElementThickness:=", "0mm",
-                "IsMaterialEditable:=", True,
-                "UseMaterialAppearance:=", False,
-                "IsLightweight:=", False
-            ]
-        )
-        log("    [DEBUG] Polyline 생성 성공: {}".format(name))
-    except Exception as e:
-        log("    [ERROR] Polyline 생성 실패: {}".format(str(e)))
-        import traceback
-        traceback.print_exc()
-        raise
+    )
 
 
-def get_vertex_at_position(oEditor, obj_name, target_x, target_z, tolerance=1.0):
-    """특정 위치의 vertex ID 찾기"""
+def fillet_all_vertices(oEditor, obj_name, radius):
+    """객체의 모든 vertex에 동일한 fillet 적용"""
     try:
         vertices = oEditor.GetVertexIDsFromObject(obj_name)
-        print("    찾은 vertex 수: {}".format(len(vertices)))
+        log("    모든 vertex에 fillet 적용: {} 개, r={}mm".format(len(vertices), radius))
 
-        for vid in vertices:
-            pos = oEditor.GetVertexPosition(obj_name, vid)
-            x_pos = pos[0]
-            y_pos = pos[1]
-            z_pos = pos[2]
+        # 모든 vertex ID를 정수 리스트로 변환
+        vertex_ids = [int(vid) for vid in vertices]
 
-            print("      Vertex {}: ({:.2f}, {:.2f}, {:.2f})".format(vid, x_pos, y_pos, z_pos))
-
-            # XZ 평면이므로 Y≈0이고, X, Z가 목표 좌표와 일치
-            if abs(y_pos) < 0.5 and abs(x_pos - target_x) < tolerance and abs(z_pos - target_z) < tolerance:
-                print("    -> 목표 좌표 ({:.2f}, {:.2f})와 일치! Vertex ID={}".format(target_x, target_z, vid))
-                return vid
-
-        print("    [경고] 목표 좌표 ({:.2f}, {:.2f})에 해당하는 vertex를 찾지 못했습니다.".format(target_x, target_z))
-    except Exception as e:
-        print("    [오류] Vertex 찾기 실패: {}".format(str(e)))
-        import traceback
-        traceback.print_exc()
-    return None
-
-
-def fillet_vertex(oEditor, obj_name, vertex_id, radius):
-    """특정 vertex에 fillet 적용"""
-    if radius <= 0 or vertex_id is None:
-        return False
-
-    try:
         oEditor.Fillet(
             [
                 "NAME:Selections",
@@ -233,16 +156,18 @@ def fillet_vertex(oEditor, obj_name, vertex_id, radius):
                 [
                     "NAME:FilletParameters",
                     "Edges:=", [],
-                    "Vertices:=", [int(vertex_id)],
+                    "Vertices:=", vertex_ids,
                     "Radius:=", "{}mm".format(radius),
                     "Setback:=", "0mm"
                 ]
             ]
         )
-        print("    Fillet 적용: vertex={}, r={}mm".format(vertex_id, radius))
+        log("    Fillet 적용 완료")
         return True
     except Exception as e:
-        print("    [경고] Fillet 적용 실패: vertex={}, r={}, 오류={}".format(vertex_id, radius, str(e)))
+        log("    [오류] Fillet 적용 실패: {}".format(str(e)))
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -262,79 +187,36 @@ def subtract_objects(oEditor, blank_name, tool_name):
 
 
 def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
-    """Static Ring 생성
+    """Static Ring 생성 - 단순화 버전
 
     단계:
-    1. 큰 직사각형 생성 (Polyline)
-    2. 외부 fillet 적용 (모든 모서리 2mm 고정)
-    3. 작은 직사각형 생성 (Polyline)
-    4. 내부 fillet 적용 (모든 모서리 2mm 고정)
-    5. Subtract (큰 직사각형 - 작은 직사각형)
+    1. 큰 직사각형 생성
+    2. 모든 vertex에 2mm fillet 한번에 적용
+    3. 작은 직사각형 생성
+    4. 모든 vertex에 2mm fillet 한번에 적용
+    5. Subtract
     """
-
-    ref_x = ring_data['ref_x'] + x_offset  # X축 offset 적용
+    ref_x = ring_data['ref_x'] + x_offset
     ref_z = ring_data['ref_z']
     thickness = ring_data['thickness']
     width = ring_data['width']
     height = ring_data['height']
 
-    # 내부 fillet 반경 (CSV 입력값)
-    inner_fillet_q1 = ring_data['inner_fillet_q1']
-    inner_fillet_q2 = ring_data['inner_fillet_q2']
-    inner_fillet_q3 = ring_data['inner_fillet_q3']
-    inner_fillet_q4 = ring_data['inner_fillet_q4']
-
-    # 외부 fillet 반경 = 내부 fillet + thickness
-    outer_fillet_q1 = inner_fillet_q1 + thickness
-    outer_fillet_q2 = inner_fillet_q2 + thickness
-    outer_fillet_q3 = inner_fillet_q3 + thickness
-    outer_fillet_q4 = inner_fillet_q4 + thickness
+    fillet_radius = 2.0  # 고정값
 
     log("  기준점: ({}, 0, {})".format(ref_x, ref_z))
     log("  큰 직사각형: W={}, H={}".format(width, height))
     log("  두께: {}".format(thickness))
-    log("  모든 모서리 Fillet: 2mm (고정)")
+    log("  모든 모서리 Fillet: {}mm".format(fillet_radius))
 
-    # 1. 큰 직사각형 생성 (Polyline)
+    # 1. 큰 직사각형 생성
     outer_rect_name = name + "_Outer"
-    create_rectangle_polyline_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
-    log("  [1] 큰 직사각형 생성 (Polyline)")
+    create_rectangle_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
+    log("  [1] 큰 직사각형 생성 완료")
 
-    # 2. 외부 fillet 적용 (모든 모서리에 2mm 고정)
-    print("  [2] 외부 Fillet 적용 중 (모든 모서리 2mm)...")
-
-    # 4개 코너 좌표 계산
-    corner_q1 = (ref_x + height, ref_z + width)  # 우상단
-    corner_q2 = (ref_x, ref_z + width)           # 좌상단
-    corner_q3 = (ref_x, ref_z)                   # 좌하단
-    corner_q4 = (ref_x + height, ref_z)          # 우하단
-
-    fillet_radius = 2.0  # 고정값
-
-    # 순차 적용: Q4 -> Q1 -> Q2 -> Q3
-    # Q4 (우하단)
-    vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q4[0], corner_q4[1])
-    if vid:
-        fillet_vertex(oEditor, outer_rect_name, vid, fillet_radius)
-        print("    Q4 fillet 완료")
-
-    # Q1 (우상단)
-    vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q1[0], corner_q1[1])
-    if vid:
-        fillet_vertex(oEditor, outer_rect_name, vid, fillet_radius)
-        print("    Q1 fillet 완료")
-
-    # Q2 (좌상단)
-    vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q2[0], corner_q2[1])
-    if vid:
-        fillet_vertex(oEditor, outer_rect_name, vid, fillet_radius)
-        print("    Q2 fillet 완료")
-
-    # Q3 (좌하단)
-    vid = get_vertex_at_position(oEditor, outer_rect_name, corner_q3[0], corner_q3[1])
-    if vid:
-        fillet_vertex(oEditor, outer_rect_name, vid, fillet_radius)
-        print("    Q3 fillet 완료")
+    # 2. 외부 직사각형 모든 vertex에 fillet 적용
+    log("  [2] 외부 직사각형 fillet 적용 중...")
+    fillet_all_vertices(oEditor, outer_rect_name, fillet_radius)
 
     # 3. 작은 직사각형 생성
     inner_width = width - 2 * thickness
@@ -343,50 +225,21 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     inner_z = ref_z + thickness
 
     if inner_width <= 0 or inner_height <= 0:
-        print("  [오류] 두께가 너무 커서 내부 직사각형을 만들 수 없습니다.")
+        log("  [오류] 두께가 너무 커서 내부 직사각형을 만들 수 없습니다.")
         return
 
     inner_rect_name = name + "_Inner"
-    create_rectangle_polyline_xz(oEditor, inner_x, inner_z, inner_width, inner_height, inner_rect_name)
-    print("  [3] 작은 직사각형 생성 (Polyline): W={}, H={}".format(inner_width, inner_height))
+    create_rectangle_xz(oEditor, inner_x, inner_z, inner_width, inner_height, inner_rect_name)
+    log("  [3] 작은 직사각형 생성 완료: W={}, H={}".format(inner_width, inner_height))
 
-    # 4. 내부 fillet 적용 (모든 모서리에 2mm 고정)
-    print("  [4] 내부 Fillet 적용 중 (모든 모서리 2mm)...")
-
-    # 내부 직사각형 4개 코너 좌표
-    inner_corner_q1 = (inner_x + inner_height, inner_z + inner_width)  # 우상단
-    inner_corner_q2 = (inner_x, inner_z + inner_width)                 # 좌상단
-    inner_corner_q3 = (inner_x, inner_z)                               # 좌하단
-    inner_corner_q4 = (inner_x + inner_height, inner_z)                # 우하단
-
-    # 순차 적용: Q4 -> Q1 -> Q2 -> Q3
-    # Q4 (우하단)
-    vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q4[0], inner_corner_q4[1])
-    if vid:
-        fillet_vertex(oEditor, inner_rect_name, vid, fillet_radius)
-        print("    내부 Q4 fillet 완료")
-
-    # Q1 (우상단)
-    vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q1[0], inner_corner_q1[1])
-    if vid:
-        fillet_vertex(oEditor, inner_rect_name, vid, fillet_radius)
-        print("    내부 Q1 fillet 완료")
-
-    # Q2 (좌상단)
-    vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q2[0], inner_corner_q2[1])
-    if vid:
-        fillet_vertex(oEditor, inner_rect_name, vid, fillet_radius)
-        print("    내부 Q2 fillet 완료")
-
-    # Q3 (좌하단)
-    vid = get_vertex_at_position(oEditor, inner_rect_name, inner_corner_q3[0], inner_corner_q3[1])
-    if vid:
-        fillet_vertex(oEditor, inner_rect_name, vid, fillet_radius)
-        print("    내부 Q3 fillet 완료")
+    # 4. 내부 직사각형 모든 vertex에 fillet 적용
+    log("  [4] 내부 직사각형 fillet 적용 중...")
+    fillet_all_vertices(oEditor, inner_rect_name, fillet_radius)
 
     # 5. Subtract
+    log("  [5] Subtract 수행 중...")
     subtract_objects(oEditor, outer_rect_name, inner_rect_name)
-    print("  [5] Subtract: Static Ring 완성")
+    log("  [5] Subtract 완료")
 
     # 최종 이름 변경
     try:
@@ -409,9 +262,9 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
                 ]
             ]
         )
-        print("  완성: {}".format(name))
+        log("  완성: {}".format(name))
     except:
-        print("  완성: {} (이름 변경 실패)".format(outer_rect_name))
+        log("  완성: {} (이름 변경 실패)".format(outer_rect_name))
 
 
 def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
