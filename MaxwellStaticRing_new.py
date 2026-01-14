@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Maxwell 3D - Static Ring 생성 (Boolean 연산)
-큰 직사각형(fillet) - 작은 직사각형(fillet) = 프레임 형태
-내부 fillet 반경 기준으로 입력, 외부 fillet = 내부 fillet + thickness
+Maxwell 3D - Static Ring 생성 (단순화 버전)
+Rectangle + 모든 vertex 한번에 fillet
 """
 
 import ScriptEnv
@@ -11,13 +10,6 @@ oDesktop.RestoreWindow()
 
 import csv
 import os
-from collections import Counter
-
-
-def log(msg):
-    """메시지 출력 (Maxwell 메시지 매니저에 표시)"""
-    AddMessage(msg)
-    print(msg)  # 백업용
 
 
 def read_staticring_csv(csv_file_path):
@@ -138,37 +130,26 @@ def create_rectangle_xz(oEditor, x_start, z_start, width, height, name):
 
 def fillet_all_vertices(oEditor, obj_name, radius):
     """객체의 모든 vertex에 동일한 fillet 적용"""
-    try:
-        vertices = oEditor.GetVertexIDsFromObject(obj_name)
-        log("    모든 vertex에 fillet 적용: {} 개, r={}mm".format(len(vertices), radius))
+    vertices = oEditor.GetVertexIDsFromObject(obj_name)
+    vertex_ids = [int(vid) for vid in vertices]
 
-        # 모든 vertex ID를 정수 리스트로 변환
-        vertex_ids = [int(vid) for vid in vertices]
-
-        oEditor.Fillet(
-            [
-                "NAME:Selections",
-                "Selections:=", obj_name,
-                "NewPartsModelFlag:=", "Model"
-            ],
+    oEditor.Fillet(
+        [
+            "NAME:Selections",
+            "Selections:=", obj_name,
+            "NewPartsModelFlag:=", "Model"
+        ],
+        [
+            "NAME:FilletParameters",
             [
                 "NAME:FilletParameters",
-                [
-                    "NAME:FilletParameters",
-                    "Edges:=", [],
-                    "Vertices:=", vertex_ids,
-                    "Radius:=", "{}mm".format(radius),
-                    "Setback:=", "0mm"
-                ]
+                "Edges:=", [],
+                "Vertices:=", vertex_ids,
+                "Radius:=", "{}mm".format(radius),
+                "Setback:=", "0mm"
             ]
-        )
-        log("    Fillet 적용 완료")
-        return True
-    except Exception as e:
-        log("    [오류] Fillet 적용 실패: {}".format(str(e)))
-        import traceback
-        traceback.print_exc()
-        return False
+        ]
+    )
 
 
 def subtract_objects(oEditor, blank_name, tool_name):
@@ -187,15 +168,7 @@ def subtract_objects(oEditor, blank_name, tool_name):
 
 
 def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
-    """Static Ring 생성 - 단순화 버전
-
-    단계:
-    1. 큰 직사각형 생성
-    2. 모든 vertex에 2mm fillet 한번에 적용
-    3. 작은 직사각형 생성
-    4. 모든 vertex에 2mm fillet 한번에 적용
-    5. Subtract
-    """
+    """Static Ring 생성 - 단순화 버전"""
     ref_x = ring_data['ref_x'] + x_offset
     ref_z = ring_data['ref_z']
     thickness = ring_data['thickness']
@@ -204,18 +177,11 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
 
     fillet_radius = 2.0  # 고정값
 
-    log("  기준점: ({}, 0, {})".format(ref_x, ref_z))
-    log("  큰 직사각형: W={}, H={}".format(width, height))
-    log("  두께: {}".format(thickness))
-    log("  모든 모서리 Fillet: {}mm".format(fillet_radius))
-
     # 1. 큰 직사각형 생성
     outer_rect_name = name + "_Outer"
     create_rectangle_xz(oEditor, ref_x, ref_z, width, height, outer_rect_name)
-    log("  [1] 큰 직사각형 생성 완료")
 
     # 2. 외부 직사각형 모든 vertex에 fillet 적용
-    log("  [2] 외부 직사각형 fillet 적용 중...")
     fillet_all_vertices(oEditor, outer_rect_name, fillet_radius)
 
     # 3. 작은 직사각형 생성
@@ -225,21 +191,16 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
     inner_z = ref_z + thickness
 
     if inner_width <= 0 or inner_height <= 0:
-        log("  [오류] 두께가 너무 커서 내부 직사각형을 만들 수 없습니다.")
         return
 
     inner_rect_name = name + "_Inner"
     create_rectangle_xz(oEditor, inner_x, inner_z, inner_width, inner_height, inner_rect_name)
-    log("  [3] 작은 직사각형 생성 완료: W={}, H={}".format(inner_width, inner_height))
 
     # 4. 내부 직사각형 모든 vertex에 fillet 적용
-    log("  [4] 내부 직사각형 fillet 적용 중...")
     fillet_all_vertices(oEditor, inner_rect_name, fillet_radius)
 
     # 5. Subtract
-    log("  [5] Subtract 수행 중...")
     subtract_objects(oEditor, outer_rect_name, inner_rect_name)
-    log("  [5] Subtract 완료")
 
     # 최종 이름 변경
     try:
@@ -262,58 +223,35 @@ def create_static_ring(oEditor, ring_data, name, x_offset=0.0):
                 ]
             ]
         )
-        log("  완성: {}".format(name))
     except:
-        log("  완성: {} (이름 변경 실패)".format(outer_rect_name))
+        pass
 
 
 def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
     """CSV 파일에서 Static Ring들을 생성"""
-    log("=" * 60)
-    log("Maxwell 3D - Static Ring 생성")
-    log("=" * 60)
-
-    log("\nCSV 파일 읽기 시작...")
     rings, x_offset = read_staticring_csv(csv_file_path)
 
-    log("읽은 Static Ring 수: {}".format(len(rings)))
-
     if not rings:
-        log("오류: CSV 파일에서 Static Ring 데이터를 읽을 수 없습니다.")
         return
 
     # Maxwell 프로젝트 및 디자인 가져오기
     oProject = oDesktop.GetActiveProject()
     if oProject is None:
         oProject = oDesktop.NewProject()
-        print("새 프로젝트를 생성했습니다.")
 
     oDesign = oProject.GetActiveDesign()
     if oDesign is None:
         oProject.InsertDesign("Maxwell 3D", "Maxwell3DDesign1", "Magnetostatic", "")
         oDesign = oProject.GetActiveDesign()
-        print("새 Maxwell 3D 디자인을 생성했습니다.")
 
     oEditor = oDesign.SetActiveEditor("3D Modeler")
 
     # 각 Static Ring 생성
-    success_count = 0
-    fail_count = 0
-
     for idx, ring in enumerate(rings):
-        print("\n--- Static Ring {} (CSV {}행) ---".format(idx + 1, ring['row_num']))
-
         ring_name = "{}_{}".format(name_prefix, idx + 1)
-
         try:
             create_static_ring(oEditor, ring, ring_name, x_offset)
-            success_count += 1
-        except Exception as e:
-            print("  [오류] Static Ring {} 생성 실패: {}".format(idx + 1, str(e)))
-            import traceback
-            traceback.print_exc()
-            print("  Static Ring {}를 건너뛰고 계속 진행합니다.".format(idx + 1))
-            fail_count += 1
+        except:
             continue
 
     # 뷰 맞추기
@@ -322,43 +260,21 @@ def create_staticrings_from_csv(csv_file_path, name_prefix="StaticRing"):
     except:
         pass
 
-    print("\n" + "=" * 60)
-    print("완료!")
-    print("  성공: {} 개".format(success_count))
-    print("  실패: {} 개".format(fail_count))
-    print("  전체: {} 개".format(len(rings)))
-    print("=" * 60)
-
 
 # 스크립트 실행
-log("\n" + "=" * 60)
-log("스크립트 실행 시작")
-log("=" * 60)
-
 try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    log("스크립트 디렉토리 (__file__): {}".format(script_dir))
 except:
     import sys
     if len(sys.argv) > 0:
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
-        log("스크립트 디렉토리 (sys.argv[0]): {}".format(script_dir))
     else:
         script_dir = os.getcwd()
-        log("스크립트 디렉토리 (getcwd): {}".format(script_dir))
 
 csv_file = os.path.join(script_dir, "StaticRingDim.csv")
 
-log("\nCSV 파일 경로: {}".format(csv_file))
-log("CSV 파일 존재 여부: {}".format(os.path.exists(csv_file)))
-
-if not os.path.exists(csv_file):
-    log("\n경고: StaticRingDim.csv 파일을 찾을 수 없습니다!")
-    log("다음 위치에 파일이 있어야 합니다: {}".format(csv_file))
-else:
-    log("\nStatic Ring 생성 함수 호출 중...")
+if os.path.exists(csv_file):
     create_staticrings_from_csv(
         csv_file_path=csv_file,
         name_prefix="StaticRing"
     )
-    log("\n스크립트 실행 완료!")
