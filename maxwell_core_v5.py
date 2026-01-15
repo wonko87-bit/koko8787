@@ -351,10 +351,10 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
         move_object(oEditor, main_name, -a/2.0, -b/2.0, 0)
         main_rects.append(main_name)
 
-        # 사이드 레그 (1개만 - 오른쪽에 배치)
+        # 사이드 레그 (원점 중심에 배치)
         side_name = "{}_Layer{}_Side".format(name_prefix, i+1)
         create_rectangle(oEditor, 0, 0, z_start, c, b, side_name)
-        move_object(oEditor, side_name, -c/2.0 + gap, -b/2.0, 0)
+        move_object(oEditor, side_name, -c/2.0, -b/2.0, 0)
         side_rects.append(side_name)
 
     # ===== 2. 각 레그별 평면 Unite =====
@@ -368,34 +368,41 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     side_united = "{}_SideLeg".format(name_prefix)
     unite_objects(oEditor, side_rects, side_united)
 
-    # ===== 3. Sweep 전에 사이드 레그 평면 복사 =====
+    # ===== 3. Sweep 전에 사이드 레그 평면 복사 (원점 기준 4개 생성) =====
     print("\n===== 사이드 레그 평면 복사 =====")
 
-    # 반대편 레그 (X축 대칭)
+    # 사이드 레그 2 (반대편)
     side2_united = "{}_Side2Leg".format(name_prefix)
     duplicate_object(oEditor, side_united, side2_united)
-    # 반대편으로 이동: gap → -gap (차이: -2*gap)
-    move_object(oEditor, side2_united, -2.0 * gap, 0, 0)
 
     # 상부 요크
     yoke1_united = "{}_Yoke1".format(name_prefix)
     duplicate_object(oEditor, side_united, yoke1_united)
-    # Y축 기준 90도 회전
-    rotate_object(oEditor, yoke1_united, "Y", 90)
-    # Y좌표로 이동: window_height/2 + BJR_max/2
-    yoke1_y = window_height / 2.0 + BJR_max / 2.0
-    move_object(oEditor, yoke1_united, -gap, yoke1_y, 0)
 
     # 하부 요크
     yoke2_united = "{}_Yoke2".format(name_prefix)
     duplicate_object(oEditor, side_united, yoke2_united)
-    # Y축 기준 -90도 (270도) 회전
-    rotate_object(oEditor, yoke2_united, "Y", -90)
-    # Y좌표로 이동: -window_height/2 - BJR_max/2
-    yoke2_y = -window_height / 2.0 - BJR_max / 2.0
-    move_object(oEditor, yoke2_united, -gap, yoke2_y, 0)
 
-    # ===== 4. 모든 레그 Sweep (BJR_max만큼 +z 방향) =====
+    # ===== 4. 각 평면을 최종 위치로 이동 및 회전 =====
+    print("\n===== 평면 이동 및 회전 =====")
+
+    # 사이드 레그 1 (원본): 오른쪽으로 gap 이동
+    move_object(oEditor, side_united, gap, 0, 0)
+
+    # 사이드 레그 2: 왼쪽으로 gap 이동
+    move_object(oEditor, side2_united, -gap, 0, 0)
+
+    # 상부 요크: Y축 90도 회전 후 상부로 이동
+    rotate_object(oEditor, yoke1_united, "Y", 90)
+    yoke1_y = window_height / 2.0 + BJR_max / 2.0
+    move_object(oEditor, yoke1_united, 0, yoke1_y, 0)
+
+    # 하부 요크: Y축 -90도 회전 후 하부로 이동
+    rotate_object(oEditor, yoke2_united, "Y", -90)
+    yoke2_y = -window_height / 2.0 - BJR_max / 2.0
+    move_object(oEditor, yoke2_united, 0, yoke2_y, 0)
+
+    # ===== 5. 모든 레그 Sweep (BJR_max만큼 +z 방향) =====
     print("\n===== Sweep 작업 =====")
     sweep_along_z(oEditor, main_united, BJR_max)
     sweep_along_z(oEditor, side_united, BJR_max)
@@ -403,7 +410,7 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     sweep_along_z(oEditor, yoke1_united, BJR_max)
     sweep_along_z(oEditor, yoke2_united, BJR_max)
 
-    # ===== 5. Sweep한 객체를 -BJR_max/2만큼 z축 아래로 이동 (중심 맞추기) =====
+    # ===== 6. Sweep한 객체를 -BJR_max/2만큼 z축 아래로 이동 (중심 맞추기) =====
     print("\n===== 중심 맞추기 (Z축 이동) =====")
     move_object(oEditor, main_united, 0, 0, -BJR_max/2.0)
     move_object(oEditor, side_united, 0, 0, -BJR_max/2.0)
