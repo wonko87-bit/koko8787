@@ -187,8 +187,8 @@ def duplicate_object(oEditor, obj_name, new_name):
     )
     oEditor.Paste()
 
-    # 복사된 객체는 원본 이름 + "_1" 형태로 생성됨
-    copied_name = obj_name + "_1"
+    # 복사된 객체는 원본 이름 + "1" 형태로 생성됨 (언더스코어 없음)
+    copied_name = obj_name + "1"
 
     # 새 이름으로 변경
     oEditor.ChangeProperty(
