@@ -415,12 +415,12 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
 
     # 상부 요크: Y축 90도 회전 후 상부로 이동 (Z축)
     rotate_object(oEditor, yoke1_united, "Y", 90)
-    yoke1_z = window_height / 2.0 + BJR_max / 2.0
+    yoke1_z = window_height + BJR_max - BJR_max/2
     move_object(oEditor, yoke1_united, 0, 0, yoke1_z)
 
     # 하부 요크: Y축 -90도 회전 후 하부로 이동 (Z축)
     rotate_object(oEditor, yoke2_united, "Y", -90)
-    yoke2_z = -window_height / 2.0 - BJR_max / 2.0
+    yoke2_z = - BJR_max/2
     move_object(oEditor, yoke2_united, 0, 0, yoke2_z)
 
     # ===== 5. Sweep 작업 =====
@@ -444,13 +444,13 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     move_object(oEditor, yoke2_united, yoke_x_offset, 0, 0)
 
     # ===== 7. 모든 객체 Z축 중심 맞추기 =====
-    print("\n===== Z축 중심 맞추기 =====")
-    leg_z_offset = -leg_sweep_distance / 2.0
+    #print("\n===== Z축 중심 맞추기 =====")
+    leg_z_offset = - BJR_max
     move_object(oEditor, main_united, 0, 0, leg_z_offset)
     move_object(oEditor, side_united, 0, 0, leg_z_offset)
     move_object(oEditor, side2_united, 0, 0, leg_z_offset)
-    move_object(oEditor, yoke1_united, 0, 0, leg_z_offset)
-    move_object(oEditor, yoke2_united, 0, 0, leg_z_offset)
+    #move_object(oEditor, yoke1_united, 0, 0, leg_z_offset)
+    #move_object(oEditor, yoke2_united, 0, 0, leg_z_offset)
 
 
     # 뷰 맞추기
