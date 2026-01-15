@@ -138,6 +138,27 @@ def sweep_along_z(oEditor, obj_name, sweep_distance):
     print("  Sweep: {} → Z축 {}mm".format(obj_name, sweep_distance))
 
 
+def sweep_along_x(oEditor, obj_name, sweep_distance):
+    """X축 방향으로 Sweep"""
+    oEditor.SweepAlongVector(
+        [
+            "NAME:Selections",
+            "Selections:=", obj_name,
+            "NewPartsModelFlag:=", "Model"
+        ],
+        [
+            "NAME:VectorSweepParameters",
+            "DraftAngle:=", "0deg",
+            "DraftType:=", "Round",
+            "CheckFaceFaceIntersection:=", False,
+            "SweepVectorX:=", "{}mm".format(sweep_distance),
+            "SweepVectorY:=", "0mm",
+            "SweepVectorZ:=", "0mm"
+        ]
+    )
+    print("  Sweep: {} → X축 {}mm".format(obj_name, sweep_distance))
+
+
 def unite_objects(oEditor, obj_list, result_name):
     """여러 객체를 Unite"""
     if len(obj_list) < 2:
@@ -402,21 +423,34 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     yoke2_z = -window_height / 2.0 - BJR_max / 2.0
     move_object(oEditor, yoke2_united, 0, 0, yoke2_z)
 
-    # ===== 5. 모든 레그 Sweep (BJR_max만큼 +z 방향) =====
+    # ===== 5. Sweep 작업 =====
     print("\n===== Sweep 작업 =====")
-    sweep_along_z(oEditor, main_united, BJR_max)
-    sweep_along_z(oEditor, side_united, BJR_max)
-    sweep_along_z(oEditor, side2_united, BJR_max)
-    sweep_along_z(oEditor, yoke1_united, BJR_max)
-    sweep_along_z(oEditor, yoke2_united, BJR_max)
 
-    # ===== 6. Sweep한 객체를 -BJR_max/2만큼 z축 아래로 이동 (중심 맞추기) =====
-    print("\n===== 중심 맞추기 (Z축 이동) =====")
-    move_object(oEditor, main_united, 0, 0, -BJR_max/2.0)
-    move_object(oEditor, side_united, 0, 0, -BJR_max/2.0)
-    move_object(oEditor, side2_united, 0, 0, -BJR_max/2.0)
-    move_object(oEditor, yoke1_united, 0, 0, -BJR_max/2.0)
-    move_object(oEditor, yoke2_united, 0, 0, -BJR_max/2.0)
+    # Main leg와 Side leg: Z축 방향으로 E3*2 + E2 만큼
+    leg_sweep_distance = BJR_max * 2.0 + window_height
+    sweep_along_z(oEditor, main_united, leg_sweep_distance)
+    sweep_along_z(oEditor, side_united, leg_sweep_distance)
+    sweep_along_z(oEditor, side2_united, leg_sweep_distance)
+
+    # Yoke: X축 방향으로 2*E1 + E3 만큼
+    yoke_sweep_distance = 2.0 * gap + BJR_max
+    sweep_along_x(oEditor, yoke1_united, yoke_sweep_distance)
+    sweep_along_x(oEditor, yoke2_united, yoke_sweep_distance)
+
+    # ===== 6. Yoke X축 중심 맞추기 =====
+    print("\n===== Yoke X축 중심 맞추기 =====")
+    yoke_x_offset = -yoke_sweep_distance / 2.0
+    move_object(oEditor, yoke1_united, yoke_x_offset, 0, 0)
+    move_object(oEditor, yoke2_united, yoke_x_offset, 0, 0)
+
+    # ===== 7. 모든 객체 Z축 중심 맞추기 =====
+    print("\n===== Z축 중심 맞추기 =====")
+    leg_z_offset = -leg_sweep_distance / 2.0
+    move_object(oEditor, main_united, 0, 0, leg_z_offset)
+    move_object(oEditor, side_united, 0, 0, leg_z_offset)
+    move_object(oEditor, side2_united, 0, 0, leg_z_offset)
+    move_object(oEditor, yoke1_united, 0, 0, leg_z_offset)
+    move_object(oEditor, yoke2_united, 0, 0, leg_z_offset)
 
 
     # 뷰 맞추기
