@@ -392,15 +392,15 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     # 사이드 레그 2: 왼쪽으로 gap 이동
     move_object(oEditor, side2_united, -gap, 0, 0)
 
-    # 상부 요크: Y축 90도 회전 후 상부로 이동
+    # 상부 요크: Y축 90도 회전 후 상부로 이동 (Z축)
     rotate_object(oEditor, yoke1_united, "Y", 90)
-    yoke1_y = window_height / 2.0 + BJR_max / 2.0
-    move_object(oEditor, yoke1_united, 0, yoke1_y, 0)
+    yoke1_z = window_height / 2.0 + BJR_max / 2.0
+    move_object(oEditor, yoke1_united, 0, 0, yoke1_z)
 
-    # 하부 요크: Y축 -90도 회전 후 하부로 이동
+    # 하부 요크: Y축 -90도 회전 후 하부로 이동 (Z축)
     rotate_object(oEditor, yoke2_united, "Y", -90)
-    yoke2_y = -window_height / 2.0 - BJR_max / 2.0
-    move_object(oEditor, yoke2_united, 0, yoke2_y, 0)
+    yoke2_z = -window_height / 2.0 - BJR_max / 2.0
+    move_object(oEditor, yoke2_united, 0, 0, yoke2_z)
 
     # ===== 5. 모든 레그 Sweep (BJR_max만큼 +z 방향) =====
     print("\n===== Sweep 작업 =====")
@@ -437,7 +437,7 @@ except:
     else:
         script_dir = os.getcwd()
 
-csv_file = os.path.join(script_dir, "transformer_core_sample.csv")
+csv_file = os.path.join(script_dir, "CoreDim.csv")
 
 print("CSV 파일 경로: {}".format(csv_file))
 print("CSV 파일 존재 여부: {}".format(os.path.exists(csv_file)))
