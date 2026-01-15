@@ -602,39 +602,39 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
 
     # ===== 8. 컴포넌트 이름 재정의 =====
     print("\n===== 컴포넌트 이름 재정의 =====")
-    rename_object(oEditor, main_united, "Core_MainLeg")
-    rename_object(oEditor, side_united, "Core_SideLegPlus")
-    rename_object(oEditor, side2_united, "Core_SideLegMinus")
-    rename_object(oEditor, yoke1_united, "Core_TopYoke")
-    rename_object(oEditor, yoke2_united, "Core_BottomYoke")
+    rename_object(oEditor, main_united, "Core_Main_Leg")
+    rename_object(oEditor, side_united, "Core_Side_LegPlus")
+    rename_object(oEditor, side2_united, "Core_Side_LegMinus")
+    rename_object(oEditor, yoke1_united, "Core_Top_Yoke")
+    rename_object(oEditor, yoke2_united, "Core_Bottom_Yoke")
 
     # ===== 9. 각 컴포넌트 복제 =====
     print("\n===== 컴포넌트 복제 =====")
-    duplicate_object(oEditor, "Core_MainLeg", "Core_MainLeg_Copy")
-    duplicate_object(oEditor, "Core_SideLegPlus", "Core_SideLegPlus_Copy")
-    duplicate_object(oEditor, "Core_SideLegMinus", "Core_SideLegMinus_Copy")
-    duplicate_object(oEditor, "Core_TopYoke", "Core_TopYoke_Copy")
-    duplicate_object(oEditor, "Core_BottomYoke", "Core_BottomYoke_Copy")
+    duplicate_object(oEditor, "Core_Main_Leg", "Core_Main_Leg_Copy")
+    duplicate_object(oEditor, "Core_Side_LegPlus", "Core_Side_LegPlus_Copy")
+    duplicate_object(oEditor, "Core_Side_LegMinus", "Core_Side_LegMinus_Copy")
+    duplicate_object(oEditor, "Core_Top_Yoke", "Core_Top_Yoke_Copy")
+    duplicate_object(oEditor, "Core_Bottom_Yoke", "Core_Bottom_Yoke_Copy")
 
     # ===== 10. Subtract 작업으로 잉여분 추출 =====
     print("\n===== Subtract 작업 =====")
 
     # Leg 복제본 3개에서 Yoke 복제본 2개를 빼서 leg 잉여분 추출
-    leg_copies = ["Core_MainLeg_Copy", "Core_SideLegPlus_Copy", "Core_SideLegMinus_Copy"]
-    yoke_copies = ["Core_TopYoke_Copy", "Core_BottomYoke_Copy"]
+    leg_copies = ["Core_Main_Leg_Copy", "Core_Side_LegPlus_Copy", "Core_Side_LegMinus_Copy"]
+    yoke_copies = ["Core_Top_Yoke_Copy", "Core_Bottom_Yoke_Copy"]
 
     # Leg 잉여분: Leg 3개(blank) - Yoke 2개(tool)
     subtract_objects(oEditor, leg_copies, yoke_copies)
 
     # Yoke 잉여분을 추출하기 위해 원본 다시 복제
-    duplicate_object(oEditor, "Core_MainLeg", "Core_MainLeg_Copy2")
-    duplicate_object(oEditor, "Core_SideLegPlus", "Core_SideLegPlus_Copy2")
-    duplicate_object(oEditor, "Core_SideLegMinus", "Core_SideLegMinus_Copy2")
-    duplicate_object(oEditor, "Core_TopYoke", "Core_TopYoke_Copy2")
-    duplicate_object(oEditor, "Core_BottomYoke", "Core_BottomYoke_Copy2")
+    duplicate_object(oEditor, "Core_Main_Leg", "Core_Main_Leg_Copy2")
+    duplicate_object(oEditor, "Core_Side_LegPlus", "Core_Side_LegPlus_Copy2")
+    duplicate_object(oEditor, "Core_Side_LegMinus", "Core_Side_LegMinus_Copy2")
+    duplicate_object(oEditor, "Core_Top_Yoke", "Core_Top_Yoke_Copy2")
+    duplicate_object(oEditor, "Core_Bottom_Yoke", "Core_Bottom_Yoke_Copy2")
 
-    leg_copies2 = ["Core_MainLeg_Copy2", "Core_SideLegPlus_Copy2", "Core_SideLegMinus_Copy2"]
-    yoke_copies2 = ["Core_TopYoke_Copy2", "Core_BottomYoke_Copy2"]
+    leg_copies2 = ["Core_Main_Leg_Copy2", "Core_Side_LegPlus_Copy2", "Core_Side_LegMinus_Copy2"]
+    yoke_copies2 = ["Core_Top_Yoke_Copy2", "Core_Bottom_Yoke_Copy2"]
 
     # Yoke 잉여분: Yoke 2개(blank) - Leg 3개(tool)
     subtract_objects(oEditor, yoke_copies2, leg_copies2)
@@ -672,11 +672,11 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     print("\n===== Leg 잉여분 Split 작업 =====")
 
     # 첫 번째 Split: 직사각형1번으로 Both
-    leg_targets = ["Core_MainLeg_Copy", "Core_SideLegMinus_Copy", "Core_SideLegPlus_Copy"]
+    leg_targets = ["Core_Main_Leg_Copy", "Core_Side_LegMinus_Copy", "Core_Side_LegPlus_Copy"]
     split_with_plane(oEditor, leg_targets, "Rectangle1", keep_both=True)
 
     # Split 결과물 이름 (Maxwell이 자동으로 _Section1 붙임)
-    leg_split1 = ["Core_MainLeg_Copy_Section1", "Core_SideLegMinus_Copy_Section1", "Core_SideLegPlus_Copy_Section1"]
+    leg_split1 = ["Core_Main_Leg_Copy_Section1", "Core_Side_LegMinus_Copy_Section1", "Core_Side_LegPlus_Copy_Section1"]
 
     # 두 번째 Split: 직사각형2번으로 Positive
     split_with_plane(oEditor, leg_split1, "Rectangle2", keep_both=False)
@@ -685,11 +685,11 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     print("\n===== Yoke 잉여분 Split 작업 =====")
 
     # 첫 번째 Split: 직사각형3번으로 Both
-    yoke_targets = ["Core_TopYoke_Copy2", "Core_BottomYoke_Copy2"]
+    yoke_targets = ["Core_Top_Yoke_Copy2", "Core_Bottom_Yoke_Copy2"]
     split_with_plane(oEditor, yoke_targets, "Rectangle3", keep_both=True)
 
     # Split 결과물 이름
-    yoke_split1 = ["Core_TopYoke_Copy2_Section1", "Core_BottomYoke_Copy2_Section1"]
+    yoke_split1 = ["Core_Top_Yoke_Copy2_Section1", "Core_Bottom_Yoke_Copy2_Section1"]
 
     # 두 번째 Split: 직사각형4번으로 Positive
     split_with_plane(oEditor, yoke_split1, "Rectangle4", keep_both=False)
