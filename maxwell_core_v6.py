@@ -117,6 +117,108 @@ def rotate_object(oEditor, obj_name, axis, angle_deg):
     print("  회전: {} → {} axis, {}deg".format(obj_name, axis, angle_deg))
 
 
+def create_rectangle_xy_plane(oEditor, x1, y1, z1, x2, y2, z2, name):
+    """XY 평면에 대각 꼭지점으로 Rectangle 생성 (WhichAxis=Z)"""
+    x_start = min(x1, x2)
+    y_start = min(y1, y2)
+    z_start = z1  # z1 == z2 여야 함
+    width = abs(x2 - x1)
+    height = abs(y2 - y1)
+
+    oEditor.CreateRectangle(
+        [
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(x_start),
+            "YStart:=", "{}mm".format(y_start),
+            "ZStart:=", "{}mm".format(z_start),
+            "Width:=", "{}mm".format(width),
+            "Height:=", "{}mm".format(height),
+            "WhichAxis:=", "Z"
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(255 128 65)",
+            "Transparency:=", 0.4,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
+    print("  생성: {} (XY평면, Z={})".format(name, z_start))
+
+
+def create_rectangle_yz_plane(oEditor, x1, y1, z1, x2, y2, z2, name):
+    """YZ 평면에 대각 꼭지점으로 Rectangle 생성 (WhichAxis=X)"""
+    x_start = x1  # x1 == x2 여야 함
+    y_start = min(y1, y2)
+    z_start = min(z1, z2)
+    width = abs(y2 - y1)
+    height = abs(z2 - z1)
+
+    oEditor.CreateRectangle(
+        [
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(x_start),
+            "YStart:=", "{}mm".format(y_start),
+            "ZStart:=", "{}mm".format(z_start),
+            "Width:=", "{}mm".format(width),
+            "Height:=", "{}mm".format(height),
+            "WhichAxis:=", "X"
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(255 128 65)",
+            "Transparency:=", 0.4,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
+    print("  생성: {} (YZ평면, X={})".format(name, x_start))
+
+
+def split_with_plane(oEditor, obj_names, plane_obj_name, keep_both=True):
+    """평면으로 객체들을 Split"""
+    if isinstance(obj_names, str):
+        obj_names = [obj_names]
+
+    oEditor.Section(
+        [
+            "NAME:Selections",
+            "Selections:=", ",".join(obj_names),
+            "NewPartsModelFlag:=", "Model"
+        ],
+        [
+            "NAME:SectionToParameters",
+            "CreateNewObjects:=", True,
+            "SectionPlane:=", plane_obj_name,
+            "SectionCrossObject:=", False,
+            "WhichSide:=", "Both" if keep_both else "PositiveOnly"
+        ]
+    )
+    print("  Split: {} by {}".format(obj_names, plane_obj_name))
+
+
 def sweep_along_z(oEditor, obj_name, sweep_distance):
     """Z축 방향으로 Sweep"""
     oEditor.SweepAlongVector(
@@ -537,9 +639,60 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     # Yoke 잉여분: Yoke 2개(blank) - Leg 3개(tool)
     subtract_objects(oEditor, yoke_copies2, leg_copies2)
 
-    # TODO: Split으로 다리 부분 제거 (직사각형으로 split)
-    print("\n===== Split 작업 (TODO) =====")
-    print("  잉여분에서 다리 부분 제거는 수동으로 처리 필요")
+    # ===== 11. 직사각형 생성 (Split용) =====
+    print("\n===== 직사각형 생성 =====")
+
+    # 직사각형 1번: XY평면, Z = window_height + 0.5*BJR_max
+    rect1_z = window_height + 0.5 * BJR_max
+    create_rectangle_xy_plane(oEditor,
+                              -gap - 0.5*BJR_max, -1000, rect1_z,
+                              gap + 0.5*BJR_max, 1000, rect1_z,
+                              "Rectangle1")
+
+    # 직사각형 2번: XY평면, Z = -0.5*BJR_max
+    rect2_z = -0.5 * BJR_max
+    create_rectangle_xy_plane(oEditor,
+                              -gap - 0.5*BJR_max, -1000, rect2_z,
+                              gap + 0.5*BJR_max, 1000, rect2_z,
+                              "Rectangle2")
+
+    # 직사각형 3번: YZ평면, X = -gap
+    create_rectangle_yz_plane(oEditor,
+                              -gap, -1000, -BJR_max,
+                              -gap, 1000, window_height + BJR_max,
+                              "Rectangle3")
+
+    # 직사각형 4번: YZ평면, X = +gap
+    create_rectangle_yz_plane(oEditor,
+                              gap, -1000, -BJR_max,
+                              gap, 1000, window_height + BJR_max,
+                              "Rectangle4")
+
+    # ===== 12. Leg 잉여분 Split 작업 =====
+    print("\n===== Leg 잉여분 Split 작업 =====")
+
+    # 첫 번째 Split: 직사각형1번으로 Both
+    leg_targets = ["Core_MainLeg_Copy", "Core_SideLegMinus_Copy", "Core_SideLegPlus_Copy"]
+    split_with_plane(oEditor, leg_targets, "Rectangle1", keep_both=True)
+
+    # Split 결과물 이름 (Maxwell이 자동으로 _Section1 붙임)
+    leg_split1 = ["Core_MainLeg_Copy_Section1", "Core_SideLegMinus_Copy_Section1", "Core_SideLegPlus_Copy_Section1"]
+
+    # 두 번째 Split: 직사각형2번으로 Positive
+    split_with_plane(oEditor, leg_split1, "Rectangle2", keep_both=False)
+
+    # ===== 13. Yoke 잉여분 Split 작업 =====
+    print("\n===== Yoke 잉여분 Split 작업 =====")
+
+    # 첫 번째 Split: 직사각형3번으로 Both
+    yoke_targets = ["Core_TopYoke_Copy2", "Core_BottomYoke_Copy2"]
+    split_with_plane(oEditor, yoke_targets, "Rectangle3", keep_both=True)
+
+    # Split 결과물 이름
+    yoke_split1 = ["Core_TopYoke_Copy2_Section1", "Core_BottomYoke_Copy2_Section1"]
+
+    # 두 번째 Split: 직사각형4번으로 Positive
+    split_with_plane(oEditor, yoke_split1, "Rectangle4", keep_both=False)
 
     # 뷰 맞추기
     oEditor.FitAll()
