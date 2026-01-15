@@ -222,15 +222,18 @@ def rename_object(oEditor, old_name, new_name):
     print("  이름 변경: {} → {}".format(old_name, new_name))
 
 
-def subtract_objects(oEditor, blank_name, tool_names):
+def subtract_objects(oEditor, blank_names, tool_names):
     """Subtract 연산 (blank에서 tool들을 빼기)"""
+    # 문자열이면 리스트로 변환
+    if isinstance(blank_names, str):
+        blank_names = [blank_names]
     if isinstance(tool_names, str):
         tool_names = [tool_names]
 
     oEditor.Subtract(
         [
             "NAME:Selections",
-            "Blank Parts:=", blank_name,
+            "Blank Parts:=", ",".join(blank_names),
             "Tool Parts:=", ",".join(tool_names)
         ],
         [
@@ -238,7 +241,7 @@ def subtract_objects(oEditor, blank_name, tool_names):
             "KeepOriginals:=", False
         ]
     )
-    print("  Subtract: {} - {}".format(blank_name, tool_names))
+    print("  Subtract: {} - {}".format(blank_names, tool_names))
 
 
 def duplicate_object(oEditor, obj_name, new_name):
@@ -511,29 +514,28 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     duplicate_object(oEditor, "Core_TopYoke", "Core_TopYoke_Copy")
     duplicate_object(oEditor, "Core_BottomYoke", "Core_BottomYoke_Copy")
 
-    # ===== 10. 복제본 Unite =====
-    print("\n===== 복제본 Unite =====")
-
-    # Leg 복제본 3개 Unite
-    leg_copies = ["Core_MainLeg_Copy", "Core_SideLegPlus_Copy", "Core_SideLegMinus_Copy"]
-    unite_objects(oEditor, leg_copies, "Legs_United")
-
-    # Yoke 복제본 2개 Unite
-    yoke_copies = ["Core_TopYoke_Copy", "Core_BottomYoke_Copy"]
-    unite_objects(oEditor, yoke_copies, "Yokes_United")
-
-    # ===== 11. Subtract 작업으로 잉여분 추출 =====
+    # ===== 10. Subtract 작업으로 잉여분 추출 =====
     print("\n===== Subtract 작업 =====")
 
-    # Yokes_United 복제 (2개 필요)
-    duplicate_object(oEditor, "Yokes_United", "Yokes_ForLegSubtract")
-    duplicate_object(oEditor, "Legs_United", "Legs_ForYokeSubtract")
+    # Leg 복제본 3개에서 Yoke 복제본 2개를 빼서 leg 잉여분 추출
+    leg_copies = ["Core_MainLeg_Copy", "Core_SideLegPlus_Copy", "Core_SideLegMinus_Copy"]
+    yoke_copies = ["Core_TopYoke_Copy", "Core_BottomYoke_Copy"]
 
-    # Leg에서 Yoke를 빼서 leg 잉여분 추출
-    subtract_objects(oEditor, "Legs_ForYokeSubtract", "Yokes_ForLegSubtract")
+    # Leg 잉여분: Leg 3개(blank) - Yoke 2개(tool)
+    subtract_objects(oEditor, leg_copies, yoke_copies)
 
-    # Yoke에서 Leg를 빼서 yoke 잉여분 추출
-    subtract_objects(oEditor, "Yokes_United", "Legs_United")
+    # Yoke 잉여분을 추출하기 위해 원본 다시 복제
+    duplicate_object(oEditor, "Core_MainLeg", "Core_MainLeg_Copy2")
+    duplicate_object(oEditor, "Core_SideLegPlus", "Core_SideLegPlus_Copy2")
+    duplicate_object(oEditor, "Core_SideLegMinus", "Core_SideLegMinus_Copy2")
+    duplicate_object(oEditor, "Core_TopYoke", "Core_TopYoke_Copy2")
+    duplicate_object(oEditor, "Core_BottomYoke", "Core_BottomYoke_Copy2")
+
+    leg_copies2 = ["Core_MainLeg_Copy2", "Core_SideLegPlus_Copy2", "Core_SideLegMinus_Copy2"]
+    yoke_copies2 = ["Core_TopYoke_Copy2", "Core_BottomYoke_Copy2"]
+
+    # Yoke 잉여분: Yoke 2개(blank) - Leg 3개(tool)
+    subtract_objects(oEditor, yoke_copies2, leg_copies2)
 
     # TODO: Split으로 다리 부분 제거 (직사각형으로 split)
     print("\n===== Split 작업 (TODO) =====")
