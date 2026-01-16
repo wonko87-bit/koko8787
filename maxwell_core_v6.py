@@ -202,21 +202,24 @@ def split_with_plane(oEditor, obj_names, plane_obj_name, keep_both=True):
     if isinstance(obj_names, str):
         obj_names = [obj_names]
 
-    # Split 함수 사용 - 직사각형을 Tool로 사용
-    oEditor.Split(
-        [
-            "NAME:Selections",
-            "Selections:=", ",".join(obj_names),
-            "NewPartsModelFlag:=", "Model"
-        ],
-        [
-            "NAME:SplitToParameters",
-            "SplitPlane:=", "FromFace",
-            "WhichSide:=", "Both" if keep_both else "PositiveOnly",
-            "Tool:=", plane_obj_name
-        ]
-    )
-    print("  Split: {} by {}".format(obj_names, plane_obj_name))
+    # 각 객체를 개별적으로 SeparateBody 수행
+    for obj_name in obj_names:
+        oEditor.SeparateBody(
+            [
+                "NAME:Selections",
+                "Selections:=", obj_name,
+                "NewPartsModelFlag:=", "Model"
+            ],
+            [
+                "NAME:SeparateBodyParameters",
+                "CoordinateSystemID:=", -1,
+                "WhichSide:=", "Both" if keep_both else "PositiveOnly",
+                "ToolType:=", "FaceTool",
+                "ToolEntityID:=", -1,
+                "SplitPlane:=", plane_obj_name
+            ]
+        )
+        print("  SeparateBody: {} by {}".format(obj_name, plane_obj_name))
 
 
 def sweep_along_z(oEditor, obj_name, sweep_distance):
