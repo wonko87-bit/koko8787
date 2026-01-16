@@ -198,24 +198,23 @@ def create_rectangle_yz_plane(oEditor, x1, y1, z1, x2, y2, z2, name):
 
 
 def split_with_plane(oEditor, obj_names, plane_obj_name, keep_both=True):
-    """평면으로 객체들을 Split (직사각형 객체 사용)"""
+    """평면으로 객체들을 Split"""
     if isinstance(obj_names, str):
         obj_names = [obj_names]
 
-    # SeparateBody 함수 사용
-    oEditor.SeparateBody(
+    # Split 함수 사용 (Split using plane from selected face/edge)
+    oEditor.Split(
         [
             "NAME:Selections",
             "Selections:=", ",".join(obj_names),
             "NewPartsModelFlag:=", "Model"
         ],
         [
-            "NAME:SeparateBodyParameters",
-            "CoordinateSystemID:=", -1,
+            "NAME:SplitToParameters",
+            "SplitPlane:=", "FromFace",
             "WhichSide:=", "Both" if keep_both else "PositiveOnly",
             "ToolType:=", "PlaneTool",
-            "ToolEntityID:=", plane_obj_name,
-            "SplitPlane:=", "FromFace"
+            "ToolEntityID:=", plane_obj_name
         ]
     )
     print("  Split: {} by {}".format(obj_names, plane_obj_name))
