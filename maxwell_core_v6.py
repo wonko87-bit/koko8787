@@ -325,7 +325,7 @@ def rename_object(oEditor, old_name, new_name):
     print("  이름 변경: {} → {}".format(old_name, new_name))
 
 
-def subtract_objects(oEditor, blank_names, tool_names):
+def subtract_objects(oEditor, blank_names, tool_names, keep_originals=True):
     """Subtract 연산 (blank에서 tool들을 빼기)"""
     # 문자열이면 리스트로 변환
     if isinstance(blank_names, str):
@@ -341,10 +341,10 @@ def subtract_objects(oEditor, blank_names, tool_names):
         ],
         [
             "NAME:SubtractParameters",
-            "KeepOriginals:=", False
+            "KeepOriginals:=", keep_originals
         ]
     )
-    print("  Subtract: {} - {}".format(blank_names, tool_names))
+    print("  Subtract: {} - {} (KeepOriginals={})".format(blank_names, tool_names, keep_originals))
 
 
 def duplicate_object(oEditor, obj_name, new_name):
@@ -624,21 +624,11 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     leg_copies = ["Core_Main_Leg_Copy", "Core_Side_LegPlus_Copy", "Core_Side_LegMinus_Copy"]
     yoke_copies = ["Core_Top_Yoke_Copy", "Core_Bottom_Yoke_Copy"]
 
-    # Leg 잉여분: Leg 3개(blank) - Yoke 2개(tool)
-    subtract_objects(oEditor, leg_copies, yoke_copies)
+    # Leg 잉여분: Leg 3개(blank) - Yoke 2개(tool), tool 유지
+    subtract_objects(oEditor, leg_copies, yoke_copies, keep_originals=True)
 
-    # Yoke 잉여분을 추출하기 위해 원본 다시 복제
-    duplicate_object(oEditor, "Core_Main_Leg", "Core_Main_Leg_Copy2")
-    duplicate_object(oEditor, "Core_Side_LegPlus", "Core_Side_LegPlus_Copy2")
-    duplicate_object(oEditor, "Core_Side_LegMinus", "Core_Side_LegMinus_Copy2")
-    duplicate_object(oEditor, "Core_Top_Yoke", "Core_Top_Yoke_Copy2")
-    duplicate_object(oEditor, "Core_Bottom_Yoke", "Core_Bottom_Yoke_Copy2")
-
-    leg_copies2 = ["Core_Main_Leg_Copy2", "Core_Side_LegPlus_Copy2", "Core_Side_LegMinus_Copy2"]
-    yoke_copies2 = ["Core_Top_Yoke_Copy2", "Core_Bottom_Yoke_Copy2"]
-
-    # Yoke 잉여분: Yoke 2개(blank) - Leg 3개(tool)
-    subtract_objects(oEditor, yoke_copies2, leg_copies2)
+    # Yoke 잉여분: Yoke 2개(blank) - Leg 3개(tool), tool 유지
+    subtract_objects(oEditor, yoke_copies, leg_copies, keep_originals=True)
 
     # ===== 11. 직사각형 생성 (Split용) =====
     print("\n===== 직사각형 생성 =====")
@@ -686,11 +676,11 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     print("\n===== Yoke 잉여분 Split 작업 =====")
 
     # 첫 번째 Split: 직사각형3번으로 Both
-    yoke_targets = ["Core_Top_Yoke_Copy2", "Core_Bottom_Yoke_Copy2"]
+    yoke_targets = ["Core_Top_Yoke_Copy", "Core_Bottom_Yoke_Copy"]
     split_with_plane(oEditor, yoke_targets, "Rectangle3", keep_both=True)
 
     # Split 결과물 이름
-    yoke_split1 = ["Core_Top_Yoke_Copy2_Section1", "Core_Bottom_Yoke_Copy2_Section1"]
+    yoke_split1 = ["Core_Top_Yoke_Copy_Section1", "Core_Bottom_Yoke_Copy_Section1"]
 
     # 두 번째 Split: 직사각형4번으로 Positive
     split_with_plane(oEditor, yoke_split1, "Rectangle4", keep_both=False)
