@@ -673,11 +673,12 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     print("\n===== Leg 잉여분 Split 작업 =====")
 
     # 첫 번째 Split: 직사각형1번으로 Both
+    # 3개 객체를 split하면 Separate1, Separate2, Separate3 생성 (순서대로)
     leg_targets = ["Core_Main_Leg_Copy", "Core_Side_LegMinus_Copy", "Core_Side_LegPlus_Copy"]
     split_with_plane(oEditor, leg_targets, "Rectangle1", keep_both=True)
 
-    # Split 결과물 이름 (Maxwell이 자동으로 _Section1 붙임)
-    leg_split1 = ["Core_Main_Leg_Copy_Section1", "Core_Side_LegMinus_Copy_Section1", "Core_Side_LegPlus_Copy_Section1"]
+    # Split 결과물 이름 (SeparateBody는 Separate1, Separate2, ... 형태로 생성)
+    leg_split1 = ["Separate1", "Separate2", "Separate3"]
 
     # 두 번째 Split: 직사각형2번으로 Positive
     split_with_plane(oEditor, leg_split1, "Rectangle2", keep_both=False)
@@ -686,11 +687,12 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     print("\n===== Yoke 잉여분 Split 작업 =====")
 
     # 첫 번째 Split: 직사각형3번으로 Both
+    # 2개 객체를 split하면 Separate4, Separate5 생성
     yoke_targets = ["Core_Top_Yoke_Copy", "Core_Bottom_Yoke_Copy"]
     split_with_plane(oEditor, yoke_targets, "Rectangle3", keep_both=True)
 
     # Split 결과물 이름
-    yoke_split1 = ["Core_Top_Yoke_Copy_Section1", "Core_Bottom_Yoke_Copy_Section1"]
+    yoke_split1 = ["Separate4", "Separate5"]
 
     # 두 번째 Split: 직사각형4번으로 Positive
     split_with_plane(oEditor, yoke_split1, "Rectangle4", keep_both=False)
