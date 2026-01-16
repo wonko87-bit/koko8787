@@ -202,7 +202,7 @@ def split_with_plane(oEditor, obj_names, plane_obj_name, keep_both=True):
     if isinstance(obj_names, str):
         obj_names = [obj_names]
 
-    # Split 함수 사용 (Split using plane from selected face/edge)
+    # Split 함수 사용 - 직사각형을 Tool로 사용
     oEditor.Split(
         [
             "NAME:Selections",
@@ -213,8 +213,7 @@ def split_with_plane(oEditor, obj_names, plane_obj_name, keep_both=True):
             "NAME:SplitToParameters",
             "SplitPlane:=", "FromFace",
             "WhichSide:=", "Both" if keep_both else "PositiveOnly",
-            "ToolType:=", "PlaneTool",
-            "ToolEntityID:=", plane_obj_name
+            "Tool:=", plane_obj_name
         ]
     )
     print("  Split: {} by {}".format(obj_names, plane_obj_name))
