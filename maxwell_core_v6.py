@@ -626,8 +626,16 @@ def create_core_from_csv(csv_file_path, name_prefix="Core"):
     # Leg 잉여분: Leg 3개(blank) - Yoke 2개(tool), tool 유지
     subtract_objects(oEditor, leg_copies, yoke_copies, keep_originals=True)
 
+    # Yoke 잉여분을 추출하기 위해 원본 Leg를 다시 복제
+    # (첫 번째 subtract에서 leg_copies는 변경되었으므로 새로 복제 필요)
+    duplicate_object(oEditor, "Core_Main_Leg", "Core_Main_Leg_Copy2")
+    duplicate_object(oEditor, "Core_Side_LegPlus", "Core_Side_LegPlus_Copy2")
+    duplicate_object(oEditor, "Core_Side_LegMinus", "Core_Side_LegMinus_Copy2")
+
+    leg_copies2 = ["Core_Main_Leg_Copy2", "Core_Side_LegPlus_Copy2", "Core_Side_LegMinus_Copy2"]
+
     # Yoke 잉여분: Yoke 2개(blank) - Leg 3개(tool), tool 유지
-    subtract_objects(oEditor, yoke_copies, leg_copies, keep_originals=True)
+    subtract_objects(oEditor, yoke_copies, leg_copies2, keep_originals=True)
 
     # ===== 11. 직사각형 생성 (Split용) =====
     print("\n===== 직사각형 생성 =====")
