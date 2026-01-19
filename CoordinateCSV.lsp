@@ -3,7 +3,17 @@
 ;; 사용법: 명령어 "COORDCSV" 입력 후 기준점 클릭, 이후 목표점들을 연속 클릭
 ;; ESC를 누르면 CSV 파일이 생성됨
 
-(defun C:COORDCSV (/ base-pt target-pt point-list rel-x rel-y csv-path csv-file counter)
+;; 타임스탬프를 문자열로 변환하는 헬퍼 함수
+(defun get-timestamp (/ julian-date date-str time-str)
+  (setq julian-date (getvar "DATE"))
+  ;; Julian date를 문자열로 변환 (소수점 제거)
+  (setq date-str (rtos julian-date 2 9))
+  ;; 소수점과 공백 제거하여 고유한 문자열 생성
+  (setq date-str (vl-string-translate ". " "" date-str))
+  date-str
+)
+
+(defun C:COORDCSV (/ base-pt target-pt point-list rel-x rel-y csv-path csv-file counter file-handle timestamp)
   (setq point-list '())
 
   ;; 기준점 입력
@@ -41,8 +51,9 @@
             (vl-mkdir csv-path)
           )
 
-          ;; 파일명 생성 (날짜_시간 형식)
-          (setq csv-file (strcat csv-path "coordinates_" (menucmd "M=$(edtime,$(getvar,date),YYYYMMDD_HHMMSS)") ".csv"))
+          ;; 파일명 생성 (타임스탬프 사용)
+          (setq timestamp (get-timestamp))
+          (setq csv-file (strcat csv-path "coordinates_" timestamp ".csv"))
 
           ;; CSV 파일 쓰기
           (setq file-handle (open csv-file "w"))
