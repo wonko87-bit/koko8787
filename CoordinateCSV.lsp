@@ -1,20 +1,20 @@
 ;; CoordinateCSV.lsp
-;; 기준점 대비 상대좌표를 CSV 파일로 저장하는 AutoCAD LISP 프로그램
+;; 기준점 대비 상대좌표를 TXT 파일로 저장하는 AutoCAD LISP 프로그램
 ;; 사용법: 명령어 "COORDCSV" 입력 후 기준점 클릭, 이후 목표점들을 연속 클릭
-;; ESC를 누르면 CSV 파일이 생성됨
+;; ESC를 누르면 TXT 파일이 생성됨 (현재 도면 폴더에 저장)
 
 ;; 다음 사용 가능한 파일 번호를 찾는 함수
-(defun get-next-file-number (csv-path / file-num test-file)
+(defun get-next-file-number (file-path / file-num test-file)
   (setq file-num 1)
-  (setq test-file (strcat csv-path "coordinates_" (itoa file-num) ".csv"))
+  (setq test-file (strcat file-path "coordinates_" (itoa file-num) ".txt"))
   (while (findfile test-file)
     (setq file-num (1+ file-num))
-    (setq test-file (strcat csv-path "coordinates_" (itoa file-num) ".csv"))
+    (setq test-file (strcat file-path "coordinates_" (itoa file-num) ".txt"))
   )
   file-num
 )
 
-(defun C:COORDCSV (/ base-pt target-pt point-list rel-x rel-y csv-path csv-file counter file-handle file-num)
+(defun C:COORDCSV (/ base-pt target-pt point-list rel-x rel-y file-path output-file counter file-handle file-num dwg-path)
   (setq point-list '())
 
   ;; 기준점 입력
@@ -41,18 +41,24 @@
         (princ "\n다음 목표점 클릭 (ESC로 종료): ")
       )
 
-      ;; CSV 파일 저장
+      ;; TXT 파일 저장
       (if (> (length point-list) 0)
         (progn
-          ;; CSV 저장 경로 설정
-          (setq csv-path (strcat (getenv "USERPROFILE") "\\Desktop\\temp_csv\\"))
+          ;; 현재 도면 폴더 경로 가져오기
+          (setq dwg-path (getvar "DWGPREFIX"))
+
+          ;; 도면이 저장되지 않은 경우 임시 폴더 사용
+          (if (or (not dwg-path) (= dwg-path ""))
+            (setq file-path "C:\\Temp\\")
+            (setq file-path dwg-path)
+          )
 
           ;; 파일명 생성 (순차 번호 사용)
-          (setq file-num (get-next-file-number csv-path))
-          (setq csv-file (strcat csv-path "coordinates_" (itoa file-num) ".csv"))
+          (setq file-num (get-next-file-number file-path))
+          (setq output-file (strcat file-path "coordinates_" (itoa file-num) ".txt"))
 
-          ;; CSV 파일 쓰기
-          (setq file-handle (open csv-file "w"))
+          ;; TXT 파일 쓰기
+          (setq file-handle (open output-file "w"))
           (if file-handle
             (progn
               ;; 헤더 작성
@@ -73,13 +79,12 @@
               )
 
               (close file-handle)
-              (princ (strcat "\n\nCSV 파일 저장 완료: " csv-file))
+              (princ (strcat "\n\nTXT 파일 저장 완료: " output-file))
               (princ (strcat "\n총 " (itoa (length point-list)) "개의 좌표가 저장되었습니다."))
             )
             (progn
-              (princ "\n오류: CSV 파일을 생성할 수 없습니다.")
-              (princ (strcat "\n경로: " csv-path))
-              (princ "\n먼저 바탕화면에 'temp_csv' 폴더를 만들어주세요.")
+              (princ "\n오류: TXT 파일을 생성할 수 없습니다.")
+              (princ (strcat "\n경로: " file-path))
             )
           )
         )
@@ -94,4 +99,5 @@
 
 (princ "\n*** CoordinateCSV 로드됨 ***")
 (princ "\n명령어: COORDCSV")
+(princ "\n파일 저장: 현재 도면 폴더에 TXT 파일로 저장됨")
 (princ)
