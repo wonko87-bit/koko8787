@@ -47,11 +47,6 @@
           ;; CSV 저장 경로 설정
           (setq csv-path (strcat (getenv "USERPROFILE") "\\Desktop\\temp_csv\\"))
 
-          ;; 디렉토리가 없으면 생성
-          (if (not (vl-file-directory-p csv-path))
-            (vl-mkdir csv-path)
-          )
-
           ;; 파일명 생성 (순차 번호 사용)
           (setq file-num (get-next-file-number csv-path))
           (setq csv-file (strcat csv-path "coordinates_" (itoa file-num) ".csv"))
@@ -81,7 +76,11 @@
               (princ (strcat "\n\nCSV 파일 저장 완료: " csv-file))
               (princ (strcat "\n총 " (itoa (length point-list)) "개의 좌표가 저장되었습니다."))
             )
-            (princ "\n오류: CSV 파일을 생성할 수 없습니다.")
+            (progn
+              (princ "\n오류: CSV 파일을 생성할 수 없습니다.")
+              (princ (strcat "\n경로: " csv-path))
+              (princ "\n먼저 바탕화면에 'temp_csv' 폴더를 만들어주세요.")
+            )
           )
         )
         (princ "\n입력된 목표점이 없습니다.")
