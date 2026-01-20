@@ -1,20 +1,9 @@
 ;; CoordinateCSV.lsp
-;; 기준점 대비 상대좌표를 TXT 파일로 저장하는 AutoCAD LISP 프로그램
+;; 기준점 대비 상대좌표를 화면에 출력하는 AutoCAD LISP 프로그램
 ;; 사용법: 명령어 "COORDCSV" 입력 후 기준점 클릭, 이후 목표점들을 연속 클릭
-;; ESC를 누르면 TXT 파일이 생성됨 (현재 도면 폴더에 저장)
+;; ESC를 누르면 좌표 데이터가 화면에 출력됨 (복사해서 사용 가능)
 
-;; 다음 사용 가능한 파일 번호를 찾는 함수
-(defun get-next-file-number (file-path / file-num test-file)
-  (setq file-num 1)
-  (setq test-file (strcat file-path "coordinates_" (itoa file-num) ".txt"))
-  (while (findfile test-file)
-    (setq file-num (1+ file-num))
-    (setq test-file (strcat file-path "coordinates_" (itoa file-num) ".txt"))
-  )
-  file-num
-)
-
-(defun C:COORDCSV (/ base-pt target-pt point-list rel-x rel-y file-path output-file counter file-handle file-num dwg-path)
+(defun C:COORDCSV (/ base-pt target-pt point-list rel-x rel-y counter)
   (setq point-list '())
 
   ;; 기준점 입력
@@ -41,52 +30,35 @@
         (princ "\n다음 목표점 클릭 (ESC로 종료): ")
       )
 
-      ;; TXT 파일 저장
+      ;; 결과 출력
       (if (> (length point-list) 0)
         (progn
-          ;; 현재 도면 폴더 경로 가져오기
-          (setq dwg-path (getvar "DWGPREFIX"))
+          ;; 텍스트 창 열기
+          (textscr)
 
-          ;; 도면이 저장되지 않은 경우 임시 폴더 사용
-          (if (or (not dwg-path) (= dwg-path ""))
-            (setq file-path "C:\\Temp\\")
-            (setq file-path dwg-path)
-          )
+          (princ "\n\n")
+          (princ "========================================")
+          (princ "\n좌표 데이터 (아래 내용을 복사하세요)")
+          (princ "\n========================================")
+          (princ "\nNo,X,Y")
 
-          ;; 파일명 생성 (순차 번호 사용)
-          (setq file-num (get-next-file-number file-path))
-          (setq output-file (strcat file-path "coordinates_" (itoa file-num) ".txt"))
-
-          ;; TXT 파일 쓰기
-          (setq file-handle (open output-file "w"))
-          (if file-handle
-            (progn
-              ;; 헤더 작성
-              (write-line "No,X,Y" file-handle)
-
-              ;; 데이터 작성
-              (setq counter 1)
-              (foreach pt point-list
-                (write-line
-                  (strcat
-                    (itoa counter) ","
-                    (rtos (car pt) 2 6) ","
-                    (rtos (cadr pt) 2 6)
-                  )
-                  file-handle
-                )
-                (setq counter (1+ counter))
+          ;; 데이터 출력
+          (setq counter 1)
+          (foreach pt point-list
+            (princ
+              (strcat
+                "\n" (itoa counter) ","
+                (rtos (car pt) 2 6) ","
+                (rtos (cadr pt) 2 6)
               )
-
-              (close file-handle)
-              (princ (strcat "\n\nTXT 파일 저장 완료: " output-file))
-              (princ (strcat "\n총 " (itoa (length point-list)) "개의 좌표가 저장되었습니다."))
             )
-            (progn
-              (princ "\n오류: TXT 파일을 생성할 수 없습니다.")
-              (princ (strcat "\n경로: " file-path))
-            )
+            (setq counter (1+ counter))
           )
+
+          (princ "\n========================================")
+          (princ (strcat "\n총 " (itoa (length point-list)) "개의 좌표"))
+          (princ "\n========================================")
+          (princ "\n\n위 데이터를 Ctrl+C로 복사한 후 Excel 등에 붙여넣기 하세요.")
         )
         (princ "\n입력된 목표점이 없습니다.")
       )
@@ -99,5 +71,5 @@
 
 (princ "\n*** CoordinateCSV 로드됨 ***")
 (princ "\n명령어: COORDCSV")
-(princ "\n파일 저장: 현재 도면 폴더에 TXT 파일로 저장됨")
+(princ "\n출력: 화면에 CSV 형식으로 출력 (복사 가능)")
 (princ)
