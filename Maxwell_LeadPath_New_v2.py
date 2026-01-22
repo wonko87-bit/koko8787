@@ -5,13 +5,21 @@ Maxwell 3D - Lead Path 생성 v2 (Center Point Arc 방식)
 Line + Center Point Arc로 경로 생성
 """
 
+print("Loading Maxwell LeadPath v2 script...")
+
 import ScriptEnv
+print("ScriptEnv imported")
+
 ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
+print("ScriptEnv initialized")
+
 oDesktop.RestoreWindow()
+print("Desktop restored")
 
 import csv
 import os
 import math
+print("All modules imported successfully")
 
 
 def read_leadpath_csv(csv_file_path):
@@ -429,19 +437,30 @@ def create_leadpaths_from_csv(csv_file_path, name_prefix="LeadPath"):
 
 
 # 스크립트 실행
+print("=" * 50)
+print("Maxwell LeadPath v2 Script Starting...")
+print("=" * 50)
+
 try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    print("Script directory: {}".format(script_dir))
 except:
     import sys
     if len(sys.argv) > 0:
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
         script_dir = os.getcwd()
+    print("Script directory (fallback): {}".format(script_dir))
 
 csv_file = os.path.join(script_dir, "LeadPathDim.csv")
+print("Looking for CSV file: {}".format(csv_file))
 
 if os.path.exists(csv_file):
+    print("CSV file found! Starting path generation...")
     create_leadpaths_from_csv(
         csv_file_path=csv_file,
         name_prefix="LeadPath"
     )
+    print("Script completed!")
+else:
+    print("ERROR: CSV file not found at {}".format(csv_file))
