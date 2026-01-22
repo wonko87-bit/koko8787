@@ -220,29 +220,43 @@ def create_path_from_data(oEditor, path_data, path_name):
 
     current_pos = cylindrical_to_cartesian(start_r, start_theta, start_z)
 
+    # 디버깅: 시작점 출력
+    print("Start pos: ({}, {}, {})".format(current_pos[0], current_pos[1], current_pos[2]))
+
     # 현재 방향 (초기: theta 방향)
     current_dir = get_theta_direction(start_theta)
+    print("Start dir: ({}, {}, {})".format(current_dir[0], current_dir[1], current_dir[2]))
 
     # 초기 직진
     initial_straight = path_data['initial_straight']
+    print("Initial straight: {}".format(initial_straight))
+
     if initial_straight > 0:
         part_counter += 1
         line_name = "{}_Part{}".format(path_name, part_counter)
 
         next_pos = add_points(current_pos, scale_vector(current_dir, initial_straight))
+        print("Creating line from {} to {}".format(current_pos, next_pos))
         create_line(oEditor, current_pos, next_pos, line_name)
         parts.append(line_name)
 
         current_pos = next_pos
 
-    # 각 Bending 처리
-    for bend_idx, bending in enumerate(path_data['bendings']):
-        bend_type = bending['type']
-        bend_radius = bending['radius']
-        bend_angle = bending['angle']
-        bend_straight = bending['straight']
+    # 각 Bending 처리 (임시로 주석 처리 - 디버깅용)
+    print("Number of bendings: {}".format(len(path_data['bendings'])))
 
-        if bend_type.lower() == 'r-theta':
+    # TODO: Arc 생성 부분 재구현 필요
+    # Maxwell API에서 부분 호를 만드는 방법을 찾아야 함
+
+    # 일단 bending 없이 초기 직진만 테스트
+    if False:  # 임시로 비활성화
+        for bend_idx, bending in enumerate(path_data['bendings']):
+            bend_type = bending['type']
+            bend_radius = bending['radius']
+            bend_angle = bending['angle']
+            bend_straight = bending['straight']
+
+            if bend_type.lower() == 'r-theta':
             # R-theta plane bending (XY 평면, Z축 중심 회전)
             part_counter += 1
             arc_name = "{}_Part{}".format(path_name, part_counter)
