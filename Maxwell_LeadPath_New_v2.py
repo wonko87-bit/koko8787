@@ -202,62 +202,52 @@ def create_line_polyline(oEditor, pt1, pt2, name):
     )
 
 
-def create_arc_polyline(oEditor, points_list, name):
-    """여러 점을 연결하는 Polyline 생성 (Arc 근사화용)"""
-    point_list = ["NAME:PolylinePoints"]
-    for pt in points_list:
-        point_list.append([
-            "NAME:PLPoint",
-            "X:=", "{}mm".format(pt[0]),
-            "Y:=", "{}mm".format(pt[1]),
-            "Z:=", "{}mm".format(pt[2])
-        ])
+def get_perpendicular_vectors(direction):
+    """방향 벡터에 수직인 두 벡터 반환 (정규직교 기저)"""
+    # 첫 번째 수직 벡터
+    if abs(direction[2]) < 0.9:
+        # Z축이 아닌 경우
+        v1 = cross_product(direction, (0, 0, 1))
+    else:
+        # Z축 방향인 경우
+        v1 = cross_product(direction, (1, 0, 0))
 
-    segment_list = ["NAME:PolylineSegments"]
-    for i in range(len(points_list) - 1):
-        segment_list.append([
-            "NAME:PLSegment",
-            "SegmentType:=", "Line",
-            "StartIndex:=", i,
-            "NoOfPoints:=", 2
-        ])
+    v1 = normalize_vector(v1)
 
-    oEditor.CreatePolyline(
-        [
-            "NAME:PolylineParameters",
-            "IsPolylineCovered:=", False,
-            "IsPolylineClosed:=", False,
-            point_list,
-            segment_list,
-            [
-                "NAME:PolylineXSection",
-                "XSectionType:=", "None",
-                "XSectionOrient:=", "Auto",
-                "XSectionWidth:=", "0mm",
-                "XSectionTopWidth:=", "0mm",
-                "XSectionHeight:=", "0mm",
-                "XSectionNumSegments:=", "0",
-                "XSectionBendType:=", "Corner"
-            ]
-        ],
-        [
-            "NAME:Attributes",
-            "Name:=", name,
-            "Flags:=", "",
-            "Color:=", "(143 175 143)",
-            "Transparency:=", 0,
-            "PartCoordinateSystem:=", "Global",
-            "UDMId:=", "",
-            "MaterialValue:=", "\"vacuum\"",
-            "SurfaceMaterialValue:=", "\"\"",
-            "SolveInside:=", True,
-            "ShellElement:=", False,
-            "ShellElementThickness:=", "0mm",
-            "IsMaterialEditable:=", True,
-            "UseMaterialAppearance:=", False,
-            "IsLightweight:=", False
-        ]
+    # 두 번째 수직 벡터
+    v2 = cross_product(direction, v1)
+    v2 = normalize_vector(v2)
+
+    return v1, v2
+
+
+def create_arc_3d(oEditor, center, start_pt, end_pt, axis, name):
+    """
+    3D Arc 생성: CreateCircle로 원을 만들고 Section으로 잘라냄
+    center: 중심점
+    start_pt: 시작점
+    end_pt: 끝점
+    axis: 회전 축 (정규화된 벡터)
+    """
+    # 반지름 계산
+    radius = math.sqrt(
+        (start_pt[0]-center[0])**2 +
+        (start_pt[1]-center[1])**2 +
+        (start_pt[2]-center[2])**2
     )
+
+    # 원 평면의 정규 벡터 = axis
+    axis = normalize_vector(axis)
+
+    # 원을 만들기 위한 직교 기저
+    u, v = get_perpendicular_vectors(axis)
+
+    # CreateCircle은 XY, YZ, ZX 평면만 지원하므로
+    # 임의의 평면에 원을 만들려면 Coordinate System을 만들어야 함
+    # 대신 Sweep을 사용하겠습니다.
+
+    # TODO: 이 방법이 복잡하면 다른 접근 필요
+    pass
 
 
 def unite_objects(oEditor, obj_names):
