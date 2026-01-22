@@ -266,100 +266,100 @@ def create_path_from_data(oEditor, path_data, path_name):
 
     if False:  # 디버깅: bending 비활성화
         for bend_idx, bending in enumerate(path_data['bendings']):
-        direction = bending['direction']
-        radius = bending['radius']
-        angle = bending['angle']
-        straight = bending['straight']
+            direction = bending['direction']
+            radius = bending['radius']
+            angle = bending['angle']
+            straight = bending['straight']
 
-        part_counter += 1
-        arc_name = "{}_Part{}".format(path_name, part_counter)
-
-        if direction in ['left', 'right']:
-            # XY 평면 bending
-
-            # 중심점 결정
-            # left: 현재 방향 기준 왼쪽 (Z축 기준 +90도 회전)
-            # right: 현재 방향 기준 오른쪽 (Z축 기준 -90도 회전)
-            if direction == 'left':
-                perp_dir = rotate_vector_z(current_dir, 90)
-                arc_angle = angle  # + 방향 (반시계)
-            else:  # right
-                perp_dir = rotate_vector_z(current_dir, -90)
-                arc_angle = -angle  # - 방향 (시계)
-
-            arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
-
-            # Arc 생성 (일단 전체 원으로, 나중에 부분 호로 수정 필요)
-            create_center_point_arc(oEditor, arc_center, current_pos, arc_angle, arc_name)
-            parts.append(arc_name)
-
-            # 위치와 방향 업데이트
-            current_dir = rotate_vector_z(current_dir, arc_angle)
-            cumulative_xy_rotation += arc_angle
-
-            # 새 위치 계산
-            radius_vec = (current_pos[0] - arc_center[0],
-                         current_pos[1] - arc_center[1],
-                         current_pos[2] - arc_center[2])
-            rotated_radius = rotate_vector_z(radius_vec, arc_angle)
-            current_pos = add_points(arc_center, rotated_radius)
-
-        elif direction in ['up', 'down']:
-            # 수직 평면 bending (상대좌표계)
-
-            # 상대좌표계에서:
-            # - X'축: 현재 진행 방향
-            # - Y'축: 현재 진행 방향을 Z축 기준으로 90도 회전
-            # - Z'축: Z축 (변하지 않음)
-
-            # up/down 방향 결정
-            if direction == 'up':
-                # 현재 방향과 Z축에 수직인 방향 (위쪽)
-                perp_dir = (0, 0, 1)  # 일단 Z축 방향
-                arc_angle = angle  # + 방향
-            else:  # down
-                perp_dir = (0, 0, -1)  # Z축 반대 방향
-                arc_angle = -angle  # - 방향
-
-            # 실제로는 현재 방향에 수직이면서 XY평면에 수직인 방향
-            # current_dir과 (0,0,1)의 외적
-            lateral_dir = cross_product(current_dir, (0, 0, 1))
-            lateral_dir = normalize_vector(lateral_dir)
-
-            # up이면 Z 방향 성분이 +, down이면 -
-            if direction == 'up':
-                perp_dir = cross_product(lateral_dir, current_dir)
-            else:
-                perp_dir = cross_product(current_dir, lateral_dir)
-
-            perp_dir = normalize_vector(perp_dir)
-
-            arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
-
-            # Arc 생성
-            create_center_point_arc(oEditor, arc_center, current_pos, arc_angle, arc_name)
-            parts.append(arc_name)
-
-            # 위치와 방향 업데이트 (lateral_dir 축 중심으로 회전)
-            current_dir = rotate_vector_axis(current_dir, lateral_dir, arc_angle)
-
-            # 새 위치 계산
-            radius_vec = (current_pos[0] - arc_center[0],
-                         current_pos[1] - arc_center[1],
-                         current_pos[2] - arc_center[2])
-            rotated_radius = rotate_vector_axis(radius_vec, lateral_dir, arc_angle)
-            current_pos = add_points(arc_center, rotated_radius)
-
-        # Bending 후 직진
-        if straight > 0:
             part_counter += 1
-            line_name = "{}_Part{}".format(path_name, part_counter)
+            arc_name = "{}_Part{}".format(path_name, part_counter)
 
-            next_pos = add_points(current_pos, scale_vector(current_dir, straight))
-            create_line(oEditor, current_pos, next_pos, line_name)
-            parts.append(line_name)
+            if direction in ['left', 'right']:
+                # XY 평면 bending
 
-            current_pos = next_pos
+                # 중심점 결정
+                # left: 현재 방향 기준 왼쪽 (Z축 기준 +90도 회전)
+                # right: 현재 방향 기준 오른쪽 (Z축 기준 -90도 회전)
+                if direction == 'left':
+                    perp_dir = rotate_vector_z(current_dir, 90)
+                    arc_angle = angle  # + 방향 (반시계)
+                else:  # right
+                    perp_dir = rotate_vector_z(current_dir, -90)
+                    arc_angle = -angle  # - 방향 (시계)
+
+                arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
+
+                # Arc 생성 (일단 전체 원으로, 나중에 부분 호로 수정 필요)
+                create_center_point_arc(oEditor, arc_center, current_pos, arc_angle, arc_name)
+                parts.append(arc_name)
+
+                # 위치와 방향 업데이트
+                current_dir = rotate_vector_z(current_dir, arc_angle)
+                cumulative_xy_rotation += arc_angle
+
+                # 새 위치 계산
+                radius_vec = (current_pos[0] - arc_center[0],
+                             current_pos[1] - arc_center[1],
+                             current_pos[2] - arc_center[2])
+                rotated_radius = rotate_vector_z(radius_vec, arc_angle)
+                current_pos = add_points(arc_center, rotated_radius)
+
+            elif direction in ['up', 'down']:
+                # 수직 평면 bending (상대좌표계)
+
+                # 상대좌표계에서:
+                # - X'축: 현재 진행 방향
+                # - Y'축: 현재 진행 방향을 Z축 기준으로 90도 회전
+                # - Z'축: Z축 (변하지 않음)
+
+                # up/down 방향 결정
+                if direction == 'up':
+                    # 현재 방향과 Z축에 수직인 방향 (위쪽)
+                    perp_dir = (0, 0, 1)  # 일단 Z축 방향
+                    arc_angle = angle  # + 방향
+                else:  # down
+                    perp_dir = (0, 0, -1)  # Z축 반대 방향
+                    arc_angle = -angle  # - 방향
+
+                # 실제로는 현재 방향에 수직이면서 XY평면에 수직인 방향
+                # current_dir과 (0,0,1)의 외적
+                lateral_dir = cross_product(current_dir, (0, 0, 1))
+                lateral_dir = normalize_vector(lateral_dir)
+
+                # up이면 Z 방향 성분이 +, down이면 -
+                if direction == 'up':
+                    perp_dir = cross_product(lateral_dir, current_dir)
+                else:
+                    perp_dir = cross_product(current_dir, lateral_dir)
+
+                perp_dir = normalize_vector(perp_dir)
+
+                arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
+
+                # Arc 생성
+                create_center_point_arc(oEditor, arc_center, current_pos, arc_angle, arc_name)
+                parts.append(arc_name)
+
+                # 위치와 방향 업데이트 (lateral_dir 축 중심으로 회전)
+                current_dir = rotate_vector_axis(current_dir, lateral_dir, arc_angle)
+
+                # 새 위치 계산
+                radius_vec = (current_pos[0] - arc_center[0],
+                             current_pos[1] - arc_center[1],
+                             current_pos[2] - arc_center[2])
+                rotated_radius = rotate_vector_axis(radius_vec, lateral_dir, arc_angle)
+                current_pos = add_points(arc_center, rotated_radius)
+
+            # Bending 후 직진
+            if straight > 0:
+                part_counter += 1
+                line_name = "{}_Part{}".format(path_name, part_counter)
+
+                next_pos = add_points(current_pos, scale_vector(current_dir, straight))
+                create_line(oEditor, current_pos, next_pos, line_name)
+                parts.append(line_name)
+
+                current_pos = next_pos
 
     # 모든 파트 Unite
     if len(parts) > 0:
