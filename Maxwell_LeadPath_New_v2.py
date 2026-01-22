@@ -236,27 +236,36 @@ def create_path_from_data(oEditor, path_data, path_name):
 
     # 시작점: 원점
     current_pos = (0.0, 0.0, 0.0)
+    print("Starting position: {}".format(current_pos))
 
     # 현재 방향: X축
     current_dir = (1.0, 0.0, 0.0)
+    print("Starting direction: {}".format(current_dir))
 
     # 현재 누적 XY 평면 회전 각도 (Z축 기준)
     cumulative_xy_rotation = 0.0
 
     # 초기 직진
     initial_straight = path_data['initial_straight']
+    print("Initial straight distance: {}".format(initial_straight))
+
     if initial_straight > 0:
         part_counter += 1
         line_name = "{}_Part{}".format(path_name, part_counter)
 
         next_pos = add_points(current_pos, scale_vector(current_dir, initial_straight))
+        print("Creating line '{}' from {} to {}".format(line_name, current_pos, next_pos))
         create_line(oEditor, current_pos, next_pos, line_name)
         parts.append(line_name)
+        print("Line created successfully")
 
         current_pos = next_pos
 
-    # 각 Bending 처리
-    for bend_idx, bending in enumerate(path_data['bendings']):
+    # 각 Bending 처리 (임시 비활성화 - 디버깅)
+    print("Number of bendings: {} (currently disabled)".format(len(path_data['bendings'])))
+
+    if False:  # 디버깅: bending 비활성화
+        for bend_idx, bending in enumerate(path_data['bendings']):
         direction = bending['direction']
         radius = bending['radius']
         angle = bending['angle']
@@ -384,9 +393,12 @@ def create_path_from_data(oEditor, path_data, path_name):
 
 def create_leadpaths_from_csv(csv_file_path, name_prefix="LeadPath"):
     """CSV 파일에서 Lead Path들을 생성"""
+    print("Reading CSV file: {}".format(csv_file_path))
     paths = read_leadpath_csv(csv_file_path)
 
+    print("Number of paths found: {}".format(len(paths)))
     if not paths:
+        print("No paths found in CSV!")
         return
 
     oProject = oDesktop.GetActiveProject()
