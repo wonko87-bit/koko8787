@@ -5,24 +5,17 @@ Maxwell 3D - Lead Path 생성 v2 (Center Point Arc 방식)
 Line + Center Point Arc로 경로 생성
 """
 
-print("Loading Maxwell LeadPath v2 script...")
-
-import ScriptEnv
-print("ScriptEnv imported")
-
-ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
-print("ScriptEnv initialized")
-
-oDesktop = oDesktop  # 필수!
-print("oDesktop assigned")
-
-oDesktop.RestoreWindow()
-print("Desktop restored")
-
 import csv
 import os
 import math
-print("All modules imported successfully")
+import ScriptEnv
+
+# Maxwell 환경 초기화
+ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
+oDesktop = oDesktop
+oProject = oDesktop.GetActiveProject()
+oDesign = oProject.GetActiveDesign()
+oEditor = oDesign.SetActiveEditor("3D Modeler")
 
 
 def read_leadpath_csv(csv_file_path):
@@ -148,16 +141,46 @@ def rotate_vector_axis(v, axis, angle_deg):
 
 
 def create_line(oEditor, pt1, pt2, name):
-    """두 점을 연결하는 Line 생성"""
-    oEditor.CreateLine(
+    """두 점을 연결하는 Polyline 생성"""
+    point_list = ["NAME:PolylinePoints"]
+    point_list.append([
+        "NAME:PLPoint",
+        "X:=", "{}mm".format(pt1[0]),
+        "Y:=", "{}mm".format(pt1[1]),
+        "Z:=", "{}mm".format(pt1[2])
+    ])
+    point_list.append([
+        "NAME:PLPoint",
+        "X:=", "{}mm".format(pt2[0]),
+        "Y:=", "{}mm".format(pt2[1]),
+        "Z:=", "{}mm".format(pt2[2])
+    ])
+
+    segment_list = ["NAME:PolylineSegments"]
+    segment_list.append([
+        "NAME:PLSegment",
+        "SegmentType:=", "Line",
+        "StartIndex:=", 0,
+        "NoOfPoints:=", 2
+    ])
+
+    oEditor.CreatePolyline(
         [
-            "NAME:LineParameters",
-            "XStart:=", "{}mm".format(pt1[0]),
-            "YStart:=", "{}mm".format(pt1[1]),
-            "ZStart:=", "{}mm".format(pt1[2]),
-            "XEnd:=", "{}mm".format(pt2[0]),
-            "YEnd:=", "{}mm".format(pt2[1]),
-            "ZEnd:=", "{}mm".format(pt2[2])
+            "NAME:PolylineParameters",
+            "IsPolylineCovered:=", False,
+            "IsPolylineClosed:=", False,
+            point_list,
+            segment_list,
+            [
+                "NAME:PolylineXSection",
+                "XSectionType:=", "None",
+                "XSectionOrient:=", "Auto",
+                "XSectionWidth:=", "0mm",
+                "XSectionTopWidth:=", "0mm",
+                "XSectionHeight:=", "0mm",
+                "XSectionNumSegments:=", "0",
+                "XSectionBendType:=", "Corner"
+            ]
         ],
         [
             "NAME:Attributes",
@@ -440,30 +463,16 @@ def create_leadpaths_from_csv(csv_file_path, name_prefix="LeadPath"):
 
 
 # 스크립트 실행
-print("=" * 50)
-print("Maxwell LeadPath v2 Script Starting...")
-print("=" * 50)
-
 try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    print("Script directory: {}".format(script_dir))
 except:
     import sys
     if len(sys.argv) > 0:
         script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     else:
         script_dir = os.getcwd()
-    print("Script directory (fallback): {}".format(script_dir))
 
 csv_file = os.path.join(script_dir, "LeadPathDim.csv")
-print("Looking for CSV file: {}".format(csv_file))
 
 if os.path.exists(csv_file):
-    print("CSV file found! Starting path generation...")
-    create_leadpaths_from_csv(
-        csv_file_path=csv_file,
-        name_prefix="LeadPath"
-    )
-    print("Script completed!")
-else:
-    print("ERROR: CSV file not found at {}".format(csv_file))
+    create_leadpaths_from_csv(csv_file, "LeadPath")
