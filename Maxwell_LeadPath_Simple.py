@@ -12,20 +12,50 @@ oEditor = oDesign.SetActiveEditor("3D Modeler")
 
 print("Maxwell environment initialized!")
 
-# 테스트: Line 하나 생성
-oEditor.CreateLine(
+# 테스트: Polyline으로 Line 생성
+point_list = ["NAME:PolylinePoints"]
+point_list.append([
+    "NAME:PLPoint",
+    "X:=", "0mm",
+    "Y:=", "0mm",
+    "Z:=", "0mm"
+])
+point_list.append([
+    "NAME:PLPoint",
+    "X:=", "100mm",
+    "Y:=", "0mm",
+    "Z:=", "0mm"
+])
+
+segment_list = ["NAME:PolylineSegments"]
+segment_list.append([
+    "NAME:PLSegment",
+    "SegmentType:=", "Line",
+    "StartIndex:=", 0,
+    "NoOfPoints:=", 2
+])
+
+oEditor.CreatePolyline(
     [
-        "NAME:LineParameters",
-        "XStart:=", "0mm",
-        "YStart:=", "0mm",
-        "ZStart:=", "0mm",
-        "XEnd:=", "100mm",
-        "YEnd:=", "0mm",
-        "ZEnd:=", "0mm"
+        "NAME:PolylineParameters",
+        "IsPolylineCovered:=", False,
+        "IsPolylineClosed:=", False,
+        point_list,
+        segment_list,
+        [
+            "NAME:PolylineXSection",
+            "XSectionType:=", "None",
+            "XSectionOrient:=", "Auto",
+            "XSectionWidth:=", "0mm",
+            "XSectionTopWidth:=", "0mm",
+            "XSectionHeight:=", "0mm",
+            "XSectionNumSegments:=", "0",
+            "XSectionBendType:=", "Corner"
+        ]
     ],
     [
         "NAME:Attributes",
-        "Name:=", "TestLine",
+        "Name:=", "TestPolyline",
         "Flags:=", "",
         "Color:=", "(143 175 143)",
         "Transparency:=", 0,
@@ -42,4 +72,4 @@ oEditor.CreateLine(
     ]
 )
 
-print("Line created successfully!")
+print("Polyline created successfully!")
