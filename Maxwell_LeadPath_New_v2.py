@@ -202,52 +202,229 @@ def create_line_polyline(oEditor, pt1, pt2, name):
     )
 
 
-def get_perpendicular_vectors(direction):
-    """방향 벡터에 수직인 두 벡터 반환 (정규직교 기저)"""
-    # 첫 번째 수직 벡터
-    if abs(direction[2]) < 0.9:
-        # Z축이 아닌 경우
-        v1 = cross_product(direction, (0, 0, 1))
-    else:
-        # Z축 방향인 경우
-        v1 = cross_product(direction, (1, 0, 0))
-
-    v1 = normalize_vector(v1)
-
-    # 두 번째 수직 벡터
-    v2 = cross_product(direction, v1)
-    v2 = normalize_vector(v2)
-
-    return v1, v2
-
-
-def create_arc_3d(oEditor, center, start_pt, end_pt, axis, name):
+def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg, name):
     """
-    3D Arc 생성: CreateCircle로 원을 만들고 Section으로 잘라냄
-    center: 중심점
-    start_pt: 시작점
-    end_pt: 끝점
-    axis: 회전 축 (정규화된 벡터)
+    XY 평면에서 Arc 생성 (사분원 방식)
+    center: 중심점 (x, y, z)
+    radius: 반지름
+    start_angle_deg: 시작 각도 (X축 기준, 도 단위)
+    arc_angle_deg: 호의 각도 (양수: 반시계, 음수: 시계)
     """
-    # 반지름 계산
-    radius = math.sqrt(
-        (start_pt[0]-center[0])**2 +
-        (start_pt[1]-center[1])**2 +
-        (start_pt[2]-center[2])**2
+    # 1. 원 생성 (XY 평면, Z축 기준)
+    circle_name = "{}_Circle".format(name)
+    oEditor.CreateCircle(
+        [
+            "NAME:CircleParameters",
+            "IsCovered:=", False,
+            "XCenter:=", "{}mm".format(center[0]),
+            "YCenter:=", "{}mm".format(center[1]),
+            "ZCenter:=", "{}mm".format(center[2]),
+            "Radius:=", "{}mm".format(radius),
+            "WhichAxis:=", "Z",
+            "NumSegments:=", "0"
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", circle_name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
     )
 
-    # 원 평면의 정규 벡터 = axis
-    axis = normalize_vector(axis)
+    # 2. 사각형 2개 만들어서 사분원으로 만들기
+    rect_size = radius * 2.5
 
-    # 원을 만들기 위한 직교 기저
-    u, v = get_perpendicular_vectors(axis)
+    # 첫 번째 사각형 (start_angle 방향 기준)
+    rect1_name = "{}_Rect1".format(name)
+    oEditor.CreateRectangle(
+        [
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(center[0]),
+            "YStart:=", "{}mm".format(center[1]),
+            "ZStart:=", "{}mm".format(center[2]),
+            "Width:=", "{}mm".format(rect_size),
+            "Height:=", "{}mm".format(rect_size),
+            "WhichAxis:=", "Z"
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", rect1_name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
 
-    # CreateCircle은 XY, YZ, ZX 평면만 지원하므로
-    # 임의의 평면에 원을 만들려면 Coordinate System을 만들어야 함
-    # 대신 Sweep을 사용하겠습니다.
+    # 첫 번째 사각형을 start_angle로 회전
+    oEditor.Rotate(
+        ["NAME:Selections", "Selections:=", rect1_name],
+        [
+            "NAME:RotateParameters",
+            "RotateAxis:=", "Z",
+            "RotateAngle:=", "{}deg".format(start_angle_deg)
+        ]
+    )
 
-    # TODO: 이 방법이 복잡하면 다른 접근 필요
-    pass
+    # 두 번째 사각형 (start_angle + 90도 방향)
+    rect2_name = "{}_Rect2".format(name)
+    oEditor.CreateRectangle(
+        [
+            "NAME:RectangleParameters",
+            "IsCovered:=", True,
+            "XStart:=", "{}mm".format(center[0]),
+            "YStart:=", "{}mm".format(center[1]),
+            "ZStart:=", "{}mm".format(center[2]),
+            "Width:=", "{}mm".format(rect_size),
+            "Height:=", "{}mm".format(rect_size),
+            "WhichAxis:=", "Z"
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", rect2_name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
+
+    # 두 번째 사각형을 start_angle + 90도로 회전
+    oEditor.Rotate(
+        ["NAME:Selections", "Selections:=", rect2_name],
+        [
+            "NAME:RotateParameters",
+            "RotateAxis:=", "Z",
+            "RotateAngle:=", "{}deg".format(start_angle_deg + 90)
+        ]
+    )
+
+    # 3. Subtract로 사분원 만들기
+    oEditor.Subtract(
+        ["NAME:Selections", "Blank Parts:=", circle_name, "Tool Parts:=", "{},{}".format(rect1_name, rect2_name)],
+        ["NAME:SubtractParameters", "KeepOriginals:=", False]
+    )
+
+    # 4. 원하는 각도만 남기기
+    abs_arc_angle = abs(arc_angle_deg)
+    if abs_arc_angle < 90:
+        # 회전 각도 = 90 - abs_arc_angle
+        rotate_angle = 90 - abs_arc_angle
+
+        # 사분원을 회전 (시계 방향이면 반대로)
+        if arc_angle_deg < 0:
+            rotate_angle = -rotate_angle
+
+        oEditor.Rotate(
+            ["NAME:Selections", "Selections:=", circle_name],
+            [
+                "NAME:RotateParameters",
+                "RotateAxis:=", "Z",
+                "RotateAngle:=", "{}deg".format(rotate_angle)
+            ]
+        )
+
+        # 새 사각형으로 다시 자르기
+        rect3_name = "{}_Rect3".format(name)
+        oEditor.CreateRectangle(
+            [
+                "NAME:RectangleParameters",
+                "IsCovered:=", True,
+                "XStart:=", "{}mm".format(center[0]),
+                "YStart:=", "{}mm".format(center[1]),
+                "ZStart:=", "{}mm".format(center[2]),
+                "Width:=", "{}mm".format(rect_size),
+                "Height:=", "{}mm".format(rect_size),
+                "WhichAxis:=", "Z"
+            ],
+            [
+                "NAME:Attributes",
+                "Name:=", rect3_name,
+                "Flags:=", "",
+                "Color:=", "(143 175 143)",
+                "Transparency:=", 0,
+                "PartCoordinateSystem:=", "Global",
+                "UDMId:=", "",
+                "MaterialValue:=", "\"vacuum\"",
+                "SurfaceMaterialValue:=", "\"\"",
+                "SolveInside:=", True,
+                "ShellElement:=", False,
+                "ShellElementThickness:=", "0mm",
+                "IsMaterialEditable:=", True,
+                "UseMaterialAppearance:=", False,
+                "IsLightweight:=", False
+            ]
+        )
+
+        # 사각형3을 start_angle + 90로 회전
+        oEditor.Rotate(
+            ["NAME:Selections", "Selections:=", rect3_name],
+            [
+                "NAME:RotateParameters",
+                "RotateAxis:=", "Z",
+                "RotateAngle:=", "{}deg".format(start_angle_deg + 90)
+            ]
+        )
+
+        # 다시 Subtract
+        oEditor.Subtract(
+            ["NAME:Selections", "Blank Parts:=", circle_name, "Tool Parts:=", rect3_name],
+            ["NAME:SubtractParameters", "KeepOriginals:=", False]
+        )
+
+    # 5. 최종 이름 변경
+    try:
+        oEditor.ChangeProperty(
+            [
+                "NAME:AllTabs",
+                [
+                    "NAME:Geometry3DAttributeTab",
+                    [
+                        "NAME:PropServers",
+                        circle_name
+                    ],
+                    [
+                        "NAME:ChangedProps",
+                        [
+                            "NAME:Name",
+                            "Value:=", name
+                        ]
+                    ]
+                ]
+            ]
+        )
+    except:
+        pass
 
 
 def unite_objects(oEditor, obj_names):
