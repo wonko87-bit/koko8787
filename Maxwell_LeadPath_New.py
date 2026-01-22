@@ -271,20 +271,20 @@ def create_polyline(oEditor, points, name):
     if len(points) < 2:
         return
 
-    # PolylinePoints 생성
-    point_list = []
+    # PolylinePoints 생성 (각 점을 개별 리스트로)
+    point_list = ["NAME:PolylinePoints"]
     for i, pt in enumerate(points):
-        point_list.extend([
+        point_list.append([
             "NAME:PLPoint",
             "X:=", "{}mm".format(pt[0]),
             "Y:=", "{}mm".format(pt[1]),
             "Z:=", "{}mm".format(pt[2])
         ])
 
-    # PolylineSegments 생성
-    segment_list = []
+    # PolylineSegments 생성 (각 세그먼트를 개별 리스트로)
+    segment_list = ["NAME:PolylineSegments"]
     for i in range(len(points) - 1):
-        segment_list.extend([
+        segment_list.append([
             "NAME:PLSegment",
             "SegmentType:=", "Line",
             "StartIndex:=", i,
@@ -296,12 +296,8 @@ def create_polyline(oEditor, points, name):
             "NAME:PolylineParameters",
             "IsPolylineCovered:=", False,
             "IsPolylineClosed:=", False,
-            [
-                "NAME:PolylinePoints"
-            ] + point_list,
-            [
-                "NAME:PolylineSegments"
-            ] + segment_list,
+            point_list,
+            segment_list,
             [
                 "NAME:PolylineXSection",
                 "XSectionType:=", "None",
