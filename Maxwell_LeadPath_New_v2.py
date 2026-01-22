@@ -140,20 +140,29 @@ def rotate_vector_axis(v, axis, angle_deg):
     return v_rot
 
 
-def create_polyline_path(oEditor, points, segments, name):
-    """점들과 세그먼트 정보로 Polyline 생성"""
+def create_line_polyline(oEditor, pt1, pt2, name):
+    """두 점을 연결하는 직선 Polyline 생성"""
     point_list = ["NAME:PolylinePoints"]
-    for pt in points:
-        point_list.append([
-            "NAME:PLPoint",
-            "X:=", "{}mm".format(pt[0]),
-            "Y:=", "{}mm".format(pt[1]),
-            "Z:=", "{}mm".format(pt[2])
-        ])
+    point_list.append([
+        "NAME:PLPoint",
+        "X:=", "{}mm".format(pt1[0]),
+        "Y:=", "{}mm".format(pt1[1]),
+        "Z:=", "{}mm".format(pt1[2])
+    ])
+    point_list.append([
+        "NAME:PLPoint",
+        "X:=", "{}mm".format(pt2[0]),
+        "Y:=", "{}mm".format(pt2[1]),
+        "Z:=", "{}mm".format(pt2[2])
+    ])
 
     segment_list = ["NAME:PolylineSegments"]
-    for seg in segments:
-        segment_list.append(seg)
+    segment_list.append([
+        "NAME:PLSegment",
+        "SegmentType:=", "Line",
+        "StartIndex:=", 0,
+        "NoOfPoints:=", 2
+    ])
 
     oEditor.CreatePolyline(
         [
@@ -193,15 +202,90 @@ def create_polyline_path(oEditor, points, segments, name):
     )
 
 
-def create_path_from_data(oEditor, path_data, path_name):
-    """경로 데이터로부터 하나의 Polyline을 생성 (Line + Arc segments)"""
+def create_arc_polyline(oEditor, points_list, name):
+    """여러 점을 연결하는 Polyline 생성 (Arc 근사화용)"""
+    point_list = ["NAME:PolylinePoints"]
+    for pt in points_list:
+        point_list.append([
+            "NAME:PLPoint",
+            "X:=", "{}mm".format(pt[0]),
+            "Y:=", "{}mm".format(pt[1]),
+            "Z:=", "{}mm".format(pt[2])
+        ])
 
-    points = []    # 모든 점들
-    segments = []  # 모든 세그먼트들
+    segment_list = ["NAME:PolylineSegments"]
+    for i in range(len(points_list) - 1):
+        segment_list.append([
+            "NAME:PLSegment",
+            "SegmentType:=", "Line",
+            "StartIndex:=", i,
+            "NoOfPoints:=", 2
+        ])
+
+    oEditor.CreatePolyline(
+        [
+            "NAME:PolylineParameters",
+            "IsPolylineCovered:=", False,
+            "IsPolylineClosed:=", False,
+            point_list,
+            segment_list,
+            [
+                "NAME:PolylineXSection",
+                "XSectionType:=", "None",
+                "XSectionOrient:=", "Auto",
+                "XSectionWidth:=", "0mm",
+                "XSectionTopWidth:=", "0mm",
+                "XSectionHeight:=", "0mm",
+                "XSectionNumSegments:=", "0",
+                "XSectionBendType:=", "Corner"
+            ]
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
+
+
+def unite_objects(oEditor, obj_names):
+    """Boolean Unite"""
+    if len(obj_names) < 2:
+        return obj_names[0] if obj_names else None
+
+    oEditor.Unite(
+        [
+            "NAME:Selections",
+            "Selections:=", ",".join(obj_names)
+        ],
+        [
+            "NAME:UniteParameters",
+            "KeepOriginals:=", False
+        ]
+    )
+    return obj_names[0]
+
+
+def create_path_from_data(oEditor, path_data, path_name):
+    """경로 데이터로부터 Line과 Arc를 별도 객체로 생성 후 Unite"""
+
+    parts = []
+    part_counter = 0
 
     # 시작점: 원점
     current_pos = (0.0, 0.0, 0.0)
-    points.append(current_pos)
 
     # 현재 방향: X축
     current_dir = (1.0, 0.0, 0.0)
@@ -210,16 +294,12 @@ def create_path_from_data(oEditor, path_data, path_name):
     initial_straight = path_data['initial_straight']
 
     if initial_straight > 0:
-        next_pos = add_points(current_pos, scale_vector(current_dir, initial_straight))
-        points.append(next_pos)
+        part_counter += 1
+        line_name = "{}_Part{}".format(path_name, part_counter)
 
-        # Line segment 추가
-        segments.append([
-            "NAME:PLSegment",
-            "SegmentType:=", "Line",
-            "StartIndex:=", 0,
-            "NoOfPoints:=", 2
-        ])
+        next_pos = add_points(current_pos, scale_vector(current_dir, initial_straight))
+        create_line_polyline(oEditor, current_pos, next_pos, line_name)
+        parts.append(line_name)
 
         current_pos = next_pos
 
@@ -229,6 +309,9 @@ def create_path_from_data(oEditor, path_data, path_name):
         radius = bending['radius']
         angle = bending['angle']
         straight = bending['straight']
+
+        # Arc를 작은 선분들로 근사화 (각도에 따라 분할 수 결정)
+        num_segments = max(int(abs(angle) / 5), 4)  # 5도마다 하나의 segment, 최소 4개
 
         if direction in ['left', 'right']:
             # XY 평면 bending
@@ -243,32 +326,28 @@ def create_path_from_data(oEditor, path_data, path_name):
 
             arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
 
-            # Arc의 끝점 계산
-            radius_vec = (current_pos[0] - arc_center[0],
-                         current_pos[1] - arc_center[1],
-                         current_pos[2] - arc_center[2])
-            rotated_radius = rotate_vector_z(radius_vec, arc_angle)
-            arc_end = add_points(arc_center, rotated_radius)
+            # Arc를 작은 선분들로 근사화
+            arc_points = [current_pos]
+            for i in range(1, num_segments + 1):
+                t = float(i) / num_segments
+                current_angle = arc_angle * t
 
-            # Arc segment 추가
-            start_idx = len(points) - 1
-            points.append(arc_center)  # 중심점
-            points.append(arc_end)     # 끝점
+                radius_vec = (current_pos[0] - arc_center[0],
+                             current_pos[1] - arc_center[1],
+                             current_pos[2] - arc_center[2])
+                rotated_radius = rotate_vector_z(radius_vec, current_angle)
+                pt = add_points(arc_center, rotated_radius)
+                arc_points.append(pt)
 
-            segments.append([
-                "NAME:PLSegment",
-                "SegmentType:=", "AngularArc",
-                "StartIndex:=", start_idx,
-                "NoOfPoints:=", 3,
-                "ArcAngle:=", "{}deg".format(arc_angle),
-                "ArcCenterX:=", "{}mm".format(arc_center[0]),
-                "ArcCenterY:=", "{}mm".format(arc_center[1]),
-                "ArcCenterZ:=", "{}mm".format(arc_center[2])
-            ])
+            # Arc Polyline 생성
+            part_counter += 1
+            arc_name = "{}_Part{}".format(path_name, part_counter)
+            create_arc_polyline(oEditor, arc_points, arc_name)
+            parts.append(arc_name)
 
             # 방향과 위치 업데이트
             current_dir = rotate_vector_z(current_dir, arc_angle)
-            current_pos = arc_end
+            current_pos = arc_points[-1]
 
         elif direction in ['up', 'down']:
             # 수직 평면 bending
@@ -288,50 +367,68 @@ def create_path_from_data(oEditor, path_data, path_name):
             perp_dir = normalize_vector(perp_dir)
             arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
 
-            # Arc의 끝점 계산
-            radius_vec = (current_pos[0] - arc_center[0],
-                         current_pos[1] - arc_center[1],
-                         current_pos[2] - arc_center[2])
-            rotated_radius = rotate_vector_axis(radius_vec, lateral_dir, arc_angle)
-            arc_end = add_points(arc_center, rotated_radius)
+            # Arc를 작은 선분들로 근사화
+            arc_points = [current_pos]
+            for i in range(1, num_segments + 1):
+                t = float(i) / num_segments
+                current_angle = arc_angle * t
 
-            # Arc segment 추가
-            start_idx = len(points) - 1
-            points.append(arc_center)
-            points.append(arc_end)
+                radius_vec = (current_pos[0] - arc_center[0],
+                             current_pos[1] - arc_center[1],
+                             current_pos[2] - arc_center[2])
+                rotated_radius = rotate_vector_axis(radius_vec, lateral_dir, current_angle)
+                pt = add_points(arc_center, rotated_radius)
+                arc_points.append(pt)
 
-            segments.append([
-                "NAME:PLSegment",
-                "SegmentType:=", "AngularArc",
-                "StartIndex:=", start_idx,
-                "NoOfPoints:=", 3,
-                "ArcAngle:=", "{}deg".format(arc_angle),
-                "ArcCenterX:=", "{}mm".format(arc_center[0]),
-                "ArcCenterY:=", "{}mm".format(arc_center[1]),
-                "ArcCenterZ:=", "{}mm".format(arc_center[2])
-            ])
+            # Arc Polyline 생성
+            part_counter += 1
+            arc_name = "{}_Part{}".format(path_name, part_counter)
+            create_arc_polyline(oEditor, arc_points, arc_name)
+            parts.append(arc_name)
 
             # 방향과 위치 업데이트
             current_dir = rotate_vector_axis(current_dir, lateral_dir, arc_angle)
-            current_pos = arc_end
+            current_pos = arc_points[-1]
 
         # Bending 후 직진
         if straight > 0:
-            next_pos = add_points(current_pos, scale_vector(current_dir, straight))
-            points.append(next_pos)
+            part_counter += 1
+            line_name = "{}_Part{}".format(path_name, part_counter)
 
-            start_idx = len(points) - 2
-            segments.append([
-                "NAME:PLSegment",
-                "SegmentType:=", "Line",
-                "StartIndex:=", start_idx,
-                "NoOfPoints:=", 2
-            ])
+            next_pos = add_points(current_pos, scale_vector(current_dir, straight))
+            create_line_polyline(oEditor, current_pos, next_pos, line_name)
+            parts.append(line_name)
 
             current_pos = next_pos
 
-    # 하나의 Polyline 생성
-    create_polyline_path(oEditor, points, segments, path_name)
+    # 모든 파트 Unite
+    if len(parts) > 0:
+        final_name = unite_objects(oEditor, parts)
+
+        # 최종 이름 변경
+        if final_name:
+            try:
+                oEditor.ChangeProperty(
+                    [
+                        "NAME:AllTabs",
+                        [
+                            "NAME:Geometry3DAttributeTab",
+                            [
+                                "NAME:PropServers",
+                                final_name
+                            ],
+                            [
+                                "NAME:ChangedProps",
+                                [
+                                    "NAME:Name",
+                                    "Value:=", path_name
+                                ]
+                            ]
+                        ]
+                    ]
+                )
+            except:
+                pass
 
 
 def create_leadpaths_from_csv(csv_file_path, name_prefix="LeadPath"):
