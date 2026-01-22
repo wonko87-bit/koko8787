@@ -10,11 +10,28 @@ print("Hello from LeadPath v2 test!")
 print("This is a test message")
 
 oDesktop = oDesktop
-oProject = oDesktop.GetActiveProject()
-oDesign = oProject.GetActiveDesign()
-oEditor = oDesign.SetActiveEditor("3D Modeler")
+print("oDesktop: {}".format(oDesktop))
 
-print("Maxwell environment initialized")
+oProject = oDesktop.GetActiveProject()
+print("oProject: {}".format(oProject))
+
+if oProject is None:
+    print("No active project! Creating new project...")
+    oProject = oDesktop.NewProject()
+    print("New project created")
+
+oDesign = oProject.GetActiveDesign()
+print("oDesign: {}".format(oDesign))
+
+if oDesign is None:
+    print("No active design! Creating new Maxwell 3D design...")
+    oProject.InsertDesign("Maxwell 3D", "Maxwell3DDesign1", "Magnetostatic", "")
+    oDesign = oProject.GetActiveDesign()
+    print("New design created")
+
+oEditor = oDesign.SetActiveEditor("3D Modeler")
+print("oEditor: {}".format(oEditor))
+print("Maxwell environment initialized successfully!")
 
 # 간단한 Line 하나만 생성
 oEditor.CreateLine(
