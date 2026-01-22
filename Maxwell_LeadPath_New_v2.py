@@ -202,6 +202,64 @@ def create_line_polyline(oEditor, pt1, pt2, name):
     )
 
 
+def create_arc_polyline(oEditor, points_list, name):
+    """여러 점을 연결하는 Polyline 생성 (Arc 근사화용)"""
+    point_list = ["NAME:PolylinePoints"]
+    for pt in points_list:
+        point_list.append([
+            "NAME:PLPoint",
+            "X:=", "{}mm".format(pt[0]),
+            "Y:=", "{}mm".format(pt[1]),
+            "Z:=", "{}mm".format(pt[2])
+        ])
+
+    segment_list = ["NAME:PolylineSegments"]
+    for i in range(len(points_list) - 1):
+        segment_list.append([
+            "NAME:PLSegment",
+            "SegmentType:=", "Line",
+            "StartIndex:=", i,
+            "NoOfPoints:=", 2
+        ])
+
+    oEditor.CreatePolyline(
+        [
+            "NAME:PolylineParameters",
+            "IsPolylineCovered:=", False,
+            "IsPolylineClosed:=", False,
+            point_list,
+            segment_list,
+            [
+                "NAME:PolylineXSection",
+                "XSectionType:=", "None",
+                "XSectionOrient:=", "Auto",
+                "XSectionWidth:=", "0mm",
+                "XSectionTopWidth:=", "0mm",
+                "XSectionHeight:=", "0mm",
+                "XSectionNumSegments:=", "0",
+                "XSectionBendType:=", "Corner"
+            ]
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
+
+
 def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg, name):
     """
     XY 평면에서 Arc 생성 (사분원 방식)
@@ -493,28 +551,26 @@ def create_path_from_data(oEditor, path_data, path_name):
 
             arc_center = add_points(current_pos, scale_vector(perp_dir, radius))
 
-            # Arc를 작은 선분들로 근사화
-            arc_points = [current_pos]
-            for i in range(1, num_segments + 1):
-                t = float(i) / num_segments
-                current_angle = arc_angle * t
+            # 시작 각도 계산 (X축 기준)
+            radius_vec = (current_pos[0] - arc_center[0],
+                         current_pos[1] - arc_center[1])
+            start_angle_deg = math.degrees(math.atan2(radius_vec[1], radius_vec[0]))
 
-                radius_vec = (current_pos[0] - arc_center[0],
-                             current_pos[1] - arc_center[1],
-                             current_pos[2] - arc_center[2])
-                rotated_radius = rotate_vector_z(radius_vec, current_angle)
-                pt = add_points(arc_center, rotated_radius)
-                arc_points.append(pt)
-
-            # Arc Polyline 생성
+            # 실제 Arc 생성
             part_counter += 1
             arc_name = "{}_Part{}".format(path_name, part_counter)
-            create_arc_polyline(oEditor, arc_points, arc_name)
+            create_arc_xy_plane(oEditor, arc_center, radius, start_angle_deg, arc_angle, arc_name)
             parts.append(arc_name)
 
             # 방향과 위치 업데이트
             current_dir = rotate_vector_z(current_dir, arc_angle)
-            current_pos = arc_points[-1]
+
+            # 끝 위치 계산
+            radius_vec_full = (current_pos[0] - arc_center[0],
+                              current_pos[1] - arc_center[1],
+                              current_pos[2] - arc_center[2])
+            rotated_radius = rotate_vector_z(radius_vec_full, arc_angle)
+            current_pos = add_points(arc_center, rotated_radius)
 
         elif direction in ['up', 'down']:
             # 수직 평면 bending
