@@ -13,6 +13,9 @@ print("ScriptEnv imported")
 ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
 print("ScriptEnv initialized")
 
+oDesktop = oDesktop  # 필수!
+print("oDesktop assigned")
+
 oDesktop.RestoreWindow()
 print("Desktop restored")
 
