@@ -1,4 +1,4 @@
-Start_R,Start_Theta,Start_Z,Initial_Straight,Bend1_Type,Bend1_Radius,Bend1_Angle,Bend1_Straight,Bend2_Type,Bend2_Radius,Bend2_Angle,Bend2_Straight
-100,45,50,30,R-theta,20,90,15,theta-Z,25,45,20
-150,90,100,40,theta-Z,30,60,25,R-theta,15,120,10
-200,0,75,50,R-theta,40,45,30,R-theta,35,90,0
+Initial_Straight,Bend1_Direction,Bend1_Radius,Bend1_Angle,Bend1_Straight,Bend2_Direction,Bend2_Radius,Bend2_Angle,Bend2_Straight
+100,left,50,90,30,up,40,45,20
+150,right,60,45,40,down,30,60,25
+200,left,70,120,50,up,50,90,0
