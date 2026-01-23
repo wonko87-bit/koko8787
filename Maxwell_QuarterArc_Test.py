@@ -65,7 +65,7 @@ def create_quarter_arc(oEditor, radius, angle, name):
     oEditor.CreateCircle(
         [
             "NAME:CircleParameters",
-            "IsCovered:=", False,
+            "IsCovered:=", True,
             "XCenter:=", "0mm",
             "YCenter:=", "0mm",
             "ZCenter:=", "0mm",
