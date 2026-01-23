@@ -160,8 +160,15 @@ def create_quarter_arc(oEditor, radius, angle, name):
     )
 
     # Subtract로 1사분면만 남기기
+    # 먼저 사각형 2개를 Unite
+    oEditor.Unite(
+        ["NAME:Selections", "Selections:=", "{},{}".format(rect1_name, rect2_name)],
+        ["NAME:UniteParameters", "KeepOriginals:=", False]
+    )
+
+    # 합쳐진 사각형(rect1)으로 원에서 빼기
     oEditor.Subtract(
-        ["NAME:Selections", "Blank Parts:=", circle_name, "Tool Parts:=", "{},{}".format(rect1_name, rect2_name)],
+        ["NAME:Selections", "Blank Parts:=", circle_name, "Tool Parts:=", rect1_name],
         ["NAME:SubtractParameters", "KeepOriginals:=", False]
     )
 
