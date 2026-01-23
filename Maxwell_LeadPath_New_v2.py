@@ -301,7 +301,7 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
     )
 
     # 2. 사각형 2개 만들어서 사분원으로 만들기
-    rect_size = radius * 3.0
+    rect_size = radius * 10.0  # 충분히 크게 만들기
 
     # 첫 번째 사각형 - 원의 왼쪽 절반을 덮음 (X < 0)
     rect1_name = "{}_Rect1".format(name)
