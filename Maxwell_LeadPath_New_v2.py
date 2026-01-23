@@ -301,17 +301,17 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
     )
 
     # 2. 사각형 2개 만들어서 사분원으로 만들기
-    rect_size = radius * 10.0  # 충분히 크게 만들기
+    rect_size = radius * 5.0
 
-    # 첫 번째 사각형 - 원의 왼쪽 절반을 덮음 (X < 0)
+    # 첫 번째 사각형 - arc_center에 직접 만들기
     rect1_name = "{}_Rect1".format(name)
     oEditor.CreateRectangle(
         [
             "NAME:RectangleParameters",
             "IsCovered:=", True,
-            "XStart:=", "{}mm".format(-rect_size),
-            "YStart:=", "{}mm".format(-rect_size),
-            "ZStart:=", "0mm",
+            "XStart:=", "{}mm".format(center[0] - rect_size),
+            "YStart:=", "{}mm".format(center[1] - rect_size),
+            "ZStart:=", "{}mm".format(center[2]),
             "Width:=", "{}mm".format(rect_size),
             "Height:=", "{}mm".format(rect_size * 2),
             "WhichAxis:=", "Z"
@@ -335,7 +335,18 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         ]
     )
 
-    # 첫 번째 사각형을 start_angle로 회전 (원점 기준)
+    # 첫 번째 사각형을 arc_center 기준으로 회전
+    # 원점으로 이동 → 회전 → 다시 arc_center로
+    oEditor.Move(
+        ["NAME:Selections", "Selections:=", rect1_name],
+        [
+            "NAME:TranslateParameters",
+            "TranslateVectorX:=", "{}mm".format(-center[0]),
+            "TranslateVectorY:=", "{}mm".format(-center[1]),
+            "TranslateVectorZ:=", "{}mm".format(-center[2])
+        ]
+    )
+
     oEditor.Rotate(
         ["NAME:Selections", "Selections:=", rect1_name],
         [
@@ -345,7 +356,6 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         ]
     )
 
-    # 첫 번째 사각형을 arc_center로 이동
     oEditor.Move(
         ["NAME:Selections", "Selections:=", rect1_name],
         [
@@ -356,15 +366,15 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         ]
     )
 
-    # 두 번째 사각형 - 원의 아래쪽 절반을 덮음 (Y < 0)
+    # 두 번째 사각형 - arc_center에 직접 만들기
     rect2_name = "{}_Rect2".format(name)
     oEditor.CreateRectangle(
         [
             "NAME:RectangleParameters",
             "IsCovered:=", True,
-            "XStart:=", "{}mm".format(-rect_size),
-            "YStart:=", "{}mm".format(-rect_size),
-            "ZStart:=", "0mm",
+            "XStart:=", "{}mm".format(center[0] - rect_size),
+            "YStart:=", "{}mm".format(center[1] - rect_size),
+            "ZStart:=", "{}mm".format(center[2]),
             "Width:=", "{}mm".format(rect_size * 2),
             "Height:=", "{}mm".format(rect_size),
             "WhichAxis:=", "Z"
@@ -388,7 +398,17 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         ]
     )
 
-    # 두 번째 사각형을 start_angle + 90도로 회전 (원점 기준)
+    # 두 번째 사각형을 arc_center 기준으로 회전
+    oEditor.Move(
+        ["NAME:Selections", "Selections:=", rect2_name],
+        [
+            "NAME:TranslateParameters",
+            "TranslateVectorX:=", "{}mm".format(-center[0]),
+            "TranslateVectorY:=", "{}mm".format(-center[1]),
+            "TranslateVectorZ:=", "{}mm".format(-center[2])
+        ]
+    )
+
     oEditor.Rotate(
         ["NAME:Selections", "Selections:=", rect2_name],
         [
@@ -398,7 +418,6 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         ]
     )
 
-    # 두 번째 사각형을 arc_center로 이동
     oEditor.Move(
         ["NAME:Selections", "Selections:=", rect2_name],
         [
@@ -421,10 +440,22 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         # 회전 각도 = 90 - abs_arc_angle
         rotate_angle = 90 - abs_arc_angle
 
-        # 사분원을 회전 (시계 방향이면 반대로)
+        # 사분원을 arc_center 기준으로 회전 (시계 방향이면 반대로)
         if arc_angle_deg < 0:
             rotate_angle = -rotate_angle
 
+        # 원점으로 이동
+        oEditor.Move(
+            ["NAME:Selections", "Selections:=", circle_name],
+            [
+                "NAME:TranslateParameters",
+                "TranslateVectorX:=", "{}mm".format(-center[0]),
+                "TranslateVectorY:=", "{}mm".format(-center[1]),
+                "TranslateVectorZ:=", "{}mm".format(-center[2])
+            ]
+        )
+
+        # 회전
         oEditor.Rotate(
             ["NAME:Selections", "Selections:=", circle_name],
             [
@@ -434,15 +465,26 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
             ]
         )
 
+        # arc_center로 다시 이동
+        oEditor.Move(
+            ["NAME:Selections", "Selections:=", circle_name],
+            [
+                "NAME:TranslateParameters",
+                "TranslateVectorX:=", "{}mm".format(center[0]),
+                "TranslateVectorY:=", "{}mm".format(center[1]),
+                "TranslateVectorZ:=", "{}mm".format(center[2])
+            ]
+        )
+
         # 새 사각형으로 다시 자르기
         rect3_name = "{}_Rect3".format(name)
         oEditor.CreateRectangle(
             [
                 "NAME:RectangleParameters",
                 "IsCovered:=", True,
-                "XStart:=", "{}mm".format(-rect_size),
-                "YStart:=", "{}mm".format(-rect_size),
-                "ZStart:=", "0mm",
+                "XStart:=", "{}mm".format(center[0] - rect_size),
+                "YStart:=", "{}mm".format(center[1] - rect_size),
+                "ZStart:=", "{}mm".format(center[2]),
                 "Width:=", "{}mm".format(rect_size * 2),
                 "Height:=", "{}mm".format(rect_size),
                 "WhichAxis:=", "Z"
@@ -466,7 +508,17 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
             ]
         )
 
-        # 사각형3을 start_angle + 90로 회전 (원점 기준)
+        # 사각형3을 arc_center 기준으로 회전
+        oEditor.Move(
+            ["NAME:Selections", "Selections:=", rect3_name],
+            [
+                "NAME:TranslateParameters",
+                "TranslateVectorX:=", "{}mm".format(-center[0]),
+                "TranslateVectorY:=", "{}mm".format(-center[1]),
+                "TranslateVectorZ:=", "{}mm".format(-center[2])
+            ]
+        )
+
         oEditor.Rotate(
             ["NAME:Selections", "Selections:=", rect3_name],
             [
@@ -476,7 +528,6 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
             ]
         )
 
-        # 사각형3을 arc_center로 이동
         oEditor.Move(
             ["NAME:Selections", "Selections:=", rect3_name],
             [
