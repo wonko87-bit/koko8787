@@ -262,311 +262,87 @@ def create_arc_polyline(oEditor, points_list, name):
 
 def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg, name):
     """
-    XY 평면에서 Arc 생성 (사분원 방식)
+    XY 평면에서 Arc 생성 (Polyline Arc segment 사용)
     center: 중심점 (x, y, z)
     radius: 반지름
     start_angle_deg: 시작 각도 (X축 기준, 도 단위)
     arc_angle_deg: 호의 각도 (양수: 반시계, 음수: 시계)
     """
-    # 1. 원 생성 (XY 평면, Z축 기준)
-    circle_name = "{}_Circle".format(name)
-    oEditor.CreateCircle(
+    # 시작점 계산
+    start_rad = math.radians(start_angle_deg)
+    start_x = center[0] + radius * math.cos(start_rad)
+    start_y = center[1] + radius * math.sin(start_rad)
+    start_z = center[2]
+
+    # 끝점 계산
+    end_rad = math.radians(start_angle_deg + arc_angle_deg)
+    end_x = center[0] + radius * math.cos(end_rad)
+    end_y = center[1] + radius * math.sin(end_rad)
+    end_z = center[2]
+
+    # Arc 생성
+    oEditor.CreatePolyline(
         [
-            "NAME:CircleParameters",
-            "IsCovered:=", False,
-            "XCenter:=", "{}mm".format(center[0]),
-            "YCenter:=", "{}mm".format(center[1]),
-            "ZCenter:=", "{}mm".format(center[2]),
-            "Radius:=", "{}mm".format(radius),
-            "WhichAxis:=", "Z",
-            "NumSegments:=", "0"
-        ],
-        [
-            "NAME:Attributes",
-            "Name:=", circle_name,
-            "Flags:=", "",
-            "Color:=", "(143 175 143)",
-            "Transparency:=", 0,
-            "PartCoordinateSystem:=", "Global",
-            "UDMId:=", "",
-            "MaterialValue:=", "\"vacuum\"",
-            "SurfaceMaterialValue:=", "\"\"",
-            "SolveInside:=", True,
-            "ShellElement:=", False,
-            "ShellElementThickness:=", "0mm",
-            "IsMaterialEditable:=", True,
-            "UseMaterialAppearance:=", False,
-            "IsLightweight:=", False
-        ]
-    )
-
-    # 2. 사각형 2개 만들어서 사분원으로 만들기
-    rect_size = radius * 5.0
-
-    # 첫 번째 사각형 - arc_center에 직접 만들기
-    rect1_name = "{}_Rect1".format(name)
-    oEditor.CreateRectangle(
-        [
-            "NAME:RectangleParameters",
-            "IsCovered:=", True,
-            "XStart:=", "{}mm".format(center[0] - rect_size),
-            "YStart:=", "{}mm".format(center[1] - rect_size),
-            "ZStart:=", "{}mm".format(center[2]),
-            "Width:=", "{}mm".format(rect_size),
-            "Height:=", "{}mm".format(rect_size * 2),
-            "WhichAxis:=", "Z"
-        ],
-        [
-            "NAME:Attributes",
-            "Name:=", rect1_name,
-            "Flags:=", "",
-            "Color:=", "(143 175 143)",
-            "Transparency:=", 0,
-            "PartCoordinateSystem:=", "Global",
-            "UDMId:=", "",
-            "MaterialValue:=", "\"vacuum\"",
-            "SurfaceMaterialValue:=", "\"\"",
-            "SolveInside:=", True,
-            "ShellElement:=", False,
-            "ShellElementThickness:=", "0mm",
-            "IsMaterialEditable:=", True,
-            "UseMaterialAppearance:=", False,
-            "IsLightweight:=", False
-        ]
-    )
-
-    # 첫 번째 사각형을 arc_center 기준으로 회전
-    # 원점으로 이동 → 회전 → 다시 arc_center로
-    oEditor.Move(
-        ["NAME:Selections", "Selections:=", rect1_name],
-        [
-            "NAME:TranslateParameters",
-            "TranslateVectorX:=", "{}mm".format(-center[0]),
-            "TranslateVectorY:=", "{}mm".format(-center[1]),
-            "TranslateVectorZ:=", "{}mm".format(-center[2])
-        ]
-    )
-
-    oEditor.Rotate(
-        ["NAME:Selections", "Selections:=", rect1_name],
-        [
-            "NAME:RotateParameters",
-            "RotateAxis:=", "Z",
-            "RotateAngle:=", "{}deg".format(start_angle_deg)
-        ]
-    )
-
-    oEditor.Move(
-        ["NAME:Selections", "Selections:=", rect1_name],
-        [
-            "NAME:TranslateParameters",
-            "TranslateVectorX:=", "{}mm".format(center[0]),
-            "TranslateVectorY:=", "{}mm".format(center[1]),
-            "TranslateVectorZ:=", "{}mm".format(center[2])
-        ]
-    )
-
-    # 두 번째 사각형 - arc_center에 직접 만들기
-    rect2_name = "{}_Rect2".format(name)
-    oEditor.CreateRectangle(
-        [
-            "NAME:RectangleParameters",
-            "IsCovered:=", True,
-            "XStart:=", "{}mm".format(center[0] - rect_size),
-            "YStart:=", "{}mm".format(center[1] - rect_size),
-            "ZStart:=", "{}mm".format(center[2]),
-            "Width:=", "{}mm".format(rect_size * 2),
-            "Height:=", "{}mm".format(rect_size),
-            "WhichAxis:=", "Z"
-        ],
-        [
-            "NAME:Attributes",
-            "Name:=", rect2_name,
-            "Flags:=", "",
-            "Color:=", "(143 175 143)",
-            "Transparency:=", 0,
-            "PartCoordinateSystem:=", "Global",
-            "UDMId:=", "",
-            "MaterialValue:=", "\"vacuum\"",
-            "SurfaceMaterialValue:=", "\"\"",
-            "SolveInside:=", True,
-            "ShellElement:=", False,
-            "ShellElementThickness:=", "0mm",
-            "IsMaterialEditable:=", True,
-            "UseMaterialAppearance:=", False,
-            "IsLightweight:=", False
-        ]
-    )
-
-    # 두 번째 사각형을 arc_center 기준으로 회전
-    oEditor.Move(
-        ["NAME:Selections", "Selections:=", rect2_name],
-        [
-            "NAME:TranslateParameters",
-            "TranslateVectorX:=", "{}mm".format(-center[0]),
-            "TranslateVectorY:=", "{}mm".format(-center[1]),
-            "TranslateVectorZ:=", "{}mm".format(-center[2])
-        ]
-    )
-
-    oEditor.Rotate(
-        ["NAME:Selections", "Selections:=", rect2_name],
-        [
-            "NAME:RotateParameters",
-            "RotateAxis:=", "Z",
-            "RotateAngle:=", "{}deg".format(start_angle_deg + 90)
-        ]
-    )
-
-    oEditor.Move(
-        ["NAME:Selections", "Selections:=", rect2_name],
-        [
-            "NAME:TranslateParameters",
-            "TranslateVectorX:=", "{}mm".format(center[0]),
-            "TranslateVectorY:=", "{}mm".format(center[1]),
-            "TranslateVectorZ:=", "{}mm".format(center[2])
-        ]
-    )
-
-    # 3. Subtract로 사분원 만들기
-    oEditor.Subtract(
-        ["NAME:Selections", "Blank Parts:=", circle_name, "Tool Parts:=", "{},{}".format(rect1_name, rect2_name)],
-        ["NAME:SubtractParameters", "KeepOriginals:=", False]
-    )
-
-    # 4. 원하는 각도만 남기기
-    abs_arc_angle = abs(arc_angle_deg)
-    if abs_arc_angle < 90:
-        # 회전 각도 = 90 - abs_arc_angle
-        rotate_angle = 90 - abs_arc_angle
-
-        # 사분원을 arc_center 기준으로 회전 (시계 방향이면 반대로)
-        if arc_angle_deg < 0:
-            rotate_angle = -rotate_angle
-
-        # 원점으로 이동
-        oEditor.Move(
-            ["NAME:Selections", "Selections:=", circle_name],
+            "NAME:PolylineParameters",
+            "IsPolylineCovered:=", False,
+            "IsPolylineClosed:=", False,
             [
-                "NAME:TranslateParameters",
-                "TranslateVectorX:=", "{}mm".format(-center[0]),
-                "TranslateVectorY:=", "{}mm".format(-center[1]),
-                "TranslateVectorZ:=", "{}mm".format(-center[2])
-            ]
-        )
-
-        # 회전
-        oEditor.Rotate(
-            ["NAME:Selections", "Selections:=", circle_name],
-            [
-                "NAME:RotateParameters",
-                "RotateAxis:=", "Z",
-                "RotateAngle:=", "{}deg".format(rotate_angle)
-            ]
-        )
-
-        # arc_center로 다시 이동
-        oEditor.Move(
-            ["NAME:Selections", "Selections:=", circle_name],
-            [
-                "NAME:TranslateParameters",
-                "TranslateVectorX:=", "{}mm".format(center[0]),
-                "TranslateVectorY:=", "{}mm".format(center[1]),
-                "TranslateVectorZ:=", "{}mm".format(center[2])
-            ]
-        )
-
-        # 새 사각형으로 다시 자르기
-        rect3_name = "{}_Rect3".format(name)
-        oEditor.CreateRectangle(
-            [
-                "NAME:RectangleParameters",
-                "IsCovered:=", True,
-                "XStart:=", "{}mm".format(center[0] - rect_size),
-                "YStart:=", "{}mm".format(center[1] - rect_size),
-                "ZStart:=", "{}mm".format(center[2]),
-                "Width:=", "{}mm".format(rect_size * 2),
-                "Height:=", "{}mm".format(rect_size),
-                "WhichAxis:=", "Z"
+                "NAME:PolylinePoints",
+                [
+                    "NAME:PLPoint",
+                    "X:=", "{}mm".format(start_x),
+                    "Y:=", "{}mm".format(start_y),
+                    "Z:=", "{}mm".format(start_z)
+                ],
+                [
+                    "NAME:PLPoint",
+                    "X:=", "{}mm".format(end_x),
+                    "Y:=", "{}mm".format(end_y),
+                    "Z:=", "{}mm".format(end_z)
+                ]
             ],
             [
-                "NAME:Attributes",
-                "Name:=", rect3_name,
-                "Flags:=", "",
-                "Color:=", "(143 175 143)",
-                "Transparency:=", 0,
-                "PartCoordinateSystem:=", "Global",
-                "UDMId:=", "",
-                "MaterialValue:=", "\"vacuum\"",
-                "SurfaceMaterialValue:=", "\"\"",
-                "SolveInside:=", True,
-                "ShellElement:=", False,
-                "ShellElementThickness:=", "0mm",
-                "IsMaterialEditable:=", True,
-                "UseMaterialAppearance:=", False,
-                "IsLightweight:=", False
-            ]
-        )
-
-        # 사각형3을 arc_center 기준으로 회전
-        oEditor.Move(
-            ["NAME:Selections", "Selections:=", rect3_name],
-            [
-                "NAME:TranslateParameters",
-                "TranslateVectorX:=", "{}mm".format(-center[0]),
-                "TranslateVectorY:=", "{}mm".format(-center[1]),
-                "TranslateVectorZ:=", "{}mm".format(-center[2])
-            ]
-        )
-
-        oEditor.Rotate(
-            ["NAME:Selections", "Selections:=", rect3_name],
-            [
-                "NAME:RotateParameters",
-                "RotateAxis:=", "Z",
-                "RotateAngle:=", "{}deg".format(start_angle_deg + 90)
-            ]
-        )
-
-        oEditor.Move(
-            ["NAME:Selections", "Selections:=", rect3_name],
-            [
-                "NAME:TranslateParameters",
-                "TranslateVectorX:=", "{}mm".format(center[0]),
-                "TranslateVectorY:=", "{}mm".format(center[1]),
-                "TranslateVectorZ:=", "{}mm".format(center[2])
-            ]
-        )
-
-        # 다시 Subtract
-        oEditor.Subtract(
-            ["NAME:Selections", "Blank Parts:=", circle_name, "Tool Parts:=", rect3_name],
-            ["NAME:SubtractParameters", "KeepOriginals:=", False]
-        )
-
-    # 5. 최종 이름 변경
-    try:
-        oEditor.ChangeProperty(
-            [
-                "NAME:AllTabs",
+                "NAME:PolylineSegments",
                 [
-                    "NAME:Geometry3DAttributeTab",
-                    [
-                        "NAME:PropServers",
-                        circle_name
-                    ],
-                    [
-                        "NAME:ChangedProps",
-                        [
-                            "NAME:Name",
-                            "Value:=", name
-                        ]
-                    ]
+                    "NAME:PLSegment",
+                    "SegmentType:=", "Arc",
+                    "StartIndex:=", 0,
+                    "NoOfPoints:=", 2,
+                    "ArcAngle:=", "{}deg".format(arc_angle_deg),
+                    "ArcCenterX:=", "{}mm".format(center[0]),
+                    "ArcCenterY:=", "{}mm".format(center[1]),
+                    "ArcCenterZ:=", "{}mm".format(center[2])
                 ]
+            ],
+            [
+                "NAME:PolylineXSection",
+                "XSectionType:=", "None",
+                "XSectionOrient:=", "Auto",
+                "XSectionWidth:=", "0mm",
+                "XSectionTopWidth:=", "0mm",
+                "XSectionHeight:=", "0mm",
+                "XSectionNumSegments:=", "0",
+                "XSectionBendType:=", "Corner"
             ]
-        )
-    except:
-        pass
+        ],
+        [
+            "NAME:Attributes",
+            "Name:=", name,
+            "Flags:=", "",
+            "Color:=", "(143 175 143)",
+            "Transparency:=", 0,
+            "PartCoordinateSystem:=", "Global",
+            "UDMId:=", "",
+            "MaterialValue:=", "\"vacuum\"",
+            "SurfaceMaterialValue:=", "\"\"",
+            "SolveInside:=", True,
+            "ShellElement:=", False,
+            "ShellElementThickness:=", "0mm",
+            "IsMaterialEditable:=", True,
+            "UseMaterialAppearance:=", False,
+            "IsLightweight:=", False
+        ]
+    )
 
 
 def unite_objects(oEditor, obj_names):
