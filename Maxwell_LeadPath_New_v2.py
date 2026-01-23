@@ -301,19 +301,19 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
     )
 
     # 2. 사각형 2개 만들어서 사분원으로 만들기
-    rect_size = radius * 2.5
+    rect_size = radius * 3.0
 
-    # 첫 번째 사각형 (원점에서 생성)
+    # 첫 번째 사각형 - 원의 왼쪽 절반을 덮음 (X < 0)
     rect1_name = "{}_Rect1".format(name)
     oEditor.CreateRectangle(
         [
             "NAME:RectangleParameters",
             "IsCovered:=", True,
-            "XStart:=", "0mm",
-            "YStart:=", "0mm",
+            "XStart:=", "{}mm".format(-rect_size),
+            "YStart:=", "{}mm".format(-rect_size),
             "ZStart:=", "0mm",
             "Width:=", "{}mm".format(rect_size),
-            "Height:=", "{}mm".format(rect_size),
+            "Height:=", "{}mm".format(rect_size * 2),
             "WhichAxis:=", "Z"
         ],
         [
@@ -356,16 +356,16 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
         ]
     )
 
-    # 두 번째 사각형 (원점에서 생성)
+    # 두 번째 사각형 - 원의 아래쪽 절반을 덮음 (Y < 0)
     rect2_name = "{}_Rect2".format(name)
     oEditor.CreateRectangle(
         [
             "NAME:RectangleParameters",
             "IsCovered:=", True,
-            "XStart:=", "0mm",
-            "YStart:=", "0mm",
+            "XStart:=", "{}mm".format(-rect_size),
+            "YStart:=", "{}mm".format(-rect_size),
             "ZStart:=", "0mm",
-            "Width:=", "{}mm".format(rect_size),
+            "Width:=", "{}mm".format(rect_size * 2),
             "Height:=", "{}mm".format(rect_size),
             "WhichAxis:=", "Z"
         ],
@@ -440,10 +440,10 @@ def create_arc_xy_plane(oEditor, center, radius, start_angle_deg, arc_angle_deg,
             [
                 "NAME:RectangleParameters",
                 "IsCovered:=", True,
-                "XStart:=", "0mm",
-                "YStart:=", "0mm",
+                "XStart:=", "{}mm".format(-rect_size),
+                "YStart:=", "{}mm".format(-rect_size),
                 "ZStart:=", "0mm",
-                "Width:=", "{}mm".format(rect_size),
+                "Width:=", "{}mm".format(rect_size * 2),
                 "Height:=", "{}mm".format(rect_size),
                 "WhichAxis:=", "Z"
             ],
