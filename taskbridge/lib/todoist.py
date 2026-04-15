@@ -59,5 +59,7 @@ def create_task(token: str, content: str) -> dict:
         data=json.dumps(payload),
         timeout=10,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        print(f"[Todoist API error] status={resp.status_code} body={resp.text}")
+        resp.raise_for_status()
     return resp.json()
