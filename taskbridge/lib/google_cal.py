@@ -162,4 +162,6 @@ def create_event(token: str, summary: str) -> dict:
     if not resp.ok:
         print(f"[Google Cal error] status={resp.status_code} body={resp.text}")
         resp.raise_for_status()
-    return resp.json()
+    result = resp.json()
+    print(f"[Google Cal success] id={result.get('id')} link={result.get('htmlLink')}")
+    return result
