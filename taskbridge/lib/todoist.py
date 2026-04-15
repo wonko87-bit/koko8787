@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 
-TODOIST_API_BASE = "https://api.todoist.com/rest/v2"
+TODOIST_API_BASE = "https://api.todoist.com/api/v1"
 
 
 def _extract_due_date(text: str) -> Optional[str]:
