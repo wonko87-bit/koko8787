@@ -11,12 +11,11 @@ import java.io.IOException
 
 object OAuthManager {
 
-    // ── 여기에 본인 OAuth 앱 정보를 입력하세요 ──────────────────────────
-    const val GOOGLE_CLIENT_ID     = "YOUR_GOOGLE_CLIENT_ID"
-    const val GOOGLE_CLIENT_SECRET = "YOUR_GOOGLE_CLIENT_SECRET"
-    const val TODOIST_CLIENT_ID    = "YOUR_TODOIST_CLIENT_ID"
-    const val TODOIST_CLIENT_SECRET = "YOUR_TODOIST_CLIENT_SECRET"
-    // ────────────────────────────────────────────────────────────────────
+    // GitHub Secrets → build.gradle → BuildConfig 를 통해 자동 주입됨
+    val GOOGLE_CLIENT_ID      get() = com.taskbridge.BuildConfig.GOOGLE_CLIENT_ID
+    val GOOGLE_CLIENT_SECRET  get() = com.taskbridge.BuildConfig.GOOGLE_CLIENT_SECRET
+    val TODOIST_CLIENT_ID     get() = com.taskbridge.BuildConfig.TODOIST_CLIENT_ID
+    val TODOIST_CLIENT_SECRET get() = com.taskbridge.BuildConfig.TODOIST_CLIENT_SECRET
 
     const val GOOGLE_REDIRECT_URI  = "taskbridge://auth/google"
     const val TODOIST_REDIRECT_URI = "taskbridge://auth/todoist"

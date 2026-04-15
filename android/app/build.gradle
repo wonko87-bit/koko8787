@@ -13,6 +13,12 @@ android {
         targetSdk 34
         versionCode 1
         versionName "1.0"
+
+        // GitHub Secrets → BuildConfig 필드로 주입
+        buildConfigField "String", "GOOGLE_CLIENT_ID",      "\"${System.getenv('GOOGLE_CLIENT_ID') ?: ''}\""
+        buildConfigField "String", "GOOGLE_CLIENT_SECRET",  "\"${System.getenv('GOOGLE_CLIENT_SECRET') ?: ''}\""
+        buildConfigField "String", "TODOIST_CLIENT_ID",     "\"${System.getenv('TODOIST_CLIENT_ID') ?: ''}\""
+        buildConfigField "String", "TODOIST_CLIENT_SECRET", "\"${System.getenv('TODOIST_CLIENT_SECRET') ?: ''}\""
     }
 
     buildTypes {
@@ -24,6 +30,7 @@ android {
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     compileOptions {

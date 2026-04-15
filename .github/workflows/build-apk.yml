@@ -31,6 +31,11 @@ jobs:
 
       - name: Build Debug APK
         working-directory: android
+        env:
+          GOOGLE_CLIENT_ID:      ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          TODOIST_CLIENT_ID:     ${{ secrets.TODOIST_CLIENT_ID }}
+          TODOIST_CLIENT_SECRET: ${{ secrets.TODOIST_CLIENT_SECRET }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
