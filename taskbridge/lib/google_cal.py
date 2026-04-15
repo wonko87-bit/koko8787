@@ -224,6 +224,11 @@ def strip_datetime(text: str) -> str:
     # 한국어 날짜 키워드
     result = re.sub(r'오늘|내일|모레', '', result)
 
+    # Todoist 메타데이터 기호 제거 (#프로젝트, @레이블, !우선순위)
+    result = re.sub(r'!p?[1-4]\b', '', result, flags=re.IGNORECASE)
+    result = re.sub(r'#\S+', '', result)
+    result = re.sub(r'@\S+', '', result)
+
     # 공백 정리
     result = re.sub(r'\s+', ' ', result).strip()
     return result
