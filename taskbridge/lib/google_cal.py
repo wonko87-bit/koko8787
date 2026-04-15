@@ -149,6 +149,7 @@ def create_event(token: str, summary: str) -> dict:
         **timing,
     }
 
+    print(f"[Google Cal] payload={json.dumps(payload)}")
     resp = requests.post(
         f"{GCAL_API_BASE}/calendars/{CALENDAR_ID}/events",
         headers={
@@ -158,5 +159,7 @@ def create_event(token: str, summary: str) -> dict:
         data=json.dumps(payload),
         timeout=10,
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        print(f"[Google Cal error] status={resp.status_code} body={resp.text}")
+        resp.raise_for_status()
     return resp.json()
