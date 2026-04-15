@@ -143,7 +143,9 @@ def todoist_exchange_code(code: str, state: str) -> Optional[str]:
         "client_id":     os.environ["TODOIST_CLIENT_ID"],
         "client_secret": os.environ["TODOIST_CLIENT_SECRET"],
     }, timeout=10)
-    resp.raise_for_status()
+    if not resp.ok:
+        print(f"[Todoist OAuth error] status={resp.status_code} body={resp.text}")
+        resp.raise_for_status()
     token_data = resp.json()
     # Todoist token response doesn't include expires_in; treat as long-lived
     token_data.setdefault("expires_in", 365 * 24 * 3600)
