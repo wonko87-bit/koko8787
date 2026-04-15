@@ -1,13 +1,15 @@
 """
-Todoist REST API v2 client.
-Docs: https://developer.todoist.com/rest/v2/
+Todoist API v1 client.
+Docs: https://developer.todoist.com/api/v1
 """
 
 import json
 import re
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+from lib.google_cal import strip_datetime, _parse_datetime
 
 
 TODOIST_API_BASE = "https://api.todoist.com/api/v1"
@@ -15,36 +17,26 @@ TODOIST_API_BASE = "https://api.todoist.com/api/v1"
 
 def _extract_due_date(text: str) -> Optional[str]:
     """
-    Naively extract a due date string from text.
-    Returns ISO date string (YYYY-MM-DD) if found, else None.
-    More sophisticated NLP can be added later.
+    날짜 표현을 추출해 ISO date string (YYYY-MM-DD) 반환.
+    google_cal의 _parse_datetime을 재사용.
     """
-    # Match patterns like "내일", "오늘", or explicit dates (YYYY-MM-DD / MM/DD)
     today = datetime.now(timezone.utc).date()
+    timing = _parse_datetime(text)
+    if not timing:
+        return None
 
-    if "내일" in text:
-        from datetime import timedelta
-        return str(today + timedelta(days=1))
-    if "오늘" in text:
-        return str(today)
-
-    # Match YYYY-MM-DD
-    m = re.search(r"\d{4}-\d{2}-\d{2}", text)
-    if m:
-        return m.group(0)
-
-    # Match MM/DD or MM-DD
-    m = re.search(r"(\d{1,2})[/-](\d{1,2})", text)
-    if m:
-        month, day = m.group(1), m.group(2)
-        return f"{today.year}-{int(month):02d}-{int(day):02d}"
-
+    start = timing.get("start", {})
+    if "date" in start:
+        return start["date"]
+    if "dateTime" in start:
+        return start["dateTime"][:10]  # YYYY-MM-DD 부분만
     return None
 
 
 def create_task(token: str, content: str) -> dict:
     """Create a Todoist task. Returns the created task dict."""
-    payload: dict = {"content": content}
+    clean_content = strip_datetime(content) or content  # 날짜 제거 후 빈 문자열이면 원본 사용
+    payload: dict = {"content": clean_content}
 
     due_date = _extract_due_date(content)
     if due_date:

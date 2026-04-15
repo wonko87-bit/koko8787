@@ -18,6 +18,32 @@ CALENDAR_ID = "primary"
 # Datetime parsing helpers
 # -----------------------------------------------------------------
 
+def strip_datetime(text: str) -> str:
+    """날짜/시간 표현을 텍스트에서 제거하고 깨끗한 내용만 반환."""
+    result = text
+
+    # 오전/오후 N시 [M분]
+    result = re.sub(r'(오전|오후)\s*\d{1,2}시(?:\s*\d{1,2}분)?', '', result)
+    # HH:MM
+    result = re.sub(r'\d{1,2}:\d{2}', '', result)
+    # N시 [M분] (오전/오후 없는 경우)
+    result = re.sub(r'\d{1,2}시(?:\s*\d{1,2}분)?', '', result)
+
+    # YYYY-MM-DD
+    result = re.sub(r'\d{4}-\d{2}-\d{2}', '', result)
+    # N월 M일
+    result = re.sub(r'\d{1,2}월\s*\d{1,2}일', '', result)
+    # MM/DD 또는 MM-DD
+    result = re.sub(r'\d{1,2}[/-]\d{1,2}', '', result)
+
+    # 한국어 날짜 키워드
+    result = re.sub(r'오늘|내일|모레', '', result)
+
+    # 남은 공백 정리
+    result = re.sub(r'\s+', ' ', result).strip()
+    return result
+
+
 def _parse_datetime(text: str) -> Optional[dict]:
     """
     Try to extract a datetime (or date) from Korean natural language text.
@@ -108,6 +134,7 @@ def _parse_datetime(text: str) -> Optional[dict]:
 def create_event(token: str, summary: str) -> dict:
     """Create a Google Calendar event. Returns the created event dict."""
     timing = _parse_datetime(summary)
+    clean_summary = strip_datetime(summary) or summary  # 날짜 제거 후 빈 문자열이면 원본 사용
 
     if timing is None:
         # Fallback: all-day event today
@@ -118,7 +145,7 @@ def create_event(token: str, summary: str) -> dict:
         }
 
     payload = {
-        "summary": summary,
+        "summary": clean_summary,
         **timing,
     }
 
