@@ -73,13 +73,12 @@ def parse_meta(text: str) -> dict:
 # 프로젝트 이름 → ID 조회
 # ---------------------------------------------------------------
 
-def _get_project_id(token: str, name: str) -> Optional[str]:
-    """프로젝트 이름으로 ID를 조회한다. 없으면 None."""
-    resp = requests.get(
-        f"{TODOIST_API_BASE}/projects",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=10,
-    )
+def _get_or_create_project_id(token: str, name: str) -> Optional[str]:
+    """프로젝트 이름으로 ID를 조회한다. 없으면 신규 생성 후 ID 반환."""
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. 기존 프로젝트 목록 조회
+    resp = requests.get(f"{TODOIST_API_BASE}/projects", headers=headers, timeout=10)
     if not resp.ok:
         print(f"[Todoist] 프로젝트 목록 조회 실패: {resp.status_code}")
         return None
@@ -88,8 +87,19 @@ def _get_project_id(token: str, name: str) -> Optional[str]:
         if project.get("name", "").lower() == name.lower():
             return project["id"]
 
-    print(f"[Todoist] 프로젝트 '{name}' 없음")
-    return None
+    # 2. 없으면 신규 생성
+    print(f"[Todoist] 프로젝트 '{name}' 없음 → 신규 생성")
+    resp = requests.post(
+        f"{TODOIST_API_BASE}/projects",
+        headers={**headers, "Content-Type": "application/json"},
+        data=json.dumps({"name": name}),
+        timeout=10,
+    )
+    if not resp.ok:
+        print(f"[Todoist] 프로젝트 생성 실패: {resp.status_code} {resp.text}")
+        return None
+
+    return resp.json()["id"]
 
 
 # ---------------------------------------------------------------
@@ -131,9 +141,9 @@ def create_task(token: str, content: str) -> dict:
     if meta["labels"]:
         payload["labels"] = meta["labels"]
 
-    # 프로젝트
+    # 프로젝트 (없으면 자동 생성)
     if meta["project"]:
-        project_id = _get_project_id(token, meta["project"])
+        project_id = _get_or_create_project_id(token, meta["project"])
         if project_id:
             payload["project_id"] = project_id
 
