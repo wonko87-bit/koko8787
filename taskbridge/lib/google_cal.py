@@ -26,6 +26,10 @@ from typing import Optional
 GCAL_API_BASE = "https://www.googleapis.com/calendar/v3"
 CALENDAR_ID   = "primary"
 
+# KST = UTC+9 (서버가 UTC로 실행되므로 명시적으로 고정)
+KST = timezone(timedelta(hours=9))
+TZ_SUFFIX = "+09:00"
+
 
 # ---------------------------------------------------------------
 # Internal: single datetime parser
@@ -41,7 +45,7 @@ def _parse_single(
     - hour가 None이면 종일(all-day) 의미
     - default_date: 날짜 표현이 없을 때 사용할 기본 날짜
     """
-    now   = datetime.now(timezone.utc).astimezone()
+    now   = datetime.now(KST)
     today = now.date()
     base  = default_date or today
 
@@ -115,9 +119,7 @@ def _has_date_expr(text: str) -> bool:
 
 
 def _tz_suffix() -> str:
-    now = datetime.now(timezone.utc).astimezone()
-    tz  = now.strftime("%z")          # "+0900"
-    return f"{tz[:3]}:{tz[3:]}"       # "+09:00"
+    return TZ_SUFFIX
 
 
 # ---------------------------------------------------------------
@@ -244,7 +246,7 @@ def create_event(token: str, summary: str) -> dict:
     clean_summary = strip_datetime(summary) or summary
 
     if timing is None:
-        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today_str = datetime.now(KST).strftime("%Y-%m-%d")
         timing = {
             "start": {"date": today_str},
             "end":   {"date": today_str},
