@@ -142,8 +142,6 @@ def todoist_exchange_code(code: str, state: str) -> Optional[str]:
         "code":          code,
         "client_id":     os.environ["TODOIST_CLIENT_ID"],
         "client_secret": os.environ["TODOIST_CLIENT_SECRET"],
-        "grant_type":    "authorization_code",
-        "redirect_uri":  "",   # Todoist doesn't require redirect_uri in token exchange
     }, timeout=10)
     resp.raise_for_status()
     token_data = resp.json()
