@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@color/bg">
+
+    <!-- 헤더 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔗 TaskBridge"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="@color/text"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Todoist + Google Calendar"
+        android:textSize="12sp"
+        android:textColor="@color/muted"
+        android:layout_marginBottom="24dp" />
+
+    <!-- 연결 패널 -->
+    <LinearLayout
+        android:id="@+id/authPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:padding="16dp"
+        android:layout_marginBottom="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🔌 서비스 연결"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/text"
+            android:layout_marginBottom="12dp" />
+
+        <Button
+            android:id="@+id/btnConnectGoogle"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Google Calendar 연결"
+            android:layout_marginBottom="8dp"
+            style="@style/Widget.TaskBridge.OutlineButton" />
+
+        <Button
+            android:id="@+id/btnConnectTodoist"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Todoist 연결"
+            style="@style/Widget.TaskBridge.OutlineButton" />
+    </LinearLayout>
+
+    <!-- 입력 영역 -->
+    <EditText
+        android:id="@+id/etInput"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:hint="내일 오후 3시 치과&#10;보고서 초안 작성 #업무 @중요 !p1&#10;/c 오늘 오후 6시 저녁 약속"
+        android:background="@drawable/input_bg"
+        android:padding="14dp"
+        android:textColor="@color/text"
+        android:textColorHint="@color/muted"
+        android:textSize="15sp"
+        android:gravity="top"
+        android:inputType="textMultiLine|textCapSentences"
+        android:layout_marginBottom="8dp" />
+
+    <!-- 힌트 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="기본: 둘 다 저장  |  /c 캘린더만  |  /t Todoist만"
+        android:textSize="12sp"
+        android:textColor="@color/muted"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 저장 버튼 + 로딩 -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="저장"
+            android:textSize="16sp"
+            style="@style/Widget.TaskBridge.PrimaryButton" />
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:indeterminateTint="@color/white" />
+    </FrameLayout>
+
+</LinearLayout>

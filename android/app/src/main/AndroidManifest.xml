@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.TaskBridge">
+
+        <!-- 메인 입력 화면 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- OAuth 인증 화면 -->
+        <activity
+            android:name=".AuthActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <!-- Google OAuth 콜백 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="taskbridge" android:host="auth" android:pathPrefix="/google" />
+            </intent-filter>
+            <!-- Todoist OAuth 콜백 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="taskbridge" android:host="auth" android:pathPrefix="/todoist" />
+            </intent-filter>
+        </activity>
+
+        <!-- 위젯 입력 다이얼로그 -->
+        <activity
+            android:name=".widget.WidgetInputActivity"
+            android:exported="false"
+            android:theme="@style/Theme.TaskBridge.Dialog"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
+        <!-- 홈화면 위젯 -->
+        <receiver
+            android:name=".widget.InputWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/input_widget_info" />
+        </receiver>
+
+    </application>
+</manifest>
