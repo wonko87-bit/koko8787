@@ -12,6 +12,8 @@ Routes:
   GET  /auth/todoist            → start Todoist OAuth flow
   GET  /auth/todoist/callback   → Todoist OAuth callback
   GET  /auth/logout             → clear session
+  GET  /auth/mobile/google/callback   → relay for Android OAuth (redirects to taskbridge://)
+  GET  /auth/mobile/todoist/callback  → relay for Android OAuth (redirects to taskbridge://)
 
 Run:
   python server.py              (default port 8000)
@@ -137,6 +139,12 @@ class TaskBridgeHandler(BaseHTTPRequestHandler):
             elif path == "/auth/logout":
                 self._handle_logout()
 
+            elif path == "/auth/mobile/google/callback":
+                self._handle_mobile_google_callback(qs)
+
+            elif path == "/auth/mobile/todoist/callback":
+                self._handle_mobile_todoist_callback(qs)
+
             else:
                 self._not_found()
 
@@ -203,6 +211,45 @@ class TaskBridgeHandler(BaseHTTPRequestHandler):
             self._error(400, "Invalid OAuth state")
             return
         _redirect(self, "/?connected=todoist", [_set_session_cookie(sid)])
+
+    def _handle_mobile_google_callback(self, qs: dict):
+        code  = qs.get("code",  [""])[0]
+        state = qs.get("state", [""])[0]
+        error = qs.get("error", [""])[0]
+        if error:
+            deep_link = f"taskbridge://auth/google?error={error}"
+        elif not code:
+            deep_link = "taskbridge://auth/google?error=missing_code"
+        else:
+            deep_link = f"taskbridge://auth/google?code={code}&state={state}"
+        self._serve_deep_link_redirect(deep_link)
+
+    def _handle_mobile_todoist_callback(self, qs: dict):
+        code  = qs.get("code",  [""])[0]
+        state = qs.get("state", [""])[0]
+        error = qs.get("error", [""])[0]
+        if error:
+            deep_link = f"taskbridge://auth/todoist?error={error}"
+        elif not code:
+            deep_link = "taskbridge://auth/todoist?error=missing_code"
+        else:
+            deep_link = f"taskbridge://auth/todoist?code={code}&state={state}"
+        self._serve_deep_link_redirect(deep_link)
+
+    def _serve_deep_link_redirect(self, deep_link: str):
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="refresh" content="0;url={deep_link}">
+<script>window.location.replace("{deep_link}");</script>
+</head>
+<body>앱으로 돌아가는 중...</body>
+</html>""".encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self.end_headers()
+        self.wfile.write(html)
 
     def _handle_logout(self):
         sid = _get_session_id(self)
