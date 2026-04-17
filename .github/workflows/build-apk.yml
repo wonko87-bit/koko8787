@@ -33,7 +33,7 @@ jobs:
           GOOGLE_CLIENT_SECRET:  ${{ secrets.GOOGLE_CLIENT_SECRET }}
           TODOIST_CLIENT_ID:     ${{ secrets.TODOIST_CLIENT_ID }}
           TODOIST_CLIENT_SECRET: ${{ secrets.TODOIST_CLIENT_SECRET }}
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon -Pandroid.useAndroidX=true -Pandroid.enableJetifier=true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
