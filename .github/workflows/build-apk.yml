@@ -22,9 +22,9 @@ jobs:
 
       - name: Install Gradle 8.4
         run: |
-          wget -q https://services.gradle.org/distributions/gradle-8.4.0-bin.zip -O /tmp/gradle.zip
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip -O /tmp/gradle.zip
           sudo unzip -q /tmp/gradle.zip -d /opt/
-          echo "/opt/gradle-8.4.0/bin" >> $GITHUB_PATH
+          echo "/opt/gradle-8.4/bin" >> $GITHUB_PATH
 
       - name: Build Debug APK
         working-directory: android
