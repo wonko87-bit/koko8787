@@ -4,6 +4,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 private val KST = ZoneId.of("Asia/Seoul")
 
@@ -127,6 +128,14 @@ object DateTimeParser {
         return null
     }
 
-    // due date (Todoist용 - YYYY-MM-DD)
-    fun extractDueDate(text: String): String? = parse(text)?.startDate?.toString()
+    // Todoist용: 시간 있으면 (RFC3339 UTC, true), 없으면 (YYYY-MM-DD, false)
+    fun extractDueInfo(text: String): Pair<String, Boolean>? {
+        val p = parse(text) ?: return null
+        return if (p.hasTime && p.start != null) {
+            val utc = p.start.withZoneSameInstant(ZoneId.of("UTC"))
+            Pair(utc.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")), true)
+        } else {
+            Pair(p.startDate.toString(), false)
+        }
+    }
 }

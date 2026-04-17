@@ -57,8 +57,11 @@ object TodoistApi {
         val meta = MetaParser.parse(rawContent)
         val payload = JSONObject().put("content", meta.content.ifBlank { rawContent })
 
-        // 날짜
-        DateTimeParser.extractDueDate(rawContent)?.let { payload.put("due_date", it) }
+        // 날짜/시간
+        DateTimeParser.extractDueInfo(rawContent)?.let { (value, hasTime) ->
+            if (hasTime) payload.put("due_datetime", value)
+            else payload.put("due_date", value)
+        }
 
         // 우선순위
         meta.priority?.let { payload.put("priority", it) }
