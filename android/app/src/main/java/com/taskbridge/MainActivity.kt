@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(b.root)
 
         b.btnSave.setOnClickListener { handleSave() }
+        b.btnHelp.setOnClickListener { HelpDialog.show(this) }
         b.btnConnectGoogle.setOnClickListener  { startActivity(Intent(this, AuthActivity::class.java).putExtra("provider", "google")) }
         b.btnConnectTodoist.setOnClickListener { startActivity(Intent(this, AuthActivity::class.java).putExtra("provider", "todoist")) }
 

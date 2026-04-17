@@ -5,6 +5,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.taskbridge.HelpDialog
 import com.taskbridge.api.GoogleCalApi
 import com.taskbridge.api.OAuthManager
 import com.taskbridge.api.TodoistApi
@@ -35,6 +36,7 @@ class WidgetInputActivity : AppCompatActivity() {
 
         b.btnSend.setOnClickListener { handleSave() }
         b.btnCancel.setOnClickListener { finish() }
+        b.btnHelp.setOnClickListener { HelpDialog.show(this) }
     }
 
     private fun handleSave() {
