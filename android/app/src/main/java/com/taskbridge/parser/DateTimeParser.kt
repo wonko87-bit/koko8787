@@ -8,8 +8,10 @@ import java.time.format.DateTimeFormatter
 
 private val KST = ZoneId.of("Asia/Seoul")
 
+enum class RecurrenceType { DAILY, WEEKLY, BIWEEKLY, MONTHLY }
+
 data class ParsedDateTime(
-    val start: ZonedDateTime?,   // null이면 종일
+    val start: ZonedDateTime?,
     val end: ZonedDateTime?,
     val startDate: LocalDate,
     val endDate: LocalDate,
@@ -18,19 +20,25 @@ data class ParsedDateTime(
 
 object DateTimeParser {
 
-    // ---- 정규식 ----
-    private val MONTH_DAY   = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
-    private val DAY_ONLY    = Regex("""(?<!\d)(\d{1,2})일(?!\w)""")
-    private val AMPM_TIME   = Regex("""(오전|오후)\s*(\d{1,2})시(?:\s*(\d{1,2})분)?""")
-    private val BARE_TIME   = Regex("""(?<!\d)(\d{1,2})시(?:\s*(\d{1,2})분)?""")
-    private val CLOCK_TIME  = Regex("""(\d{1,2}):(\d{2})""")
-    private val META_SYMBOL = Regex("""[#@!]\S*""")
+    private val MONTH_DAY    = Regex("""(\d{1,2})월\s*(\d{1,2})일""")
+    private val DAY_ONLY     = Regex("""(?<!\d)(\d{1,2})일(?!\w)""")
+    private val AMPM_TIME    = Regex("""(오전|오후)\s*(\d{1,2})시(?:\s*(\d{1,2})분)?""")
+    private val BARE_TIME    = Regex("""(?<!\d)(\d{1,2})시(?:\s*(\d{1,2})분)?""")
+    private val CLOCK_TIME   = Regex("""(\d{1,2}):(\d{2})""")
+    private val META_SYMBOL  = Regex("""[#@!]\S*""")
     private val SLASH_PREFIX = Regex("""^/[ct]\s*""")
+    private val RECUR_RE     = Regex("""매격주|격주|매주|매달|매월|매일""")
 
-    // ---- strip: 날짜·시간·메타 기호 제거 ----
+    fun extractRecurrence(text: String): RecurrenceType? = when {
+        "매격주" in text || "격주" in text -> RecurrenceType.BIWEEKLY
+        "매주"  in text                   -> RecurrenceType.WEEKLY
+        "매달"  in text || "매월" in text  -> RecurrenceType.MONTHLY
+        "매일"  in text                   -> RecurrenceType.DAILY
+        else                              -> null
+    }
+
     fun strip(text: String): String {
         var s = SLASH_PREFIX.replace(text, "")
-        // ~ 이후 끝 시각 제거
         s = Regex("""\s*~\s*(?:(?:\d{1,2}월\s*\d{1,2}일\s*)?(?:오전|오후)?\s*\d{1,2}시(?:\s*\d{1,2}분)?|\d{1,2}:\d{2})""").replace(s, "")
         s = AMPM_TIME.replace(s, "")
         s = CLOCK_TIME.replace(s, "")
@@ -39,16 +47,15 @@ object DateTimeParser {
         s = MONTH_DAY.replace(s, "")
         s = DAY_ONLY.replace(s, "")
         s = Regex("""오늘|내일|모레""").replace(s, "")
+        s = RECUR_RE.replace(s, "")
         s = META_SYMBOL.replace(s, "")
         return s.replace(Regex("""\s+"""), " ").trim()
     }
 
-    // ---- 단일 datetime 파싱 ----
     private fun parseSingle(text: String, defaultDate: LocalDate? = null): Triple<LocalDate, Int?, Int> {
         val today = LocalDate.now(KST)
         var base  = defaultDate ?: today
 
-        // 날짜
         when {
             "내일" in text -> base = today.plusDays(1)
             "모레" in text -> base = today.plusDays(2)
@@ -64,7 +71,6 @@ object DateTimeParser {
             }
         }
 
-        // 시각
         var hour: Int? = null
         var minute = 0
 
@@ -89,17 +95,14 @@ object DateTimeParser {
     private fun hasDateExpr(text: String) =
         Regex("""오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|(?<!\d)\d{1,2}일(?!\w)""").containsMatchIn(text)
 
-    // ---- 메인 파싱 (범위 포함) ----
     fun parse(text: String): ParsedDateTime? {
         if ("~" in text) {
-            val (startRaw, _, endRaw) = text.partition { it == '~' }.let {
-                val idx = text.indexOf('~')
-                Triple(text.substring(0, idx).trim(), '~', text.substring(idx + 1).trim())
-            }
+            val idx      = text.indexOf('~')
+            val startRaw = text.substring(0, idx).trim()
+            val endRaw   = text.substring(idx + 1).trim()
             val (sd, sh, sm) = parseSingle(startRaw)
             val (ed, eh, em) = parseSingle(endRaw, defaultDate = sd)
 
-            // 오후 맥락 전파
             var finalEh = eh
             if (sh != null && eh != null && !Regex("""오전|오후""").containsMatchIn(endRaw)) {
                 if (sh >= 12 && eh < sh && eh < 12) finalEh = eh + 12
@@ -116,7 +119,6 @@ object DateTimeParser {
             return null
         }
 
-        // 단일
         val (base, hour, minute) = parseSingle(text)
         if (hour != null) {
             val s = ZonedDateTime.of(LocalDateTime.of(base, java.time.LocalTime.of(hour, minute)), KST)
@@ -126,16 +128,5 @@ object DateTimeParser {
             return ParsedDateTime(null, null, base, base, false)
         }
         return null
-    }
-
-    // Todoist용: 시간 있으면 (RFC3339 UTC, true), 없으면 (YYYY-MM-DD, false)
-    fun extractDueInfo(text: String): Pair<String, Boolean>? {
-        val p = parse(text) ?: return null
-        return if (p.hasTime && p.start != null) {
-            val utc = p.start.withZoneSameInstant(ZoneId.of("UTC"))
-            Pair(utc.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'")), true)
-        } else {
-            Pair(p.startDate.toString(), false)
-        }
     }
 }

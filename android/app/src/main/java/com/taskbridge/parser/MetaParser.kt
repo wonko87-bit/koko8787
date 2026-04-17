@@ -1,43 +1,43 @@
 package com.taskbridge.parser
 
 data class TodoistMeta(
-    val content: String,
-    val project: String?,
-    val labels: List<String>,
-    val priority: Int?,   // Todoist 내부값: 4=긴급, 3=높음, 2=보통, 1=낮음
+    val quickAddText: String,  // Todoist Quick Add에 보낼 텍스트 (!r 제거, 반복 영어 변환)
+    val reminderMinutes: Int?, // !r30 → 30
 )
 
 object MetaParser {
 
-    private val PRIORITY_RE = Regex("""!p?([1-4])\b""", RegexOption.IGNORE_CASE)
-    private val PROJECT_RE  = Regex("""#(\S+)""")
-    private val LABEL_RE    = Regex("""@(\S+)""")
+    private val REMINDER_RE = Regex("""!r(\d+)\b""", RegexOption.IGNORE_CASE)
+
+    // 한국어 반복 키워드 → Todoist Quick Add가 이해하는 영어로 변환
+    private val RECURRENCE_MAP = listOf(
+        "매격주" to "every 2 weeks",
+        "격주"   to "every 2 weeks",
+        "매주"   to "every week",
+        "매달"   to "every month",
+        "매월"   to "every month",
+        "매일"   to "every day",
+    )
+
+    fun extractReminderMinutes(text: String): Int? =
+        REMINDER_RE.find(text)?.groupValues?.get(1)?.toIntOrNull()
 
     fun parse(text: String): TodoistMeta {
         var s = text
 
-        // 우선순위
-        val priMatch = PRIORITY_RE.find(s)
-        val priority = priMatch?.groupValues?.get(1)?.toIntOrNull()?.let { 5 - it }
-        if (priMatch != null) s = s.removeRange(priMatch.range).trim()
+        // !r30 제거
+        val remMatch = REMINDER_RE.find(s)
+        val reminderMinutes = remMatch?.groupValues?.get(1)?.toIntOrNull()
+        if (remMatch != null) s = s.removeRange(remMatch.range).trim()
 
-        // 프로젝트
-        val projMatch = PROJECT_RE.find(s)
-        val project = projMatch?.groupValues?.get(1)
-        if (projMatch != null) s = s.removeRange(projMatch.range).trim()
-
-        // 레이블
-        val labels = LABEL_RE.findAll(s).map { it.groupValues[1] }.toList()
-        s = LABEL_RE.replace(s, "").trim()
-
-        // 날짜/시간 제거
-        val clean = DateTimeParser.strip(s).ifBlank { s }
+        // 반복 키워드 영어로 변환
+        for ((korean, english) in RECURRENCE_MAP) {
+            if (korean in s) { s = s.replace(korean, english); break }
+        }
 
         return TodoistMeta(
-            content  = clean,
-            project  = project,
-            labels   = labels,
-            priority = priority,
+            quickAddText   = s.replace(Regex("""\s+"""), " ").trim(),
+            reminderMinutes = reminderMinutes,
         )
     }
 }
