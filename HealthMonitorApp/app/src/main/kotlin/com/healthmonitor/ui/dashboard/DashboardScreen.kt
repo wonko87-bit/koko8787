@@ -4,8 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,14 +17,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.healthmonitor.data.health.HealthConnectManager
 import com.healthmonitor.domain.models.HealthData
 import com.healthmonitor.ui.components.*
 import com.healthmonitor.ui.theme.CardSurface
@@ -41,8 +38,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Health Connect 권한 다이얼로그는 별도 Activity로 열렸다가 돌아오므로
-    // ON_RESUME 시 권한 상태를 반드시 재확인해야 합니다.
+    // HC 설정 화면에서 돌아올 때 ON_RESUME 시 권한 상태를 재확인합니다.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -54,35 +50,8 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Android 14+(API 34) 에서는 health 권한이 일반 런타임 권한으로 승격되어
-    // RequestMultiplePermissions 계약으로 직접 요청해야 다이얼로그가 열립니다.
-    // Android 13 이하는 PermissionController 전용 계약이 필요합니다.
-    // Compose 규칙상 두 launcher 모두 무조건 등록해두고, 런타임에 분기합니다.
-    val modernLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions: Map<String, Boolean> ->
-        val granted = permissions.filterValues { it }.keys.toSet()
-        viewModel.onPermissionsResult(granted)
-    }
-    val legacyLauncher = rememberLauncherForActivityResult(
-        PermissionController.createRequestPermissionResultContract()
-    ) { granted: Set<String> ->
-        viewModel.onPermissionsResult(granted)
-    }
-    val launchPermissions: () -> Unit = {
-        Toast.makeText(context, "권한 요청 중...", Toast.LENGTH_SHORT).show()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                modernLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS.toTypedArray())
-            } else {
-                legacyLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS)
-            }
-        } catch (e: Exception) {
-            Toast.makeText(context, "오류: ${e::class.simpleName} – ${e.message}", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    // 사이드로드 APK는 HC 권한 다이얼로그가 차단될 수 있으므로 HC 설정 화면을 직접 엽니다.
+    // Play Store 미등록 앱은 HC 권한 다이얼로그가 차단됩니다.
+    // 대신 HC 설정 화면을 직접 엽니다.
     val openHCPermissions: () -> Unit = {
         val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")
@@ -163,16 +132,41 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         title = "권한이 필요합니다",
                         body = "걸음수, 수면, 칼로리, 수분 데이터를 읽으려면\nHealth Connect 권한을 허용해주세요.",
                         action = {
-                            Button(onClick = launchPermissions) {
-                                Text("권한 허용하기")
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = openHCPermissions) {
+                            Button(onClick = openHCPermissions) {
                                 Text("Health Connect에서 직접 설정")
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = "또는 ADB로 권한 부여 (PC 필요)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = TextSecondary
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    val pkg = "com.healthmonitor"
+                                    listOf(
+                                        "android.permission.health.READ_STEPS",
+                                        "android.permission.health.READ_SLEEP",
+                                        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+                                        "android.permission.health.READ_HYDRATION"
+                                    ).forEach { perm ->
+                                        Text(
+                                            text = "adb shell pm grant $pkg $perm",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(vertical = 2.dp)
+                                        )
+                                    }
+                                }
                             }
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                text = "위 버튼이 반응 없으면 'Health Connect에서 직접 설정'으로\n앱 권한을 수동 허용 후 돌아오세요.",
+                                text = "Play Store 미등록 앱은 HC 권한 다이얼로그를 사용할 수 없습니다.\n위 방법 중 하나로 권한 부여 후 자동으로 감지됩니다.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
                                 textAlign = TextAlign.Center
