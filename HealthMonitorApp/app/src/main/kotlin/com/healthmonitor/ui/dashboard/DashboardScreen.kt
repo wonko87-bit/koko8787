@@ -12,15 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.healthmonitor.data.health.HealthConnectManager
 import com.healthmonitor.domain.models.HealthData
@@ -34,7 +32,6 @@ import java.time.LocalDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Health Connect 권한 다이얼로그는 별도 Activity로 열렸다가 돌아오므로
@@ -50,17 +47,9 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 클라이언트 인스턴스를 통해 contract를 생성해야 일부 기기에서도 정상 동작합니다.
-    val permissionContract = remember(context) {
-        if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
-            HealthConnectClient.getOrCreate(context).permissionController
-                .createRequestPermissionResultContract()
-        } else {
-            PermissionController.createRequestPermissionResultContract()
-        }
-    }
-
-    val permissionLauncher = rememberLauncherForActivityResult(permissionContract) { granted: Set<String> ->
+    val permissionLauncher = rememberLauncherForActivityResult(
+        remember { PermissionController.createRequestPermissionResultContract() }
+    ) { granted: Set<String> ->
         viewModel.onPermissionsResult(granted)
     }
 
