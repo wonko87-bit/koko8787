@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration (machine-specific SDK path)
+local.properties
+
+# Android signing keys - NEVER commit these
+*.jks
+*.keystore
+release.jks
+
+# IDE
+.idea/
+*.iml
+.DS_Store
