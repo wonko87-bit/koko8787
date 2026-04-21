@@ -2,33 +2,17 @@ name: Build APK
 
 on:
   push:
-    branches:
-      - 'claude/health-monitoring-app-QnDe9'
-      - 'main'
+    branches: [ claude/health-monitoring-app-QnDe9 ]
     paths:
       - 'HealthMonitorApp/**'
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: '빌드 타입'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
-
-env:
-  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8"
 
 jobs:
   build:
-    name: Build ${{ inputs.build_type || 'debug' }} APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -36,64 +20,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # gradle-wrapper.jar 없이 Gradle을 시스템에 직접 설치
-      - name: Setup Gradle 8.6
-        uses: gradle/actions/setup-gradle@v3
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.6'
+          gradle-version: "8.6"
 
-      # GitHub Actions 러너에 이미 Android SDK가 설치되어 있음
-      - name: Write local.properties
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > HealthMonitorApp/local.properties
-
-      - name: Accept Android SDK licenses
-        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-      # ── Debug Build ──────────────────────────────────────────────────────────
       - name: Build Debug APK
-        if: ${{ inputs.build_type != 'release' }}
         working-directory: HealthMonitorApp
-        run: gradle assembleDebug
+        run: gradle assembleDebug --no-daemon -Pandroid.useAndroidX=true -Pandroid.enableJetifier=true
 
-      - name: Upload Debug APK
-        if: ${{ inputs.build_type != 'release' }}
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: HealthMonitor-debug-${{ github.run_number }}
+          name: HealthMonitor-debug
           path: HealthMonitorApp/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
-
-      # ── Release Build (서명 필요) ─────────────────────────────────────────────
-      # 사용하려면 GitHub Secrets에 아래 4개 값을 등록해야 합니다:
-      #   KEYSTORE_BASE64    : base64로 인코딩한 .jks 파일 내용
-      #   KEYSTORE_PASSWORD  : keystore 비밀번호
-      #   KEY_ALIAS          : key alias
-      #   KEY_PASSWORD       : key 비밀번호
-      - name: Decode Keystore
-        if: ${{ inputs.build_type == 'release' }}
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode \
-            > HealthMonitorApp/app/release.jks
-
-      - name: Build Release APK
-        if: ${{ inputs.build_type == 'release' }}
-        working-directory: HealthMonitorApp
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/HealthMonitorApp/app/release.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          gradle assembleRelease \
-            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
-            -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
-            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
-
-      - name: Upload Release APK
-        if: ${{ inputs.build_type == 'release' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: HealthMonitor-release-${{ github.run_number }}
-          path: HealthMonitorApp/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
