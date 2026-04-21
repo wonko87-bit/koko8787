@@ -1,6 +1,8 @@
 package com.healthmonitor.ui.dashboard
 
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,10 +49,27 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        remember { PermissionController.createRequestPermissionResultContract() }
+    // Android 14+(API 34) 에서는 health 권한이 일반 런타임 권한으로 승격되어
+    // RequestMultiplePermissions 계약으로 직접 요청해야 다이얼로그가 열립니다.
+    // Android 13 이하는 PermissionController 전용 계약이 필요합니다.
+    // Compose 규칙상 두 launcher 모두 무조건 등록해두고, 런타임에 분기합니다.
+    val modernLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions: Map<String, Boolean> ->
+        val granted = permissions.filterValues { it }.keys.toSet()
+        viewModel.onPermissionsResult(granted)
+    }
+    val legacyLauncher = rememberLauncherForActivityResult(
+        PermissionController.createRequestPermissionResultContract()
     ) { granted: Set<String> ->
         viewModel.onPermissionsResult(granted)
+    }
+    val launchPermissions: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            modernLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS.toTypedArray())
+        } else {
+            legacyLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS)
+        }
     }
 
     // 앱이 열려 있는 동안 5분마다 자동 갱신
@@ -119,11 +138,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                         title = "권한이 필요합니다",
                         body = "걸음수, 수면, 칼로리, 수분 데이터를 읽으려면\nHealth Connect 권한을 허용해주세요.",
                         action = {
-                            Button(
-                                onClick = {
-                                    permissionLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS)
-                                }
-                            ) {
+                            Button(onClick = launchPermissions) {
                                 Text("권한 허용하기")
                             }
                         }
