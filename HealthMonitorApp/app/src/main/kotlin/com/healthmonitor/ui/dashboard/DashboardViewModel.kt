@@ -53,11 +53,15 @@ class DashboardViewModel @Inject constructor(
             _uiState.update { it.copy(sdkStatus = status) }
 
             if (status == HealthConnectClient.SDK_AVAILABLE) {
+                val wasGranted = _uiState.value.hasPermissions
                 val hasPermissions = repository.hasAllPermissions()
                 _uiState.update { it.copy(hasPermissions = hasPermissions) }
                 if (hasPermissions) {
-                    syncData()
-                    HealthSyncWorker.schedule(context)
+                    // 방금 권한을 획득했거나 데이터가 없을 때만 동기화
+                    if (!wasGranted || _uiState.value.todayData == null) {
+                        syncData()
+                        HealthSyncWorker.schedule(context)
+                    }
                 } else {
                     _uiState.update { it.copy(isLoading = false) }
                 }

@@ -1,5 +1,6 @@
 package com.healthmonitor.ui.dashboard
 
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,11 +12,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.PermissionController
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.healthmonitor.data.health.HealthConnectManager
 import com.healthmonitor.domain.models.HealthData
 import com.healthmonitor.ui.components.*
@@ -23,21 +29,42 @@ import com.healthmonitor.ui.theme.CardSurface
 import com.healthmonitor.ui.theme.Primary
 import com.healthmonitor.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(viewModel: DashboardViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Permission launcher for Health Connect
-    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.health.connect.client.PermissionController
-            .createRequestPermissionResultContract()
-    ) { granted: Set<String> ->
+    // Health Connect 권한 다이얼로그는 별도 Activity로 열렸다가 돌아오므로
+    // ON_RESUME 시 권한 상태를 반드시 재확인해야 합니다.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.checkAvailabilityAndPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // 클라이언트 인스턴스를 통해 contract를 생성해야 일부 기기에서도 정상 동작합니다.
+    val permissionContract = remember(context) {
+        if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
+            HealthConnectClient.getOrCreate(context).permissionController
+                .createRequestPermissionResultContract()
+        } else {
+            PermissionController.createRequestPermissionResultContract()
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(permissionContract) { granted: Set<String> ->
         viewModel.onPermissionsResult(granted)
     }
 
-    // Auto-refresh every 5 minutes while the screen is visible
+    // 앱이 열려 있는 동안 5분마다 자동 갱신
     LaunchedEffect(uiState.hasPermissions) {
         if (uiState.hasPermissions) {
             while (true) {
@@ -81,8 +108,16 @@ fun DashboardScreen(viewModel: DashboardViewModel = androidx.hilt.navigation.com
             when {
                 !uiState.isHealthConnectAvailable -> {
                     ErrorScreen(
-                        icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp)) },
-                        title = if (uiState.needsProviderUpdate) "Health Connect 업데이트 필요" else "Health Connect 미지원",
+                        icon = {
+                            Icon(
+                                Icons.Default.Warning,
+                                null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(48.dp)
+                            )
+                        },
+                        title = if (uiState.needsProviderUpdate) "Health Connect 업데이트 필요"
+                                else "Health Connect 미지원",
                         body = if (uiState.needsProviderUpdate)
                             "Play 스토어에서 Health Connect 앱을 업데이트해주세요."
                         else
@@ -93,7 +128,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = androidx.hilt.navigation.com
                 !uiState.hasPermissions -> {
                     ErrorScreen(
                         title = "권한이 필요합니다",
-                        body = "걸음수, 수면, 칼로리, 수분 데이터를 읽으려면 Health Connect 권한을 허용해주세요.",
+                        body = "걸음수, 수면, 칼로리, 수분 데이터를 읽으려면\nHealth Connect 권한을 허용해주세요.",
                         action = {
                             Button(
                                 onClick = {
@@ -113,10 +148,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = androidx.hilt.navigation.com
                 }
 
                 else -> {
-                    DashboardContent(
-                        uiState = uiState,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    DashboardContent(uiState = uiState, modifier = Modifier.fillMaxSize())
                 }
             }
         }
@@ -126,7 +158,7 @@ fun DashboardScreen(viewModel: DashboardViewModel = androidx.hilt.navigation.com
 @Composable
 private fun DashboardContent(uiState: DashboardUiState, modifier: Modifier = Modifier) {
     val today = uiState.todayData ?: HealthData(
-        date = java.time.LocalDate.now(),
+        date = LocalDate.now(),
         steps = 0, sleepMinutes = 0, activeCaloriesKcal = 0.0, hydrationLiters = 0.0
     )
 
@@ -150,7 +182,6 @@ private fun DashboardContent(uiState: DashboardUiState, modifier: Modifier = Mod
             }
         }
 
-        // Today's stats grid (2x2)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -167,7 +198,6 @@ private fun DashboardContent(uiState: DashboardUiState, modifier: Modifier = Mod
             HydrationWidget(data = today, modifier = Modifier.weight(1f).height(160.dp))
         }
 
-        // Weekly activity chart
         if (uiState.weeklyData.isNotEmpty()) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
