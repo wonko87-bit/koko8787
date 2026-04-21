@@ -31,9 +31,9 @@ fun DashboardScreen(viewModel: DashboardViewModel = androidx.hilt.navigation.com
 
     // Permission launcher for Health Connect
     val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.health.connect.client.permission.PermissionController
+        contract = androidx.health.connect.client.PermissionController
             .createRequestPermissionResultContract()
-    ) { granted ->
+    ) { granted: Set<String> ->
         viewModel.onPermissionsResult(granted)
     }
 

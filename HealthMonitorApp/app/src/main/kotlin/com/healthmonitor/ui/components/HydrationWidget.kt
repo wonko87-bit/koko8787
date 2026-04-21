@@ -56,7 +56,7 @@ fun HydrationWidget(data: HealthData, modifier: Modifier = Modifier) {
                 }
 
                 Row(
-                    verticalAlignment = Alignment.Baseline,
+                    verticalAlignment = Alignment.Bottom,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(

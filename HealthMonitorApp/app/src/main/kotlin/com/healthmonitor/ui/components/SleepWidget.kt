@@ -67,7 +67,7 @@ fun SleepWidget(data: HealthData, modifier: Modifier = Modifier) {
 
                 if (data.sleepMinutes > 0) {
                     Row(
-                        verticalAlignment = Alignment.Baseline,
+                        verticalAlignment = Alignment.Bottom,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Text(
