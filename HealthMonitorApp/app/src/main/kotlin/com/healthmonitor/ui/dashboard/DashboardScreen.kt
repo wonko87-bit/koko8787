@@ -1,6 +1,9 @@
 package com.healthmonitor.ui.dashboard
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -14,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -34,6 +38,7 @@ import java.time.LocalDate
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Health Connect 권한 다이얼로그는 별도 Activity로 열렸다가 돌아오므로
@@ -65,10 +70,30 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
         viewModel.onPermissionsResult(granted)
     }
     val launchPermissions: () -> Unit = {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            modernLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS.toTypedArray())
+        Toast.makeText(context, "권한 요청 중...", Toast.LENGTH_SHORT).show()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                modernLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS.toTypedArray())
+            } else {
+                legacyLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, "오류: ${e::class.simpleName} – ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // 사이드로드 APK는 HC 권한 다이얼로그가 차단될 수 있으므로 HC 설정 화면을 직접 엽니다.
+    val openHCPermissions: () -> Unit = {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")
+                .putExtra(Intent.EXTRA_PACKAGE_NAME, context.packageName)
         } else {
-            legacyLauncher.launch(HealthConnectManager.REQUIRED_PERMISSIONS)
+            Intent(Intent.ACTION_VIEW).setPackage("com.google.android.apps.healthdata")
+        }
+        try {
+            context.startActivity(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "Health Connect 앱을 찾을 수 없습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -141,6 +166,17 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
                             Button(onClick = launchPermissions) {
                                 Text("권한 허용하기")
                             }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedButton(onClick = openHCPermissions) {
+                                Text("Health Connect에서 직접 설정")
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = "위 버튼이 반응 없으면 'Health Connect에서 직접 설정'으로\n앱 권한을 수동 허용 후 돌아오세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     )
                 }
