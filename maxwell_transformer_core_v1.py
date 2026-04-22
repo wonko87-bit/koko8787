@@ -387,6 +387,19 @@ def create_side_leg(oEditor, x_center, DS, Bjr, SS, h_leg, name, mat_core):
         ],
         _attr_block(tmp)
     )
+    # MajRadius aligns with X in Maxwell -> rotate 90deg around Z so long axis -> Y
+    oEditor.Rotate(
+        [
+            "NAME:Selections",
+            "Selections:=",        tmp,
+            "NewPartsModelFlag:=", "Model",
+        ],
+        [
+            "NAME:RotateParameters",
+            "RotateAxis:=",  "Z",
+            "RotateAngle:=", "90deg",
+        ]
+    )
     sweep_z(oEditor, tmp, h_leg)
     _clip_y(oEditor, tmp, SS, DS,
             x_center - DS / 2.0, x_center + DS / 2.0,
@@ -396,15 +409,40 @@ def create_side_leg(oEditor, x_center, DS, Bjr, SS, h_leg, name, mat_core):
     assign_material(oEditor, name, mat_core)
 
 
-def create_yoke(oEditor, x_start, yoke_len, DS, SS, Bjr, z_center, name, mat_core):
+def create_yoke(oEditor, x_start, yoke_len, DS, SS, Bjr, z_center, name, mat_core,
+                Bjr_ext=None):
     """
-    Yoke: DS circle in YZ plane clipped to SS(Y) x Bjr(Z), swept yoke_len in X.
+    Yoke swept in X direction.
+    N by 2 (Bjr_ext provided): ellipse cross-section matching side leg shape.
+      MajRadius=DS/2, minor semi=(Bjr+20)/2, WhichAxis=X.
+      Clip: Y->SS, Z->Bjr.  (DS used as safe clip reference in both directions.)
+    3by0 (Bjr_ext=None): DS circle clipped to SS(Y) x Bjr(Z).
     z_center : vertical center of yoke cross-section.
     """
-    print("  [Yoke] {}  x_start={:.1f} len={:.1f}  DS={} SS={} Bjr={}  z_center={:.1f}".format(
-        name, x_start, yoke_len, DS, SS, Bjr, z_center))
+    use_ellipse = (Bjr_ext is not None)
+    print("  [Yoke] {}  x_start={:.1f} len={:.1f}  DS={} SS={} Bjr={}  z_center={:.1f}  ellipse={}".format(
+        name, x_start, yoke_len, DS, SS, Bjr, z_center, use_ellipse))
     tmp = name + "_c"
-    create_circle(oEditor, x_start, 0.0, z_center, DS / 2.0, "X", tmp)
+    if use_ellipse:
+        oEditor.CreateEllipse(
+            [
+                "NAME:EllipseParameters",
+                "IsCovered:=",   True,
+                "XCenter:=",     "{}mm".format(x_start),
+                "YCenter:=",     "0mm",
+                "ZCenter:=",     "{}mm".format(z_center),
+                "MajRadius:=",   "{}mm".format(DS / 2.0),
+                "Ratio:=",       "{}".format(Bjr_ext / DS),
+                "WhichAxis:=",   "X",
+                "NumSegments:=", "0",
+            ],
+            _attr_block(tmp)
+        )
+        # If MajRadius aligns with Z for WhichAxis=X (needs rotation), add:
+        # oEditor.Rotate(["NAME:Selections","Selections:=",tmp,"NewPartsModelFlag:=","Model"],
+        #                ["NAME:RotateParameters","RotateAxis:=","X","RotateAngle:=","90deg"])
+    else:
+        create_circle(oEditor, x_start, 0.0, z_center, DS / 2.0, "X", tmp)
     sweep_x(oEditor, tmp, yoke_len)
     _clip_y(oEditor, tmp, SS, DS,
             x_start, x_start + yoke_len,
@@ -509,12 +547,13 @@ def create_core(oEditor, core_type,
 
     # -- Yokes ----------------------------------------------
     print("\n[Yokes]")
+    yoke_Bjr_ext = (Core_Bjr + 20.0) if core_type in ("1by2", "2by2", "3by2") else None
     create_yoke(oEditor, yoke_x0, yoke_len,
                 Core_DS, Core_SS, Core_Bjr, z_bot_c,
-                "Core_Yoke_Bot", mat_core)
+                "Core_Yoke_Bot", mat_core, Bjr_ext=yoke_Bjr_ext)
     create_yoke(oEditor, yoke_x0, yoke_len,
                 Core_DS, Core_SS, Core_Bjr, z_top_c,
-                "Core_Yoke_Top", mat_core)
+                "Core_Yoke_Top", mat_core, Bjr_ext=yoke_Bjr_ext)
 
     oEditor.FitAll()
     print("\nDone.")
