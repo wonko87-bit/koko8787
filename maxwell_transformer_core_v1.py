@@ -1,18 +1,17 @@
-# -*- coding: utf-8 -*-
 """
-Maxwell 3D - EI 변압기 철심 자동 모델링  (Stage 1)
-지원 코어 타입: 1by2 / 2by2 / 3by0 / 3by2
+Maxwell 3D - EI Transformer Core Auto-Modeling  (Stage 1)
+Supported core types: 1by2 / 2by2 / 3by0 / 3by2
 
-좌표계
-  X : 레그 배열 방향 (사이드레그 방향)
-  Y : 코어 스택 깊이 방향
-  Z : 레그 높이 방향 (수직)
+Coordinate system
+  X : leg array direction (toward side legs)
+  Y : core stack depth direction
+  Z : leg height direction (vertical)
 
-Z 기준
-  Z = 0            : 하부 요크 최하단
-  Z = Core_Bjr     : 창 하단 (하부 요크 최상단 = Core_HF 기준점)
-  Z = Core_Bjr + Core_HF      : 창 상단
-  Z = 2*Core_Bjr + Core_HF    : 상부 요크 최상단
+Z reference
+  Z = 0                        : bottom face of lower yoke
+  Z = Core_Bjr                 : window bottom (= top face of lower yoke)
+  Z = Core_Bjr + Core_HF       : window top
+  Z = 2*Core_Bjr + Core_HF     : top face of upper yoke
 """
 
 import ScriptEnv
@@ -23,12 +22,12 @@ import csv
 import os
 
 
-# ─────────────────────────────────────────────────────────
-# CSV 파라미터 읽기
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+# CSV parameter reader
+# ---------------------------------------------------------
 
 def read_params(csv_path):
-    """key-value 형식 CSV 읽기. 주석행(#) 및 빈 행 무시."""
+    """Read key-value CSV. Skips comment lines (#) and short rows."""
     params = {}
     with open(csv_path, 'r') as f:
         reader = csv.reader(f)
@@ -44,9 +43,9 @@ def read_params(csv_path):
     return params
 
 
-# ─────────────────────────────────────────────────────────
-# Maxwell 오브젝트 헬퍼
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+# Maxwell object helpers
+# ---------------------------------------------------------
 
 def _attr_block(name, color="(128 128 0)", transparency=0.3, material="vacuum"):
     return [
@@ -70,11 +69,11 @@ def _attr_block(name, color="(128 128 0)", transparency=0.3, material="vacuum"):
 
 def create_ellipse_xy(oEditor, cx, cy, cz, rx, ry, name, material="vacuum"):
     """
-    XY 평면 타원 (WhichAxis=Z).
-    rx : X방향 반지름,  ry : Y방향 반지름
-    MajRadius = rx (X축),  Ratio = ry/rx
-    ※ Maxwell 에서 WhichAxis=Z 일 때 MajRadius 가 X축임을 가정.
-      실행 후 단면 방향 확인 필요.
+    Create ellipse in XY plane (WhichAxis=Z).
+    rx : X semi-axis,  ry : Y semi-axis
+    MajRadius = rx (along X),  Ratio = ry/rx
+    NOTE: assumes MajRadius aligns with X when WhichAxis=Z in Maxwell 2021 R1.
+          Verify orientation on first run.
     """
     oEditor.CreateEllipse(
         [
@@ -96,11 +95,11 @@ def create_ellipse_xy(oEditor, cx, cy, cz, rx, ry, name, material="vacuum"):
 
 def create_ellipse_yz(oEditor, cx, cy, cz, ry, rz, name, material="vacuum"):
     """
-    YZ 평면 타원 (WhichAxis=X).
-    ry : Y방향 반지름,  rz : Z방향 반지름
-    MajRadius = ry (Y축),  Ratio = rz/ry
-    ※ Maxwell 에서 WhichAxis=X 일 때 MajRadius 가 Y축임을 가정.
-      실행 후 단면 방향 확인 필요.
+    Create ellipse in YZ plane (WhichAxis=X).
+    ry : Y semi-axis,  rz : Z semi-axis
+    MajRadius = ry (along Y),  Ratio = rz/ry
+    NOTE: assumes MajRadius aligns with Y when WhichAxis=X in Maxwell 2021 R1.
+          Verify orientation on first run.
     """
     oEditor.CreateEllipse(
         [
@@ -121,7 +120,7 @@ def create_ellipse_yz(oEditor, cx, cy, cz, ry, rz, name, material="vacuum"):
 
 
 def sweep_z(oEditor, name, dist):
-    """Z 방향 SweepAlongVector"""
+    """Sweep object along +Z by dist [mm]."""
     oEditor.SweepAlongVector(
         [
             "NAME:Selections",
@@ -130,19 +129,19 @@ def sweep_z(oEditor, name, dist):
         ],
         [
             "NAME:VectorSweepParameters",
-            "DraftAngle:=",              "0deg",
-            "DraftType:=",               "Round",
+            "DraftAngle:=",                "0deg",
+            "DraftType:=",                 "Round",
             "CheckFaceFaceIntersection:=", False,
-            "SweepVectorX:=",            "0mm",
-            "SweepVectorY:=",            "0mm",
-            "SweepVectorZ:=",            "{}mm".format(dist),
+            "SweepVectorX:=",              "0mm",
+            "SweepVectorY:=",              "0mm",
+            "SweepVectorZ:=",              "{}mm".format(dist),
         ]
     )
-    print("  SweepZ: {} → {}mm".format(name, dist))
+    print("  SweepZ: {} {}mm".format(name, dist))
 
 
 def sweep_x(oEditor, name, dist):
-    """X 방향 SweepAlongVector"""
+    """Sweep object along +X by dist [mm]."""
     oEditor.SweepAlongVector(
         [
             "NAME:Selections",
@@ -151,15 +150,15 @@ def sweep_x(oEditor, name, dist):
         ],
         [
             "NAME:VectorSweepParameters",
-            "DraftAngle:=",              "0deg",
-            "DraftType:=",               "Round",
+            "DraftAngle:=",                "0deg",
+            "DraftType:=",                 "Round",
             "CheckFaceFaceIntersection:=", False,
-            "SweepVectorX:=",            "{}mm".format(dist),
-            "SweepVectorY:=",            "0mm",
-            "SweepVectorZ:=",            "0mm",
+            "SweepVectorX:=",              "{}mm".format(dist),
+            "SweepVectorY:=",              "0mm",
+            "SweepVectorZ:=",              "0mm",
         ]
     )
-    print("  SweepX: {} → {}mm".format(name, dist))
+    print("  SweepX: {} {}mm".format(name, dist))
 
 
 def assign_material(oEditor, name, material):
@@ -176,19 +175,19 @@ def assign_material(oEditor, name, material):
             ],
         ]
     )
-    print("  Material: {} → {}".format(name, material))
+    print("  Material: {} -> {}".format(name, material))
 
 
-# ─────────────────────────────────────────────────────────
-# 레그 배치 계산
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+# Leg layout calculation
+# ---------------------------------------------------------
 
 def get_leg_layout(core_type, Core_ES, Core_ESR):
     """
-    코어 타입별 레그 X 좌표와 종류 반환.
+    Return leg X positions by core type.
     Returns: list of (x_center, is_main, label)
-    Core_ES  : 메인-메인 center to center
-    Core_ESR : 메인-사이드 center to center (최외곽 메인 기준)
+    Core_ES  : main-to-main center to center
+    Core_ESR : outermost-main-to-side center to center
     """
     if core_type == "1by2":
         return [
@@ -219,54 +218,51 @@ def get_leg_layout(core_type, Core_ES, Core_ESR):
             (+(Core_ES + Core_ESR), False, "Side_R"),
         ]
     else:
-        raise ValueError("지원하지 않는 코어 타입: {}".format(core_type))
+        raise ValueError("Unsupported core type: {}".format(core_type))
 
 
 def get_yoke_x_range(layout, Core_BS, Core_Bjr):
-    """
-    요크 X축 시작점과 전체 길이 계산.
-    최외곽 레그의 외면 끝까지 커버.
-    """
+    """Return (x_start, length) of yoke covering outer edges of all legs."""
     x_l, is_main_l = layout[0][0],  layout[0][1]
     x_r, is_main_r = layout[-1][0], layout[-1][1]
     r_l = Core_BS / 2.0 if is_main_l else Core_Bjr / 2.0
     r_r = Core_BS / 2.0 if is_main_r else Core_Bjr / 2.0
     x_start = x_l - r_l
     x_end   = x_r + r_r
-    return x_start, x_end - x_start   # (시작점, 길이)
+    return x_start, x_end - x_start
 
 
-# ─────────────────────────────────────────────────────────
-# 철심 생성 메인 함수
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+# Core creation
+# ---------------------------------------------------------
 
 def create_core(oEditor, core_type,
                 Core_DS, Core_BS, Core_SS, Core_Bjr,
                 Core_ES, Core_ESR, Core_HF, mat_core):
 
     print("=" * 60)
-    print("EI 철심 생성: {}".format(core_type))
+    print("EI Core  type={}".format(core_type))
     print("=" * 60)
 
-    # 파생 치수
-    h_leg   = Core_HF + 2.0 * Core_Bjr        # 레그 전체 Z 높이
-    z_bot_c = Core_Bjr / 2.0                   # 하부 요크 중심 Z
-    z_top_c = Core_Bjr + Core_HF + Core_Bjr / 2.0  # 상부 요크 중심 Z
+    h_leg   = Core_HF + 2.0 * Core_Bjr
+    z_bot_c = Core_Bjr / 2.0
+    z_top_c = Core_Bjr + Core_HF + Core_Bjr / 2.0
 
     layout            = get_leg_layout(core_type, Core_ES, Core_ESR)
     yoke_x0, yoke_len = get_yoke_x_range(layout, Core_BS, Core_Bjr)
 
-    print("\n파생 치수:")
-    print("  레그 Z높이 = {}mm".format(h_leg))
-    print("  요크 Z높이 = {}mm  (= Core_Bjr)".format(Core_Bjr))
-    print("  요크 X범위 = {}mm ~ {}mm  (길이 {}mm)".format(
+    print("Derived dims:")
+    print("  leg  Z-height = {}mm".format(h_leg))
+    print("  yoke Z-height = {}mm  (= Core_Bjr)".format(Core_Bjr))
+    print("  yoke X-range  = {}mm ~ {}mm  (len {}mm)".format(
         yoke_x0, yoke_x0 + yoke_len, yoke_len))
-    print("\n레그 배치:")
+    print("Leg layout:")
     for x_c, is_main, label in layout:
-        print("  {:8s}  X = {:+.1f}mm".format(label, x_c))
+        tag = "Main" if is_main else "Side"
+        print("  {:8s} ({})  X = {:+.1f}mm".format(label, tag, x_c))
 
-    # ── 레그 생성 (XY 타원 → Z sweep) ───────────────────
-    print("\n[레그 생성]")
+    # -- Legs: ellipse in XY -> sweep Z ----------------------
+    print("\n[Legs]")
     for x_c, is_main, label in layout:
         rx   = Core_BS / 2.0 if is_main else Core_Bjr / 2.0
         ry   = Core_SS / 2.0
@@ -275,8 +271,8 @@ def create_core(oEditor, core_type,
         sweep_z(oEditor, name, h_leg)
         assign_material(oEditor, name, mat_core)
 
-    # ── 요크 생성 (YZ 타원 → X sweep) ───────────────────
-    print("\n[요크 생성]")
+    # -- Yokes: ellipse in YZ -> sweep X ---------------------
+    print("\n[Yokes]")
 
     create_ellipse_yz(oEditor,
                       yoke_x0, 0.0, z_bot_c,
@@ -293,12 +289,12 @@ def create_core(oEditor, core_type,
     assign_material(oEditor, "Core_Yoke_Top", mat_core)
 
     oEditor.FitAll()
-    print("\n완료!")
+    print("\nDone.")
 
 
-# ─────────────────────────────────────────────────────────
-# 실행 진입점
-# ─────────────────────────────────────────────────────────
+# ---------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------
 
 try:
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -318,9 +314,9 @@ if os.path.exists(csv_path):
     Core_ESR  = float(p.get("Core_ESR",  120.0))
     Core_HF   = float(p.get("Core_HF",   300.0))
     mat_core  = p.get("mat_core", "vacuum")
-    print("CSV 로드: {}".format(csv_path))
+    print("CSV loaded: {}".format(csv_path))
 else:
-    print("CSV 없음 → 기본값 사용")
+    print("CSV not found -> using defaults")
     core_type = "1by2"
     Core_DS   = 100.0
     Core_BS   =  80.0
