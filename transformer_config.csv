@@ -1,0 +1,24 @@
+# EI 변압기 파라미터 설정 파일
+# 형식: section, key, value
+# 주석행은 # 으로 시작
+#
+# ── CORE 섹션 ─────────────────────────────────────────────
+# core_type : 1by2 | 2by2 | 3by0 | 3by2
+# Core_DS   : 메인 레그 기준 지름 [mm]  (코어-권선 절연거리 기준)
+# Core_BS   : 메인 레그 X방향 직경 [mm] (사이드레그 방향)
+# Core_SS   : 공통 Y방향 직경 [mm]      (스택 깊이, 메인/사이드/요크 공통)
+# Core_Bjr  : 사이드 레그 X방향 직경 [mm] (= 요크 Z방향 높이)
+# Core_ES   : 메인-메인 center to center [mm]  (2by2/3by0/3by2 에서 유효)
+# Core_ESR  : 메인-사이드 center to center [mm]
+# Core_HF   : 창 높이 [mm]  (하부요크 최상단 ~ 상부요크 최하단)
+# mat_core  : 코어 재질명 (Maxwell 재질 라이브러리 기준)
+#
+CORE,core_type,1by2
+CORE,Core_DS,100
+CORE,Core_BS,80
+CORE,Core_SS,120
+CORE,Core_Bjr,40
+CORE,Core_ES,150
+CORE,Core_ESR,120
+CORE,Core_HF,300
+CORE,mat_core,vacuum
