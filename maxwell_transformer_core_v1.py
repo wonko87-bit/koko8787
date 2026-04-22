@@ -8,10 +8,17 @@ Coordinate system
   Z : leg height direction (vertical)
 
 Z reference
-  Z = 0                        : bottom face of lower yoke
-  Z = Core_Bjr                 : window bottom (= top face of lower yoke)
-  Z = Core_Bjr + Core_HF       : window top
-  Z = 2*Core_Bjr + Core_HF     : top face of upper yoke
+  Z = 0                    : bottom face of lower yoke
+  Z = Core_Bjr             : window bottom (= top face of lower yoke)
+  Z = Core_Bjr + Core_HF   : window top
+  Z = 2*Core_Bjr + Core_HF : top face of upper yoke
+
+Cross-section geometry
+  All parts start from a circle of diameter Core_DS.
+  Flat faces are created by subtracting box-shaped clipping tools.
+  Main leg : DS circle clipped to BS(X) x SS(Y)
+  Side leg : DS circle clipped to Bjr(X) x SS(Y)
+  Yoke     : DS circle (in YZ plane) clipped to SS(Y) x Bjr(Z), swept in X
 """
 
 import ScriptEnv
@@ -44,7 +51,18 @@ def read_params(csv_path):
 
 
 # ---------------------------------------------------------
-# Maxwell object helpers
+# Temp name generator (IronPython 2.7 compatible - no nonlocal)
+# ---------------------------------------------------------
+
+_tmp_idx = [0]
+
+def _tmp():
+    _tmp_idx[0] += 1
+    return "_clip_{}".format(_tmp_idx[0])
+
+
+# ---------------------------------------------------------
+# Attribute block helper
 # ---------------------------------------------------------
 
 def _attr_block(name, color="(128 128 0)", transparency=0.3, material="vacuum"):
@@ -67,56 +85,62 @@ def _attr_block(name, color="(128 128 0)", transparency=0.3, material="vacuum"):
     ]
 
 
-def create_ellipse_xy(oEditor, cx, cy, cz, rx, ry, name, material="vacuum"):
+# ---------------------------------------------------------
+# Maxwell primitive helpers
+# ---------------------------------------------------------
+
+def create_circle(oEditor, cx, cy, cz, r, which_axis, name, material="vacuum"):
     """
-    Create ellipse in XY plane (WhichAxis=Z).
-    rx : X semi-axis,  ry : Y semi-axis
-    MajRadius = rx (along X),  Ratio = ry/rx
-    NOTE: assumes MajRadius aligns with X when WhichAxis=Z in Maxwell 2021 R1.
-          Verify orientation on first run.
+    Create a filled circle (disk).
+    which_axis="Z" -> disk in XY plane
+    which_axis="X" -> disk in YZ plane
     """
-    oEditor.CreateEllipse(
+    oEditor.CreateCircle(
         [
-            "NAME:EllipseParameters",
+            "NAME:CircleParameters",
             "IsCovered:=",   True,
             "XCenter:=",     "{}mm".format(cx),
             "YCenter:=",     "{}mm".format(cy),
             "ZCenter:=",     "{}mm".format(cz),
-            "MajRadius:=",   "{}mm".format(rx),
-            "Ratio:=",       "{}".format(float(ry) / float(rx)),
-            "WhichAxis:=",   "Z",
+            "Radius:=",      "{}mm".format(r),
+            "WhichAxis:=",   which_axis,
             "NumSegments:=", "0",
         ],
         _attr_block(name, material=material)
     )
-    print("  Ellipse(XY): {} cx={} cy={} cz={} rx={} ry={}".format(
-        name, cx, cy, cz, rx, ry))
+    print("  Circle({}): {} c=({},{},{}) r={}".format(which_axis, name, cx, cy, cz, r))
 
 
-def create_ellipse_yz(oEditor, cx, cy, cz, ry, rz, name, material="vacuum"):
-    """
-    Create ellipse in YZ plane (WhichAxis=X).
-    ry : Y semi-axis,  rz : Z semi-axis
-    MajRadius = ry (along Y),  Ratio = rz/ry
-    NOTE: assumes MajRadius aligns with Y when WhichAxis=X in Maxwell 2021 R1.
-          Verify orientation on first run.
-    """
-    oEditor.CreateEllipse(
+def create_box_tool(oEditor, x, y, z, dx, dy, dz, name):
+    """Create a box used as a subtract tool. Material left as default (vacuum)."""
+    oEditor.CreateBox(
         [
-            "NAME:EllipseParameters",
-            "IsCovered:=",   True,
-            "XCenter:=",     "{}mm".format(cx),
-            "YCenter:=",     "{}mm".format(cy),
-            "ZCenter:=",     "{}mm".format(cz),
-            "MajRadius:=",   "{}mm".format(ry),
-            "Ratio:=",       "{}".format(float(rz) / float(ry)),
-            "WhichAxis:=",   "X",
-            "NumSegments:=", "0",
+            "NAME:BoxParameters",
+            "XPosition:=", "{}mm".format(x),
+            "YPosition:=", "{}mm".format(y),
+            "ZPosition:=", "{}mm".format(z),
+            "XSize:=",     "{}mm".format(dx),
+            "YSize:=",     "{}mm".format(dy),
+            "ZSize:=",     "{}mm".format(dz),
         ],
-        _attr_block(name, material=material)
+        _attr_block(name)
     )
-    print("  Ellipse(YZ): {} cx={} cy={} cz={} ry={} rz={}".format(
-        name, cx, cy, cz, ry, rz))
+
+
+def subtract(oEditor, blank, tools):
+    """Subtract tool solids from blank solid. Tools are consumed."""
+    oEditor.Subtract(
+        [
+            "NAME:Selections",
+            "Blank Parts:=", blank,
+            "Tool Parts:=",  ",".join(tools),
+        ],
+        [
+            "NAME:SubtractParameters",
+            "KeepOriginals:=", False,
+        ]
+    )
+    print("  Subtract: {} - [{}]".format(blank, ", ".join(tools)))
 
 
 def sweep_z(oEditor, name, dist):
@@ -161,6 +185,23 @@ def sweep_x(oEditor, name, dist):
     print("  SweepX: {} {}mm".format(name, dist))
 
 
+def rename_object(oEditor, old_name, new_name):
+    oEditor.ChangeProperty(
+        [
+            "NAME:AllTabs",
+            [
+                "NAME:Geometry3DAttributeTab",
+                ["NAME:PropServers", old_name],
+                [
+                    "NAME:ChangedProps",
+                    ["NAME:Name", "Value:=", new_name],
+                ],
+            ],
+        ]
+    )
+    print("  Rename: {} -> {}".format(old_name, new_name))
+
+
 def assign_material(oEditor, name, material):
     oEditor.ChangeProperty(
         [
@@ -179,15 +220,192 @@ def assign_material(oEditor, name, material):
 
 
 # ---------------------------------------------------------
+# Clipping helpers (subtract flat faces from a swept cylinder)
+# ---------------------------------------------------------
+
+def _clip_x(oEditor, solid, x_center, x_size, DS, z_start, z_end):
+    """
+    Remove material outside +/- x_size/2 in X direction.
+    x_center : center X of the solid
+    x_size   : target width in X (BS or Bjr)
+    DS       : reference circle diameter (original extent in X)
+    """
+    if x_size >= DS:
+        return
+    m      = 2.0
+    big_y  = DS + 2.0 * m
+    big_z  = (z_end - z_start) + 2.0 * m
+    excess = DS / 2.0 - x_size / 2.0
+
+    # Left clip
+    n = _tmp()
+    create_box_tool(oEditor,
+                    x_center - DS / 2.0 - m,   # x start (outside left edge)
+                    -big_y / 2.0,
+                    z_start - m,
+                    excess + m,                 # dx: covers excess + margin
+                    big_y,
+                    big_z,
+                    n)
+    subtract(oEditor, solid, [n])
+
+    # Right clip
+    n = _tmp()
+    create_box_tool(oEditor,
+                    x_center + x_size / 2.0,   # x start (right flat face)
+                    -big_y / 2.0,
+                    z_start - m,
+                    excess + m,
+                    big_y,
+                    big_z,
+                    n)
+    subtract(oEditor, solid, [n])
+
+
+def _clip_y(oEditor, solid, y_size, DS, x_start, x_end, z_start, z_end):
+    """
+    Remove material outside +/- y_size/2 in Y direction (centered at Y=0).
+    y_size : target depth in Y (SS)
+    DS     : reference circle diameter (original extent in Y)
+    """
+    if y_size >= DS:
+        return
+    m      = 2.0
+    big_x  = (x_end - x_start) + 2.0 * m
+    big_z  = (z_end - z_start) + 2.0 * m
+    excess = DS / 2.0 - y_size / 2.0
+
+    # Front clip (Y negative side)
+    n = _tmp()
+    create_box_tool(oEditor,
+                    x_start - m,
+                    -DS / 2.0 - m,
+                    z_start - m,
+                    big_x,
+                    excess + m,
+                    big_z,
+                    n)
+    subtract(oEditor, solid, [n])
+
+    # Back clip (Y positive side)
+    n = _tmp()
+    create_box_tool(oEditor,
+                    x_start - m,
+                    y_size / 2.0,
+                    z_start - m,
+                    big_x,
+                    excess + m,
+                    big_z,
+                    n)
+    subtract(oEditor, solid, [n])
+
+
+def _clip_z(oEditor, solid, z_center, z_size, DS, x_start, x_end):
+    """
+    Remove material outside +/- z_size/2 of z_center in Z direction.
+    z_center : center Z of the yoke cross-section
+    z_size   : target height in Z (Bjr)
+    DS       : reference circle diameter (original extent in Z)
+    """
+    if z_size >= DS:
+        return
+    m      = 2.0
+    big_x  = (x_end - x_start) + 2.0 * m
+    big_y  = DS + 2.0 * m
+    excess = DS / 2.0 - z_size / 2.0
+
+    # Bottom clip
+    n = _tmp()
+    create_box_tool(oEditor,
+                    x_start - m,
+                    -big_y / 2.0,
+                    z_center - DS / 2.0 - m,
+                    big_x,
+                    big_y,
+                    excess + m,
+                    n)
+    subtract(oEditor, solid, [n])
+
+    # Top clip
+    n = _tmp()
+    create_box_tool(oEditor,
+                    x_start - m,
+                    -big_y / 2.0,
+                    z_center + z_size / 2.0,
+                    big_x,
+                    big_y,
+                    excess + m,
+                    n)
+    subtract(oEditor, solid, [n])
+
+
+# ---------------------------------------------------------
+# Part creation
+# ---------------------------------------------------------
+
+def create_main_leg(oEditor, x_center, DS, BS, SS, h_leg, name, mat_core):
+    """
+    Main (wound) leg: DS circle clipped to BS(X) x SS(Y), swept h_leg in Z.
+    Z base = 0.
+    """
+    print("  [MainLeg] {}  x={:.1f}  DS={} BS={} SS={}  h={}".format(
+        name, x_center, DS, BS, SS, h_leg))
+    tmp = name + "_c"
+    create_circle(oEditor, x_center, 0.0, 0.0, DS / 2.0, "Z", tmp)
+    sweep_z(oEditor, tmp, h_leg)
+    _clip_x(oEditor, tmp, x_center, BS, DS, 0.0, h_leg)
+    _clip_y(oEditor, tmp, SS, DS,
+            x_center - DS / 2.0, x_center + DS / 2.0,
+            0.0, h_leg)
+    rename_object(oEditor, tmp, name)
+    assign_material(oEditor, name, mat_core)
+
+
+def create_side_leg(oEditor, x_center, DS, Bjr, SS, h_leg, name, mat_core):
+    """
+    Side (return) leg: DS circle clipped to Bjr(X) x SS(Y), swept h_leg in Z.
+    Z base = 0.
+    """
+    print("  [SideLeg] {}  x={:.1f}  DS={} Bjr={} SS={}  h={}".format(
+        name, x_center, DS, Bjr, SS, h_leg))
+    tmp = name + "_c"
+    create_circle(oEditor, x_center, 0.0, 0.0, DS / 2.0, "Z", tmp)
+    sweep_z(oEditor, tmp, h_leg)
+    _clip_x(oEditor, tmp, x_center, Bjr, DS, 0.0, h_leg)
+    _clip_y(oEditor, tmp, SS, DS,
+            x_center - DS / 2.0, x_center + DS / 2.0,
+            0.0, h_leg)
+    rename_object(oEditor, tmp, name)
+    assign_material(oEditor, name, mat_core)
+
+
+def create_yoke(oEditor, x_start, yoke_len, DS, SS, Bjr, z_center, name, mat_core):
+    """
+    Yoke: DS circle in YZ plane clipped to SS(Y) x Bjr(Z), swept yoke_len in X.
+    z_center : vertical center of yoke cross-section.
+    """
+    print("  [Yoke] {}  x_start={:.1f} len={:.1f}  DS={} SS={} Bjr={}  z_center={:.1f}".format(
+        name, x_start, yoke_len, DS, SS, Bjr, z_center))
+    tmp = name + "_c"
+    create_circle(oEditor, x_start, 0.0, z_center, DS / 2.0, "X", tmp)
+    sweep_x(oEditor, tmp, yoke_len)
+    _clip_y(oEditor, tmp, SS, DS,
+            x_start, x_start + yoke_len,
+            z_center - DS / 2.0, z_center + DS / 2.0)
+    _clip_z(oEditor, tmp, z_center, Bjr, DS, x_start, x_start + yoke_len)
+    rename_object(oEditor, tmp, name)
+    assign_material(oEditor, name, mat_core)
+
+
+# ---------------------------------------------------------
 # Leg layout calculation
 # ---------------------------------------------------------
 
 def get_leg_layout(core_type, Core_ES, Core_ESR):
     """
-    Return leg X positions by core type.
-    Returns: list of (x_center, is_main, label)
-    Core_ES  : main-to-main center to center
-    Core_ESR : outermost-main-to-side center to center
+    Return list of (x_center, is_main, label) for each leg.
+    Core_ES  : main-to-main center-to-center spacing
+    Core_ESR : outermost-main to side-leg center-to-center spacing
     """
     if core_type == "1by2":
         return [
@@ -222,9 +440,9 @@ def get_leg_layout(core_type, Core_ES, Core_ESR):
 
 
 def get_yoke_x_range(layout, Core_BS, Core_Bjr):
-    """Return (x_start, length) of yoke covering outer edges of all legs."""
-    x_l, is_main_l = layout[0][0],  layout[0][1]
-    x_r, is_main_r = layout[-1][0], layout[-1][1]
+    """Return (x_start, length) of yoke spanning outer edges of all legs."""
+    x_l,  is_main_l = layout[0][0],  layout[0][1]
+    x_r,  is_main_r = layout[-1][0], layout[-1][1]
     r_l = Core_BS / 2.0 if is_main_l else Core_Bjr / 2.0
     r_r = Core_BS / 2.0 if is_main_r else Core_Bjr / 2.0
     x_start = x_l - r_l
@@ -233,7 +451,7 @@ def get_yoke_x_range(layout, Core_BS, Core_Bjr):
 
 
 # ---------------------------------------------------------
-# Core creation
+# Core assembly
 # ---------------------------------------------------------
 
 def create_core(oEditor, core_type,
@@ -244,49 +462,42 @@ def create_core(oEditor, core_type,
     print("EI Core  type={}".format(core_type))
     print("=" * 60)
 
-    h_leg   = Core_HF + 2.0 * Core_Bjr
-    z_bot_c = Core_Bjr / 2.0
-    z_top_c = Core_Bjr + Core_HF + Core_Bjr / 2.0
+    h_leg      = Core_HF + 2.0 * Core_Bjr
+    z_bot_c    = Core_Bjr / 2.0
+    z_top_c    = Core_Bjr + Core_HF + Core_Bjr / 2.0
 
-    layout            = get_leg_layout(core_type, Core_ES, Core_ESR)
-    yoke_x0, yoke_len = get_yoke_x_range(layout, Core_BS, Core_Bjr)
+    layout             = get_leg_layout(core_type, Core_ES, Core_ESR)
+    yoke_x0, yoke_len  = get_yoke_x_range(layout, Core_BS, Core_Bjr)
 
     print("Derived dims:")
     print("  leg  Z-height = {}mm".format(h_leg))
     print("  yoke Z-height = {}mm  (= Core_Bjr)".format(Core_Bjr))
-    print("  yoke X-range  = {}mm ~ {}mm  (len {}mm)".format(
+    print("  yoke X-range  = {:.1f}mm ~ {:.1f}mm  (len {:.1f}mm)".format(
         yoke_x0, yoke_x0 + yoke_len, yoke_len))
     print("Leg layout:")
     for x_c, is_main, label in layout:
         tag = "Main" if is_main else "Side"
         print("  {:8s} ({})  X = {:+.1f}mm".format(label, tag, x_c))
 
-    # -- Legs: ellipse in XY -> sweep Z ----------------------
+    # -- Legs -----------------------------------------------
     print("\n[Legs]")
     for x_c, is_main, label in layout:
-        rx   = Core_BS / 2.0 if is_main else Core_Bjr / 2.0
-        ry   = Core_SS / 2.0
         name = "Core_Leg_{}".format(label)
-        create_ellipse_xy(oEditor, x_c, 0.0, 0.0, rx, ry, name)
-        sweep_z(oEditor, name, h_leg)
-        assign_material(oEditor, name, mat_core)
+        if is_main:
+            create_main_leg(oEditor, x_c, Core_DS, Core_BS, Core_SS,
+                            h_leg, name, mat_core)
+        else:
+            create_side_leg(oEditor, x_c, Core_DS, Core_Bjr, Core_SS,
+                            h_leg, name, mat_core)
 
-    # -- Yokes: ellipse in YZ -> sweep X ---------------------
+    # -- Yokes ----------------------------------------------
     print("\n[Yokes]")
-
-    create_ellipse_yz(oEditor,
-                      yoke_x0, 0.0, z_bot_c,
-                      Core_SS / 2.0, Core_Bjr / 2.0,
-                      "Core_Yoke_Bot")
-    sweep_x(oEditor, "Core_Yoke_Bot", yoke_len)
-    assign_material(oEditor, "Core_Yoke_Bot", mat_core)
-
-    create_ellipse_yz(oEditor,
-                      yoke_x0, 0.0, z_top_c,
-                      Core_SS / 2.0, Core_Bjr / 2.0,
-                      "Core_Yoke_Top")
-    sweep_x(oEditor, "Core_Yoke_Top", yoke_len)
-    assign_material(oEditor, "Core_Yoke_Top", mat_core)
+    create_yoke(oEditor, yoke_x0, yoke_len,
+                Core_DS, Core_SS, Core_Bjr, z_bot_c,
+                "Core_Yoke_Bot", mat_core)
+    create_yoke(oEditor, yoke_x0, yoke_len,
+                Core_DS, Core_SS, Core_Bjr, z_top_c,
+                "Core_Yoke_Top", mat_core)
 
     oEditor.FitAll()
     print("\nDone.")
