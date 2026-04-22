@@ -3,9 +3,9 @@ Maxwell 3D - EI Transformer Core Auto-Modeling  (Stage 1)
 Supported core types: 1by2 / 2by2 / 3by0 / 3by2
 
 Coordinate system
-  X : leg array direction (toward side legs)
-  Y : core stack depth direction
-  Z : leg height direction (vertical)
+  X : core stack depth direction  (SS)
+  Y : leg array direction         (toward side legs)
+  Z : leg height direction        (vertical)
 
 Z reference
   Z = 0                    : bottom face of lower yoke
@@ -14,11 +14,12 @@ Z reference
   Z = 2*Core_Bjr + Core_HF : top face of upper yoke
 
 Cross-section geometry
-  All parts start from a circle of diameter Core_DS.
-  Flat faces are created by subtracting box-shaped clipping tools.
-  Main leg : DS circle clipped to BS(X) x SS(Y)
-  Side leg : DS circle clipped to Bjr(X) x SS(Y)
-  Yoke     : DS circle (in YZ plane) clipped to SS(Y) x Bjr(Z), swept in X
+  Main leg : DS circle clipped to SS(X) x BS(Y)
+  Side leg : ellipse [MajRadius=DS/2, minor=(Bjr+20)/2, WhichAxis=Z]
+             clipped to SS(X) x Bjr(Y)  -- MajRadius aligns with X (Maxwell default)
+  Yoke (N by 2): ellipse [MajRadius=DS/2, minor=(Bjr+20)/2, WhichAxis=Y]
+                 clipped to SS(X) x Bjr(Z), swept in Y
+  Yoke (3by0)  : DS circle [WhichAxis=Y] clipped to SS(X) x Bjr(Z), swept in Y
 """
 
 import ScriptEnv
@@ -93,6 +94,7 @@ def create_circle(oEditor, cx, cy, cz, r, which_axis, name, material="vacuum"):
     """
     Create a filled circle (disk).
     which_axis="Z" -> disk in XY plane
+    which_axis="Y" -> disk in XZ plane
     which_axis="X" -> disk in YZ plane
     """
     oEditor.CreateCircle(
@@ -112,7 +114,7 @@ def create_circle(oEditor, cx, cy, cz, r, which_axis, name, material="vacuum"):
 
 
 def create_box_tool(oEditor, x, y, z, dx, dy, dz, name):
-    """Create a box used as a subtract tool. Material left as default (vacuum)."""
+    """Create a box used as a subtract tool."""
     oEditor.CreateBox(
         [
             "NAME:BoxParameters",
@@ -164,8 +166,8 @@ def sweep_z(oEditor, name, dist):
     print("  SweepZ: {} {}mm".format(name, dist))
 
 
-def sweep_x(oEditor, name, dist):
-    """Sweep object along +X by dist [mm]."""
+def sweep_y(oEditor, name, dist):
+    """Sweep object along +Y by dist [mm]."""
     oEditor.SweepAlongVector(
         [
             "NAME:Selections",
@@ -177,12 +179,12 @@ def sweep_x(oEditor, name, dist):
             "DraftAngle:=",                "0deg",
             "DraftType:=",                 "Round",
             "CheckFaceFaceIntersection:=", False,
-            "SweepVectorX:=",              "{}mm".format(dist),
-            "SweepVectorY:=",              "0mm",
+            "SweepVectorX:=",              "0mm",
+            "SweepVectorY:=",              "{}mm".format(dist),
             "SweepVectorZ:=",              "0mm",
         ]
     )
-    print("  SweepX: {} {}mm".format(name, dist))
+    print("  SweepY: {} {}mm".format(name, dist))
 
 
 def rename_object(oEditor, old_name, new_name):
@@ -220,53 +222,50 @@ def assign_material(oEditor, name, material):
 
 
 # ---------------------------------------------------------
-# Clipping helpers (subtract flat faces from a swept cylinder)
+# Clipping helpers
 # ---------------------------------------------------------
 
-def _clip_x(oEditor, solid, x_center, x_size, DS, z_start, z_end):
+def _clip_x(oEditor, solid, x_center, x_size, DS, z_start, z_end,
+            y_start=None, y_end=None):
     """
-    Remove material outside +/- x_size/2 in X direction.
-    x_center : center X of the solid
-    x_size   : target width in X (BS or Bjr)
-    DS       : reference circle diameter (original extent in X)
+    Remove material outside x_center +/- x_size/2 in X direction.
+    x_size : target width in X (SS for legs; SS for yoke)
+    DS     : reference extent used to size clip box and calculate excess
+    y_start/y_end : Y extent of solid (for yoke swept in Y); defaults to DS-based estimate
     """
     if x_size >= DS:
         return
     m      = 2.0
-    big_y  = DS + 2.0 * m
+    if y_start is not None:
+        big_y = (y_end - y_start) + 2.0 * m
+        y0    = y_start - m
+    else:
+        big_y = DS + 2.0 * m
+        y0    = -big_y / 2.0
     big_z  = (z_end - z_start) + 2.0 * m
     excess = DS / 2.0 - x_size / 2.0
 
-    # Left clip
     n = _tmp()
     create_box_tool(oEditor,
-                    x_center - DS / 2.0 - m,   # x start (outside left edge)
-                    -big_y / 2.0,
-                    z_start - m,
-                    excess + m,                 # dx: covers excess + margin
-                    big_y,
-                    big_z,
-                    n)
+                    x_center - DS / 2.0 - m,
+                    y0, z_start - m,
+                    excess + m, big_y, big_z, n)
     subtract(oEditor, solid, [n])
 
-    # Right clip
     n = _tmp()
     create_box_tool(oEditor,
-                    x_center + x_size / 2.0,   # x start (right flat face)
-                    -big_y / 2.0,
-                    z_start - m,
-                    excess + m,
-                    big_y,
-                    big_z,
-                    n)
+                    x_center + x_size / 2.0,
+                    y0, z_start - m,
+                    excess + m, big_y, big_z, n)
     subtract(oEditor, solid, [n])
 
 
-def _clip_y(oEditor, solid, y_size, DS, x_start, x_end, z_start, z_end):
+def _clip_y(oEditor, solid, y_center, y_size, DS, x_start, x_end, z_start, z_end):
     """
-    Remove material outside +/- y_size/2 in Y direction (centered at Y=0).
-    y_size : target depth in Y (SS)
-    DS     : reference circle diameter (original extent in Y)
+    Remove material outside y_center +/- y_size/2 in Y direction.
+    y_center : center Y of the solid (leg position along Y)
+    y_size   : target width in Y (BS for main leg; Bjr for side leg)
+    DS       : reference extent used to size clip box and calculate excess
     """
     if y_size >= DS:
         return
@@ -275,67 +274,52 @@ def _clip_y(oEditor, solid, y_size, DS, x_start, x_end, z_start, z_end):
     big_z  = (z_end - z_start) + 2.0 * m
     excess = DS / 2.0 - y_size / 2.0
 
-    # Front clip (Y negative side)
     n = _tmp()
     create_box_tool(oEditor,
                     x_start - m,
-                    -DS / 2.0 - m,
+                    y_center - DS / 2.0 - m,
                     z_start - m,
-                    big_x,
-                    excess + m,
-                    big_z,
-                    n)
+                    big_x, excess + m, big_z, n)
     subtract(oEditor, solid, [n])
 
-    # Back clip (Y positive side)
     n = _tmp()
     create_box_tool(oEditor,
                     x_start - m,
-                    y_size / 2.0,
+                    y_center + y_size / 2.0,
                     z_start - m,
-                    big_x,
-                    excess + m,
-                    big_z,
-                    n)
+                    big_x, excess + m, big_z, n)
     subtract(oEditor, solid, [n])
 
 
-def _clip_z(oEditor, solid, z_center, z_size, DS, x_start, x_end):
+def _clip_z(oEditor, solid, z_center, z_size, DS, y_start, y_end):
     """
-    Remove material outside +/- z_size/2 of z_center in Z direction.
-    z_center : center Z of the yoke cross-section
+    Remove material outside z_center +/- z_size/2 in Z direction.
+    Used for yoke (swept in Y).
     z_size   : target height in Z (Bjr)
-    DS       : reference circle diameter (original extent in Z)
+    DS       : reference extent (used for X extent of clip box and excess calc)
+    y_start/y_end : Y span of the swept yoke solid
     """
     if z_size >= DS:
         return
     m      = 2.0
-    big_x  = (x_end - x_start) + 2.0 * m
-    big_y  = DS + 2.0 * m
+    big_x  = DS + 2.0 * m
+    big_y  = (y_end - y_start) + 2.0 * m
     excess = DS / 2.0 - z_size / 2.0
 
-    # Bottom clip
     n = _tmp()
     create_box_tool(oEditor,
-                    x_start - m,
-                    -big_y / 2.0,
+                    -big_x / 2.0,
+                    y_start - m,
                     z_center - DS / 2.0 - m,
-                    big_x,
-                    big_y,
-                    excess + m,
-                    n)
+                    big_x, big_y, excess + m, n)
     subtract(oEditor, solid, [n])
 
-    # Top clip
     n = _tmp()
     create_box_tool(oEditor,
-                    x_start - m,
-                    -big_y / 2.0,
+                    -big_x / 2.0,
+                    y_start - m,
                     z_center + z_size / 2.0,
-                    big_x,
-                    big_y,
-                    excess + m,
-                    n)
+                    big_x, big_y, excess + m, n)
     subtract(oEditor, solid, [n])
 
 
@@ -343,42 +327,42 @@ def _clip_z(oEditor, solid, z_center, z_size, DS, x_start, x_end):
 # Part creation
 # ---------------------------------------------------------
 
-def create_main_leg(oEditor, x_center, DS, BS, SS, h_leg, name, mat_core):
+def create_main_leg(oEditor, y_center, DS, BS, SS, h_leg, name, mat_core):
     """
-    Main (wound) leg: DS circle clipped to BS(X) x SS(Y), swept h_leg in Z.
-    Z base = 0.
+    Main (wound) leg: DS circle in XY plane clipped to SS(X) x BS(Y), swept Z.
+    Leg is positioned at Y = y_center.  Z base = 0.
     """
-    print("  [MainLeg] {}  x={:.1f}  DS={} BS={} SS={}  h={}".format(
-        name, x_center, DS, BS, SS, h_leg))
+    print("  [MainLeg] {}  y={:.1f}  DS={} SS={} BS={}  h={}".format(
+        name, y_center, DS, SS, BS, h_leg))
     tmp = name + "_c"
-    create_circle(oEditor, x_center, 0.0, 0.0, DS / 2.0, "Z", tmp)
+    create_circle(oEditor, 0.0, y_center, 0.0, DS / 2.0, "Z", tmp)
     sweep_z(oEditor, tmp, h_leg)
-    _clip_x(oEditor, tmp, x_center, BS, DS, 0.0, h_leg)
-    _clip_y(oEditor, tmp, SS, DS,
-            x_center - DS / 2.0, x_center + DS / 2.0,
+    _clip_x(oEditor, tmp, 0.0, SS, DS, 0.0, h_leg)
+    _clip_y(oEditor, tmp, y_center, BS, DS,
+            -DS / 2.0, DS / 2.0,
             0.0, h_leg)
     rename_object(oEditor, tmp, name)
     assign_material(oEditor, name, mat_core)
 
 
-def create_side_leg(oEditor, x_center, DS, Bjr, SS, h_leg, name, mat_core):
+def create_side_leg(oEditor, y_center, DS, Bjr, SS, h_leg, name, mat_core):
     """
-    Side (return) leg: ellipse swept h_leg in Z, then clipped to Bjr(X) x SS(Y).
-    Ellipse: MajRadius = DS/2 (long axis), minor semi = (Bjr+20)/2 (short axis).
-    Clip: long axis direction -> SS, short axis direction -> Bjr.
-    DS is used as clip reference extent in both directions (safe upper bound).
-    Z base = 0.
+    Side (return) leg: ellipse in XY plane clipped to SS(X) x Bjr(Y), swept Z.
+    Ellipse: MajRadius=DS/2 aligns with X (Maxwell default for WhichAxis=Z).
+             minor semi = (Bjr+20)/2 -> Y extent = Bjr+20 before clip.
+    No rotation needed: X = SS direction is the long-axis direction.
+    Leg is positioned at Y = y_center.  Z base = 0.
     """
-    Bjr_ext = Bjr + 20.0  # ellipse short-axis full diameter
-    print("  [SideLeg] {}  x={:.1f}  DS={} Bjr_ext={} Bjr={} SS={}  h={}".format(
-        name, x_center, DS, Bjr_ext, Bjr, SS, h_leg))
+    Bjr_ext = Bjr + 20.0
+    print("  [SideLeg] {}  y={:.1f}  DS={} SS={} Bjr_ext={} Bjr={}  h={}".format(
+        name, y_center, DS, SS, Bjr_ext, Bjr, h_leg))
     tmp = name + "_c"
     oEditor.CreateEllipse(
         [
             "NAME:EllipseParameters",
             "IsCovered:=",   True,
-            "XCenter:=",     "{}mm".format(x_center),
-            "YCenter:=",     "0mm",
+            "XCenter:=",     "0mm",
+            "YCenter:=",     "{}mm".format(y_center),
             "ZCenter:=",     "0mm",
             "MajRadius:=",   "{}mm".format(DS / 2.0),
             "Ratio:=",       "{}".format(Bjr_ext / DS),
@@ -387,67 +371,55 @@ def create_side_leg(oEditor, x_center, DS, Bjr, SS, h_leg, name, mat_core):
         ],
         _attr_block(tmp)
     )
-    # MajRadius aligns with X in Maxwell -> rotate 90deg around Z so long axis -> Y
-    oEditor.Rotate(
-        [
-            "NAME:Selections",
-            "Selections:=",        tmp,
-            "NewPartsModelFlag:=", "Model",
-        ],
-        [
-            "NAME:RotateParameters",
-            "RotateAxis:=",  "Z",
-            "RotateAngle:=", "90deg",
-        ]
-    )
     sweep_z(oEditor, tmp, h_leg)
-    _clip_y(oEditor, tmp, SS, DS,
-            x_center - DS / 2.0, x_center + DS / 2.0,
+    _clip_x(oEditor, tmp, 0.0, SS, DS, 0.0, h_leg)
+    _clip_y(oEditor, tmp, y_center, Bjr, DS,
+            -DS / 2.0, DS / 2.0,
             0.0, h_leg)
-    _clip_x(oEditor, tmp, x_center, Bjr, DS, 0.0, h_leg)
     rename_object(oEditor, tmp, name)
     assign_material(oEditor, name, mat_core)
 
 
-def create_yoke(oEditor, x_start, yoke_len, DS, SS, Bjr, z_center, name, mat_core,
+def create_yoke(oEditor, y_start, yoke_len, DS, SS, Bjr, z_center, name, mat_core,
                 Bjr_ext=None):
     """
-    Yoke swept in X direction.
-    N by 2 (Bjr_ext provided): ellipse cross-section matching side leg shape.
-      MajRadius=DS/2, minor semi=(Bjr+20)/2, WhichAxis=X.
-      Clip: Y->SS, Z->Bjr.  (DS used as safe clip reference in both directions.)
-    3by0 (Bjr_ext=None): DS circle clipped to SS(Y) x Bjr(Z).
+    Yoke swept in Y direction. Cross-section in XZ plane (WhichAxis=Y).
+    N by 2 (Bjr_ext provided): ellipse cross-section matching side leg.
+      MajRadius=DS/2 (assumed to align with X for WhichAxis=Y).
+      Clip: X->SS, Z->Bjr.
+    3by0 (Bjr_ext=None): DS circle clipped to SS(X) x Bjr(Z).
     z_center : vertical center of yoke cross-section.
+    If MajRadius aligns with Z instead of X for WhichAxis=Y, uncomment the rotation below.
     """
     use_ellipse = (Bjr_ext is not None)
-    print("  [Yoke] {}  x_start={:.1f} len={:.1f}  DS={} SS={} Bjr={}  z_center={:.1f}  ellipse={}".format(
-        name, x_start, yoke_len, DS, SS, Bjr, z_center, use_ellipse))
+    print("  [Yoke] {}  y_start={:.1f} len={:.1f}  DS={} SS={} Bjr={}  z_center={:.1f}  ellipse={}".format(
+        name, y_start, yoke_len, DS, SS, Bjr, z_center, use_ellipse))
     tmp = name + "_c"
     if use_ellipse:
         oEditor.CreateEllipse(
             [
                 "NAME:EllipseParameters",
                 "IsCovered:=",   True,
-                "XCenter:=",     "{}mm".format(x_start),
-                "YCenter:=",     "0mm",
+                "XCenter:=",     "0mm",
+                "YCenter:=",     "{}mm".format(y_start),
                 "ZCenter:=",     "{}mm".format(z_center),
                 "MajRadius:=",   "{}mm".format(DS / 2.0),
                 "Ratio:=",       "{}".format(Bjr_ext / DS),
-                "WhichAxis:=",   "X",
+                "WhichAxis:=",   "Y",
                 "NumSegments:=", "0",
             ],
             _attr_block(tmp)
         )
-        # If MajRadius aligns with Z for WhichAxis=X (needs rotation), add:
+        # If MajRadius aligns with Z for WhichAxis=Y (axis orientation check needed), add:
         # oEditor.Rotate(["NAME:Selections","Selections:=",tmp,"NewPartsModelFlag:=","Model"],
-        #                ["NAME:RotateParameters","RotateAxis:=","X","RotateAngle:=","90deg"])
+        #                ["NAME:RotateParameters","RotateAxis:=","Y","RotateAngle:=","90deg"])
     else:
-        create_circle(oEditor, x_start, 0.0, z_center, DS / 2.0, "X", tmp)
-    sweep_x(oEditor, tmp, yoke_len)
-    _clip_y(oEditor, tmp, SS, DS,
-            x_start, x_start + yoke_len,
-            z_center - DS / 2.0, z_center + DS / 2.0)
-    _clip_z(oEditor, tmp, z_center, Bjr, DS, x_start, x_start + yoke_len)
+        create_circle(oEditor, 0.0, y_start, z_center, DS / 2.0, "Y", tmp)
+    sweep_y(oEditor, tmp, yoke_len)
+    _clip_x(oEditor, tmp, 0.0, SS, DS,
+            z_center - DS / 2.0, z_center + DS / 2.0,
+            y_start, y_start + yoke_len)
+    _clip_z(oEditor, tmp, z_center, Bjr, DS, y_start, y_start + yoke_len)
     rename_object(oEditor, tmp, name)
     assign_material(oEditor, name, mat_core)
 
@@ -458,7 +430,8 @@ def create_yoke(oEditor, x_start, yoke_len, DS, SS, Bjr, z_center, name, mat_cor
 
 def get_leg_layout(core_type, Core_ES, Core_ESR):
     """
-    Return list of (x_center, is_main, label) for each leg.
+    Return list of (y_center, is_main, label) for each leg.
+    Positions are along the Y axis (leg array direction).
     Core_ES  : main-to-main center-to-center spacing
     Core_ESR : outermost-main to side-leg center-to-center spacing
     """
@@ -494,15 +467,15 @@ def get_leg_layout(core_type, Core_ES, Core_ESR):
         raise ValueError("Unsupported core type: {}".format(core_type))
 
 
-def get_yoke_x_range(layout, Core_BS, Core_Bjr):
-    """Return (x_start, length) of yoke spanning outer edges of all legs."""
-    x_l,  is_main_l = layout[0][0],  layout[0][1]
-    x_r,  is_main_r = layout[-1][0], layout[-1][1]
+def get_yoke_y_range(layout, Core_BS, Core_Bjr):
+    """Return (y_start, length) of yoke spanning outer edges of all legs in Y."""
+    y_l, is_main_l = layout[0][0],  layout[0][1]
+    y_r, is_main_r = layout[-1][0], layout[-1][1]
     r_l = Core_BS / 2.0 if is_main_l else Core_Bjr / 2.0
     r_r = Core_BS / 2.0 if is_main_r else Core_Bjr / 2.0
-    x_start = x_l - r_l
-    x_end   = x_r + r_r
-    return x_start, x_end - x_start
+    y_start = y_l - r_l
+    y_end   = y_r + r_r
+    return y_start, y_end - y_start
 
 
 # ---------------------------------------------------------
@@ -517,41 +490,41 @@ def create_core(oEditor, core_type,
     print("EI Core  type={}".format(core_type))
     print("=" * 60)
 
-    h_leg      = Core_HF + 2.0 * Core_Bjr
-    z_bot_c    = Core_Bjr / 2.0
-    z_top_c    = Core_Bjr + Core_HF + Core_Bjr / 2.0
+    h_leg   = Core_HF + 2.0 * Core_Bjr
+    z_bot_c = Core_Bjr / 2.0
+    z_top_c = Core_Bjr + Core_HF + Core_Bjr / 2.0
 
     layout             = get_leg_layout(core_type, Core_ES, Core_ESR)
-    yoke_x0, yoke_len  = get_yoke_x_range(layout, Core_BS, Core_Bjr)
+    yoke_y0, yoke_len  = get_yoke_y_range(layout, Core_BS, Core_Bjr)
 
     print("Derived dims:")
     print("  leg  Z-height = {}mm".format(h_leg))
     print("  yoke Z-height = {}mm  (= Core_Bjr)".format(Core_Bjr))
-    print("  yoke X-range  = {:.1f}mm ~ {:.1f}mm  (len {:.1f}mm)".format(
-        yoke_x0, yoke_x0 + yoke_len, yoke_len))
-    print("Leg layout:")
-    for x_c, is_main, label in layout:
+    print("  yoke Y-range  = {:.1f}mm ~ {:.1f}mm  (len {:.1f}mm)".format(
+        yoke_y0, yoke_y0 + yoke_len, yoke_len))
+    print("Leg layout (Y axis):")
+    for y_c, is_main, label in layout:
         tag = "Main" if is_main else "Side"
-        print("  {:8s} ({})  X = {:+.1f}mm".format(label, tag, x_c))
+        print("  {:8s} ({})  Y = {:+.1f}mm".format(label, tag, y_c))
 
     # -- Legs -----------------------------------------------
     print("\n[Legs]")
-    for x_c, is_main, label in layout:
+    for y_c, is_main, label in layout:
         name = "Core_Leg_{}".format(label)
         if is_main:
-            create_main_leg(oEditor, x_c, Core_DS, Core_BS, Core_SS,
+            create_main_leg(oEditor, y_c, Core_DS, Core_BS, Core_SS,
                             h_leg, name, mat_core)
         else:
-            create_side_leg(oEditor, x_c, Core_DS, Core_Bjr, Core_SS,
+            create_side_leg(oEditor, y_c, Core_DS, Core_Bjr, Core_SS,
                             h_leg, name, mat_core)
 
     # -- Yokes ----------------------------------------------
     print("\n[Yokes]")
     yoke_Bjr_ext = (Core_Bjr + 20.0) if core_type in ("1by2", "2by2", "3by2") else None
-    create_yoke(oEditor, yoke_x0, yoke_len,
+    create_yoke(oEditor, yoke_y0, yoke_len,
                 Core_DS, Core_SS, Core_Bjr, z_bot_c,
                 "Core_Yoke_Bot", mat_core, Bjr_ext=yoke_Bjr_ext)
-    create_yoke(oEditor, yoke_x0, yoke_len,
+    create_yoke(oEditor, yoke_y0, yoke_len,
                 Core_DS, Core_SS, Core_Bjr, z_top_c,
                 "Core_Yoke_Top", mat_core, Bjr_ext=yoke_Bjr_ext)
 
