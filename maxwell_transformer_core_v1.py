@@ -363,18 +363,35 @@ def create_main_leg(oEditor, x_center, DS, BS, SS, h_leg, name, mat_core):
 
 def create_side_leg(oEditor, x_center, DS, Bjr, SS, h_leg, name, mat_core):
     """
-    Side (return) leg: DS circle clipped to Bjr(X) x SS(Y), swept h_leg in Z.
+    Side (return) leg: ellipse swept h_leg in Z, then clipped to Bjr(X) x SS(Y).
+    Ellipse: MajRadius = DS/2 (long axis), minor semi = (Bjr+20)/2 (short axis).
+    Clip: long axis direction -> SS, short axis direction -> Bjr.
+    DS is used as clip reference extent in both directions (safe upper bound).
     Z base = 0.
     """
-    print("  [SideLeg] {}  x={:.1f}  DS={} Bjr={} SS={}  h={}".format(
-        name, x_center, DS, Bjr, SS, h_leg))
+    Bjr_ext = Bjr + 20.0  # ellipse short-axis full diameter
+    print("  [SideLeg] {}  x={:.1f}  DS={} Bjr_ext={} Bjr={} SS={}  h={}".format(
+        name, x_center, DS, Bjr_ext, Bjr, SS, h_leg))
     tmp = name + "_c"
-    create_circle(oEditor, x_center, 0.0, 0.0, DS / 2.0, "Z", tmp)
+    oEditor.CreateEllipse(
+        [
+            "NAME:EllipseParameters",
+            "IsCovered:=",   True,
+            "XCenter:=",     "{}mm".format(x_center),
+            "YCenter:=",     "0mm",
+            "ZCenter:=",     "0mm",
+            "MajRadius:=",   "{}mm".format(DS / 2.0),
+            "Ratio:=",       "{}".format(Bjr_ext / DS),
+            "WhichAxis:=",   "Z",
+            "NumSegments:=", "0",
+        ],
+        _attr_block(tmp)
+    )
     sweep_z(oEditor, tmp, h_leg)
-    _clip_x(oEditor, tmp, x_center, Bjr, DS, 0.0, h_leg)
     _clip_y(oEditor, tmp, SS, DS,
             x_center - DS / 2.0, x_center + DS / 2.0,
             0.0, h_leg)
+    _clip_x(oEditor, tmp, x_center, Bjr, DS, 0.0, h_leg)
     rename_object(oEditor, tmp, name)
     assign_material(oEditor, name, mat_core)
 
