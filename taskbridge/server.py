@@ -200,6 +200,19 @@ class TaskBridgeHandler(BaseHTTPRequestHandler):
         code  = qs.get("code",  [""])[0]
         state = qs.get("state", [""])[0]
         error = qs.get("error", [""])[0]
+
+        # 모바일 앱에서 온 요청 (state에 "mobile_" 접두사)
+        if state.startswith("mobile_"):
+            real_state = state[len("mobile_"):]
+            if error:
+                self._serve_deep_link_redirect(f"taskbridge://auth/todoist?error={error}")
+            elif not code:
+                self._serve_deep_link_redirect("taskbridge://auth/todoist?error=missing_code")
+            else:
+                self._serve_deep_link_redirect(f"taskbridge://auth/todoist?code={code}&state={real_state}")
+            return
+
+        # 웹 앱 플로우
         if error:
             _redirect(self, "/?error=todoist_denied")
             return

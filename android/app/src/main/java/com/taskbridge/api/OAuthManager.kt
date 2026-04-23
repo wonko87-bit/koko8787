@@ -18,7 +18,7 @@ object OAuthManager {
     val TODOIST_CLIENT_SECRET get() = com.taskbridge.BuildConfig.TODOIST_CLIENT_SECRET
 
     const val GOOGLE_REDIRECT_URI  = "https://koko8787-production.up.railway.app/auth/mobile/google/callback"
-    const val TODOIST_REDIRECT_URI = "https://koko8787-production.up.railway.app/auth/mobile/todoist/callback"
+    const val TODOIST_REDIRECT_URI = "https://koko8787-production.up.railway.app/auth/todoist/callback"
 
     private val GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events"
 
@@ -39,9 +39,10 @@ object OAuthManager {
     // ---- Todoist 인증 URL 생성 ----
     fun todoistAuthUrl(state: String): String =
         Uri.parse("https://todoist.com/oauth/authorize").buildUpon()
-            .appendQueryParameter("client_id", TODOIST_CLIENT_ID)
-            .appendQueryParameter("scope",     "task:add,data:read_write")
-            .appendQueryParameter("state",     state)
+            .appendQueryParameter("client_id",    TODOIST_CLIENT_ID)
+            .appendQueryParameter("scope",        "task:add,data:read_write")
+            .appendQueryParameter("redirect_uri", TODOIST_REDIRECT_URI)
+            .appendQueryParameter("state",        "mobile_$state")
             .build().toString()
 
     // ---- Google 코드 교환 ----
