@@ -94,7 +94,8 @@ def _base_url(handler: "TaskBridgeHandler") -> str:
 
 
 def _set_session_cookie(sid: str) -> tuple[str, str]:
-    return ("Set-Cookie", f"{SESSION_COOKIE}={sid}; Path=/; HttpOnly; SameSite=Lax")
+    max_age = 30 * 24 * 60 * 60  # 30일
+    return ("Set-Cookie", f"{SESSION_COOKIE}={sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age}")
 
 
 # -----------------------------------------------------------------

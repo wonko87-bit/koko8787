@@ -12,16 +12,36 @@ import os
 import secrets
 import time
 import requests
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlencode
 
 
 # -----------------------------------------------------------------
-# In-memory stores
+# Persistent session store (파일 기반)
 # -----------------------------------------------------------------
 
-_sessions: dict[str, dict] = {}   # session_id → { google_token, todoist_token, ... }
-_states:   dict[str, str]  = {}   # oauth state → session_id
+_STORE_PATH = Path(os.environ.get("SESSION_STORE", "/tmp/tb_sessions.json"))
+_states: dict[str, str] = {}   # oauth state → session_id (메모리만, 수명 짧음)
+
+
+def _load_sessions() -> dict:
+    try:
+        if _STORE_PATH.exists():
+            return json.loads(_STORE_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_sessions(sessions: dict) -> None:
+    try:
+        _STORE_PATH.write_text(json.dumps(sessions))
+    except Exception:
+        pass
+
+
+_sessions: dict[str, dict] = _load_sessions()
 
 
 # -----------------------------------------------------------------
@@ -43,6 +63,7 @@ def set_token(sid: str, provider: str, token_data: dict) -> None:
         _sessions[sid] = {}
     _sessions[sid][f"{provider}_token"] = token_data
     _sessions[sid][f"{provider}_token_expiry"] = time.time() + token_data.get("expires_in", 3600)
+    _save_sessions(_sessions)
 
 
 def get_access_token(sid: str, provider: str) -> Optional[str]:
