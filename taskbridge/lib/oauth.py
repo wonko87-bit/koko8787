@@ -122,12 +122,13 @@ TODOIST_SCOPES    = "task:add,data:read_write"
 
 
 def todoist_auth_url(callback_base: str, session_id: str) -> str:
-    state = secrets.token_urlsafe(16)
+    state = "web_" + secrets.token_urlsafe(16)
     _states[state] = session_id
     params = {
-        "client_id":     os.environ["TODOIST_CLIENT_ID"],
-        "scope":         TODOIST_SCOPES,
-        "state":         state,
+        "client_id":    os.environ["TODOIST_CLIENT_ID"],
+        "scope":        TODOIST_SCOPES,
+        "redirect_uri": f"{callback_base}/auth/mobile/todoist/callback",
+        "state":        state,
     }
     return f"{TODOIST_AUTH_URL}?{urlencode(params)}"
 

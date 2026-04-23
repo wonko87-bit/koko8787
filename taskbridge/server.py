@@ -241,13 +241,29 @@ class TaskBridgeHandler(BaseHTTPRequestHandler):
         code  = qs.get("code",  [""])[0]
         state = qs.get("state", [""])[0]
         error = qs.get("error", [""])[0]
-        if error:
-            deep_link = f"taskbridge://auth/todoist?error={error}"
-        elif not code:
-            deep_link = "taskbridge://auth/todoist?error=missing_code"
+
+        if state.startswith("web_"):
+            # 웹 앱 플로우
+            if error:
+                _redirect(self, "/?error=todoist_denied")
+                return
+            if not code or not state:
+                self._error(400, "Missing code or state")
+                return
+            sid = oauth.todoist_exchange_code(code, state)
+            if not sid:
+                self._error(400, "Invalid OAuth state")
+                return
+            _redirect(self, "/?connected=todoist", [_set_session_cookie(sid)])
         else:
-            deep_link = f"taskbridge://auth/todoist?code={code}&state={state}"
-        self._serve_deep_link_redirect(deep_link)
+            # 모바일 앱 플로우 → deep link
+            if error:
+                deep_link = f"taskbridge://auth/todoist?error={error}"
+            elif not code:
+                deep_link = "taskbridge://auth/todoist?error=missing_code"
+            else:
+                deep_link = f"taskbridge://auth/todoist?code={code}&state={state}"
+            self._serve_deep_link_redirect(deep_link)
 
     def _serve_deep_link_redirect(self, deep_link: str):
         html = f"""<!DOCTYPE html>
