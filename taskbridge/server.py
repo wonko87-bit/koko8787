@@ -334,14 +334,28 @@ class TaskBridgeHandler(BaseHTTPRequestHandler):
                 errors.append("Google Calendar 연결이 필요합니다.")
             else:
                 g_token = oauth.get_access_token(sid, "google")
-                try:
-                    event = create_event(g_token, content)
-                    results["calendar"] = {
-                        "id":      event.get("id"),
-                        "htmlLink": event.get("htmlLink"),
-                    }
-                except Exception as e:
-                    errors.append(f"Google Calendar 저장 실패: {e}")
+                if not g_token:
+                    # 토큰 만료 → 세션에서 Google 토큰 제거해서 재연결 유도
+                    sess = oauth._sessions.get(sid, {})
+                    sess.pop("google_token", None)
+                    sess.pop("google_token_expiry", None)
+                    errors.append("Google 토큰이 만료되었습니다. Google Calendar를 다시 연결해주세요.")
+                else:
+                    try:
+                        event = create_event(g_token, content)
+                        results["calendar"] = {
+                            "id":      event.get("id"),
+                            "htmlLink": event.get("htmlLink"),
+                        }
+                    except Exception as e:
+                        err_str = str(e)
+                        if "401" in err_str or "403" in err_str:
+                            sess = oauth._sessions.get(sid, {})
+                            sess.pop("google_token", None)
+                            sess.pop("google_token_expiry", None)
+                            errors.append("Google 인증이 만료되었습니다. Google Calendar를 다시 연결해주세요.")
+                        else:
+                            errors.append(f"Google Calendar 저장 실패: {e}")
 
         if errors and not results:
             _json(self, 400, {"error": " / ".join(errors)}, [_set_session_cookie(sid)])

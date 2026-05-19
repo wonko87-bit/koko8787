@@ -194,5 +194,6 @@ def _refresh_token(provider: str, refresh_token: Optional[str]) -> Optional[dict
             data = resp.json()
             data.setdefault("refresh_token", refresh_token)
             return data
+        print(f"[Token refresh failed] status={resp.status_code} body={resp.text}")
 
     return None
