@@ -1,36 +1,38 @@
 """
-CSV to AutoCAD Mechanical - Shape Drawing Script
-=================================================
+CSV to AutoCAD Mechanical - Rectangle & Arc Drawing Script
+===========================================================
 
-Reads shape data from a CSV file and draws them in AutoCAD Mechanical
-via COM automation (win32com).
+AutoCAD Mechanical이 열린 상태에서 실행하면 CSV 데이터를 읽어
+모델 공간에 직사각형과 원호를 그립니다.
 
-CSV Format (header row required):
-  shape, x, y, width, height, radius, layer, color
+[CSV 컬럼 설명]
+  공통
+    shape   : RECTANGLE | ARC
+    layer   : 레이어 이름 (없으면 "0")
+    color   : AutoCAD 색상 인덱스 1~256 (0 = BYLAYER)
 
-  shape   : LINE | CIRCLE | RECTANGLE | POLYLINE
-  x, y    : insertion point (drawing units)
-  width   : width  (RECTANGLE / LINE endpoint-X offset)
-  height  : height (RECTANGLE / LINE endpoint-Y offset)
-  radius  : radius (CIRCLE)
-  layer   : target layer name (created if missing)
-  color   : AutoCAD color index 0-256 (0 = BYLAYER)
+  RECTANGLE 전용
+    x, y    : 사각형 기준점 (중심 or 좌하단 — origin 컬럼으로 선택)
+    origin  : CENTER(기본) | CORNER  — x,y 기준점 의미
+    width   : 가로 길이
+    height  : 세로 길이
+    angle   : 회전각도 (도, 반시계 방향 기준, 기본 0)
 
-Example CSV rows:
-  CIRCLE,100,100,,,50,CENTER,1
-  RECTANGLE,200,200,80,40,,WALLS,2
-  LINE,0,0,150,150,,,3
+  ARC 전용
+    x, y        : 원호 중심점
+    radius      : 반지름
+    start_angle : 시작각 (도, 3시 방향 = 0, 반시계 방향)
+    end_angle   : 끝각   (도)
 
-Usage (run from Windows with AutoCAD Mechanical open):
-  python csv_to_autocad.py shapes.csv
-
-Requirements:
+[실행]
   pip install pywin32
+  python csv_to_autocad.py shapes.csv
 """
 
 import csv
-import sys
+import math
 import os
+import sys
 import traceback
 
 try:
@@ -42,206 +44,207 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Utilities
 # ---------------------------------------------------------------------------
 
-def _float(val, default=0.0):
-    """Convert string to float safely."""
+def _f(row, key, default=0.0):
+    val = row.get(key, "").strip()
     try:
-        return float(val) if val.strip() != "" else default
-    except (ValueError, AttributeError):
+        return float(val) if val else default
+    except ValueError:
         return default
 
 
-def _int(val, default=0):
+def _i(row, key, default=0):
+    val = row.get(key, "").strip()
     try:
-        return int(val) if val.strip() != "" else default
-    except (ValueError, AttributeError):
+        return int(val) if val else default
+    except ValueError:
         return default
 
 
-def point(x, y, z=0.0):
-    """Return a VARIANT array for an AutoCAD point."""
-    import win32com.client as wcc
-    pt = wcc.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, (x, y, z))
-    return pt
-
-
-def ensure_layer(doc, layer_name, color_index=7):
-    """Create layer if it does not exist, then return it."""
-    try:
-        return doc.Layers.Item(layer_name)
-    except Exception:
-        layer = doc.Layers.Add(layer_name)
-        layer.color = color_index
-        return layer
-
-
-# ---------------------------------------------------------------------------
-# Shape drawing functions
-# ---------------------------------------------------------------------------
-
-def draw_circle(mspace, row):
-    center = point(_float(row["x"]), _float(row["y"]))
-    radius = _float(row.get("radius", 0))
-    if radius <= 0:
-        print(f"  [SKIP] CIRCLE at ({row['x']},{row['y']}) has radius <= 0")
-        return None
-    obj = mspace.AddCircle(center, radius)
-    return obj
-
-
-def draw_rectangle(mspace, row):
-    x, y = _float(row["x"]), _float(row["y"])
-    w, h = _float(row.get("width", 0)), _float(row.get("height", 0))
-    if w == 0 or h == 0:
-        print(f"  [SKIP] RECTANGLE at ({x},{y}) has zero width/height")
-        return None
-    import win32com.client as wcc
-    pts = wcc.VARIANT(
-        pythoncom.VT_ARRAY | pythoncom.VT_R8,
-        (x, y, 0,
-         x + w, y, 0,
-         x + w, y + h, 0,
-         x, y + h, 0,
-         x, y, 0),
+def _pt(x, y, z=0.0):
+    """VARIANT 3D point (win32com용)."""
+    return win32com.client.VARIANT(
+        pythoncom.VT_ARRAY | pythoncom.VT_R8, (float(x), float(y), float(z))
     )
-    obj = mspace.AddLightWeightPolyline(pts)
-    obj.Closed = True
+
+
+def _deg2rad(deg):
+    return math.radians(deg)
+
+
+def ensure_layer(doc, name):
+    if not name or name == "0":
+        return
+    try:
+        doc.Layers.Item(name)
+    except Exception:
+        doc.Layers.Add(name)
+
+
+def apply_props(obj, row):
+    """레이어·색상 공통 적용."""
+    layer = row.get("layer", "").strip() or "0"
+    obj.Layer = layer
+    color = _i(row, "color", 0)
+    if color:
+        obj.color = color
+
+
+# ---------------------------------------------------------------------------
+# RECTANGLE
+# ---------------------------------------------------------------------------
+
+def _rotate_point(cx, cy, px, py, rad):
+    """점 (px,py)을 중심 (cx,cy) 기준으로 rad 라디안 회전."""
+    dx, dy = px - cx, py - cy
+    rx = cx + dx * math.cos(rad) - dy * math.sin(rad)
+    ry = cy + dx * math.sin(rad) + dy * math.cos(rad)
+    return rx, ry
+
+
+def draw_rectangle(mspace, doc, row):
+    x, y   = _f(row, "x"),      _f(row, "y")
+    w, h   = _f(row, "width"),  _f(row, "height")
+    angle  = _f(row, "angle",  0.0)
+    origin = row.get("origin", "CENTER").strip().upper()
+
+    if w <= 0 or h <= 0:
+        raise ValueError(f"width={w}, height={h} 모두 양수여야 합니다.")
+
+    # 기준점에 따라 좌하단 코너 계산
+    if origin == "CORNER":
+        cx, cy = x + w / 2, y + h / 2   # 중심
+        corners = [
+            (x,     y),
+            (x + w, y),
+            (x + w, y + h),
+            (x,     y + h),
+        ]
+    else:  # CENTER (기본)
+        cx, cy = x, y
+        corners = [
+            (x - w / 2, y - h / 2),
+            (x + w / 2, y - h / 2),
+            (x + w / 2, y + h / 2),
+            (x - w / 2, y + h / 2),
+        ]
+
+    # 각도 회전 적용
+    rad = _deg2rad(angle)
+    rotated = [_rotate_point(cx, cy, px, py, rad) for px, py in corners]
+
+    # 닫힌 폴리라인 (5점, 마지막 = 첫점)
+    pts_flat = []
+    for px, py in rotated:
+        pts_flat += [px, py, 0.0]
+    # 닫기: 시작점 반복
+    pts_flat += list(rotated[0]) + [0.0]
+
+    pts_var = win32com.client.VARIANT(
+        pythoncom.VT_ARRAY | pythoncom.VT_R8, pts_flat
+    )
+    obj = mspace.Add3DPoly(pts_var)   # 3D Polyline (각도 회전 후)
+
+    # 닫힌 것처럼 보이게 마지막 선분은 이미 포함됨 (시작점 반복)
+    apply_props(obj, row)
     return obj
 
 
-def draw_line(mspace, row):
-    x1, y1 = _float(row["x"]), _float(row["y"])
-    x2 = x1 + _float(row.get("width", 0))
-    y2 = y1 + _float(row.get("height", 0))
-    obj = mspace.AddLine(point(x1, y1), point(x2, y2))
+# ---------------------------------------------------------------------------
+# ARC
+# ---------------------------------------------------------------------------
+
+def draw_arc(mspace, doc, row):
+    x, y        = _f(row, "x"),           _f(row, "y")
+    radius      = _f(row, "radius",       0.0)
+    start_angle = _f(row, "start_angle",  0.0)
+    end_angle   = _f(row, "end_angle",    90.0)
+
+    if radius <= 0:
+        raise ValueError(f"radius={radius} 는 양수여야 합니다.")
+
+    center = _pt(x, y)
+    obj = mspace.AddArc(
+        center,
+        radius,
+        _deg2rad(start_angle),
+        _deg2rad(end_angle),
+    )
+    apply_props(obj, row)
     return obj
 
 
-def draw_polyline(mspace, row):
-    """
-    POLYLINE shape reads extra columns pts_x and pts_y as
-    semicolon-separated coordinate lists.
-    e.g.  pts_x = "0;50;100;150"   pts_y = "0;30;0;30"
-    """
-    raw_x = row.get("pts_x", "")
-    raw_y = row.get("pts_y", "")
-    xs = [_float(v) for v in raw_x.split(";") if v.strip()]
-    ys = [_float(v) for v in raw_y.split(";") if v.strip()]
-    if len(xs) < 2 or len(xs) != len(ys):
-        print(f"  [SKIP] POLYLINE: need matching pts_x / pts_y with >=2 points")
-        return None
-    import win32com.client as wcc
-    flat = []
-    for xi, yi in zip(xs, ys):
-        flat += [xi, yi, 0.0]
-    pts = wcc.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, flat)
-    obj = mspace.AddLightWeightPolyline(pts)
-    return obj
+# ---------------------------------------------------------------------------
+# CSV reader & main
+# ---------------------------------------------------------------------------
 
-
-SHAPE_HANDLERS = {
-    "CIRCLE":    draw_circle,
+HANDLERS = {
     "RECTANGLE": draw_rectangle,
-    "LINE":      draw_line,
-    "POLYLINE":  draw_polyline,
+    "ARC":       draw_arc,
 }
 
 
-# ---------------------------------------------------------------------------
-# CSV reader
-# ---------------------------------------------------------------------------
-
-def read_csv(filepath):
-    """Return list of row dicts with lowercased keys."""
-    rows = []
-    with open(filepath, newline="", encoding="utf-8-sig") as f:
+def read_csv(path):
+    with open(path, newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
-        for row in reader:
-            rows.append({k.strip().lower(): v.strip() for k, v in row.items()})
-    return rows
+        return [{k.strip().lower(): v.strip() for k, v in row.items()}
+                for row in reader]
 
-
-# ---------------------------------------------------------------------------
-# Main driver
-# ---------------------------------------------------------------------------
 
 def draw_from_csv(csv_path):
     if not HAS_WIN32:
-        print("ERROR: pywin32 is not installed. Run:  pip install pywin32")
-        sys.exit(1)
-
-    if not os.path.isfile(csv_path):
-        print(f"ERROR: CSV file not found: {csv_path}")
+        print("ERROR: pywin32 없음 →  pip install pywin32")
         sys.exit(1)
 
     rows = read_csv(csv_path)
-    print(f"Loaded {len(rows)} row(s) from '{csv_path}'")
+    print(f"CSV 로드: {len(rows)}행  ({csv_path})")
 
-    # Connect to running AutoCAD Mechanical instance
     try:
         acad = win32com.client.GetActiveObject("AutoCAD.Application")
     except Exception:
-        print("ERROR: AutoCAD Mechanical is not running or COM registration failed.")
+        print("ERROR: AutoCAD Mechanical이 실행 중이지 않습니다.")
         sys.exit(1)
 
-    doc = acad.ActiveDocument
-    mspace = doc.ModelSpace
-    print(f"Connected to: {doc.Name}")
+    doc     = acad.ActiveDocument
+    mspace  = doc.ModelSpace
+    print(f"연결됨: {doc.Name}\n")
 
-    drawn = 0
-    skipped = 0
+    ok = err = skip = 0
 
-    for i, row in enumerate(rows, start=1):
+    for i, row in enumerate(rows, 1):
         shape = row.get("shape", "").upper()
         if not shape:
-            print(f"  [SKIP] Row {i}: missing 'shape' column")
-            skipped += 1
+            print(f"  [{i:03d}] SKIP — shape 컬럼 없음")
+            skip += 1
             continue
 
-        handler = SHAPE_HANDLERS.get(shape)
+        handler = HANDLERS.get(shape)
         if handler is None:
-            print(f"  [SKIP] Row {i}: unknown shape '{shape}'")
-            skipped += 1
+            print(f"  [{i:03d}] SKIP — 지원하지 않는 도형: '{shape}'")
+            skip += 1
             continue
+
+        layer = row.get("layer", "0") or "0"
+        ensure_layer(doc, layer)
 
         try:
-            obj = handler(mspace, row)
-            if obj is None:
-                skipped += 1
-                continue
-
-            # Apply layer
-            layer_name = row.get("layer", "").strip() or "0"
-            ensure_layer(doc, layer_name)
-            obj.Layer = layer_name
-
-            # Apply color
-            color_idx = _int(row.get("color", "0"))
-            if color_idx != 0:
-                obj.color = color_idx
-
-            print(f"  [OK]   Row {i}: {shape} on layer '{layer_name}'")
-            drawn += 1
-
-        except Exception as exc:
-            print(f"  [ERR]  Row {i}: {exc}")
+            obj = handler(mspace, doc, row)
+            print(f"  [{i:03d}] OK    {shape:12s}  layer={layer}")
+            ok += 1
+        except Exception as e:
+            print(f"  [{i:03d}] ERROR {shape:12s}  {e}")
             traceback.print_exc()
-            skipped += 1
+            err += 1
 
-    doc.Regen(1)  # acRegen = 1
-    print(f"\nDone. Drawn: {drawn}  Skipped/Errors: {skipped}")
+    doc.Regen(1)
+    print(f"\n완료 — 성공: {ok}  오류: {err}  스킵: {skip}")
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python csv_to_autocad.py <path_to_csv>")
-        print("\nExample: python csv_to_autocad.py shapes.csv")
+        print("사용법:  python csv_to_autocad.py <CSV파일>")
+        print("예시:    python csv_to_autocad.py shapes.csv")
         sys.exit(0)
-
     draw_from_csv(sys.argv[1])
