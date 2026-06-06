@@ -1,14 +1,15 @@
 """
-CSV to AutoCAD Mechanical - Rectangle / Arc / Slot Drawing Script
-==================================================================
+CSV to AutoCAD Mechanical - Rectangle / Arc / Slot / Sector Drawing Script
+===========================================================================
 
 [지원 도형]
   RECTANGLE  직사각형 (회전 각도 지원)
   ARC        원호     (시계/반시계 방향 지원)
   SLOT       장공     (직사각형 양 끝에 반원이 붙은 형태)
+  SECTOR     링 섹터  (원호 양 끝에 직사각형 막대가 붙은 형태)
 
 [공통 컬럼]
-  shape      : RECTANGLE | ARC | SLOT
+  shape      : RECTANGLE | ARC | SLOT | SECTOR
   layer      : 레이어 이름 (기본 "0")
   color      : AutoCAD 색상 인덱스 1-256  (0 = BYLAYER)
 
@@ -29,17 +30,33 @@ CSV to AutoCAD Mechanical - Rectangle / Arc / Slot Drawing Script
 [SLOT 컬럼]
   x, y       : 기준점
   origin     : CORNER(기본) | CENTER
-  width      : 전체 길이  (긴 방향)
-  height     : 전체 폭    (짧은 방향, 반원 지름)
+  width      : 전체 길이 (긴 방향)
+  height     : 전체 폭   (짧은 방향, 반원 지름)
   angle      : 회전각 (도)
-  ※ 반원 반지름 = height / 2, 직선부 길이 = width - height
 
-  내부 구조:
-    ┌──────── width ────────┐
-    │   ╭──────────────╮   │ ← 상단 직선
-    │  (  직선부 길이    )  │ ← 양쪽 반원 (radius = height/2)
-    │   ╰──────────────╯   │ ← 하단 직선
-    height
+[SECTOR 컬럼]
+  x, y        : 중심점 (호의 중심)
+  r_inner     : 안쪽 반지름 (막대의 안쪽 끝)
+  r_outer     : 바깥쪽 반지름 (호의 반지름)
+  start_angle : 시작각 (도)  — 이쪽 막대가 해당 방향으로 뻗어나감
+  end_angle   : 끝각   (도)  — 이쪽 막대가 해당 방향으로 뻗어나감
+  direction   : CCW(기본) | CW
+  angle       : 전체 회전 오프셋 (도)
+
+  예) start_angle=0, end_angle=90, direction=CCW 일 때:
+                  │  ← end_angle=90쪽 막대 (세로 ㅣ)
+                  │
+       r_inner    │      r_outer
+          ├───────┤──────────────┤
+          │  내호  │    외호      │
+          ╰───────┴──────────────╯
+          ─────────────────────────── ← start_angle=0쪽 막대 (가로 ㅡ)
+
+  실제 닫힌 외곽선 구성:
+    ① 외호  (start_angle → end_angle, r_outer)
+    ② 막대  (end_angle 방향, r_outer → r_inner)
+    ③ 내호  (end_angle → start_angle, r_inner, 역방향)
+    ④ 막대  (start_angle 방향, r_inner → r_outer)
 
 [실행]
   pip install pywin32
@@ -91,12 +108,17 @@ def _deg(deg):
 
 
 def _rotate(cx, cy, px, py, rad):
-    """점 (px,py)를 중심 (cx,cy) 기준으로 rad 라디안 회전."""
     dx, dy = px - cx, py - cy
     return (
         cx + dx * math.cos(rad) - dy * math.sin(rad),
         cy + dx * math.sin(rad) + dy * math.cos(rad),
     )
+
+
+def _polar(cx, cy, r, angle_deg):
+    """극좌표 → 직교좌표."""
+    a = math.radians(angle_deg)
+    return cx + r * math.cos(a), cy + r * math.sin(a)
 
 
 def ensure_layer(doc, name):
@@ -129,37 +151,31 @@ def draw_rectangle(mspace, doc, row):
     if w <= 0 or h <= 0:
         raise ValueError(f"width={w}, height={h} 모두 양수여야 합니다.")
 
-    # 중심 계산
     if origin == "CENTER":
         cx, cy = x, y
         corners = [
-            (x - w / 2, y - h / 2),
-            (x + w / 2, y - h / 2),
-            (x + w / 2, y + h / 2),
-            (x - w / 2, y + h / 2),
+            (x - w/2, y - h/2), (x + w/2, y - h/2),
+            (x + w/2, y + h/2), (x - w/2, y + h/2),
         ]
-    else:  # CORNER (기본) — x,y = 좌하단
-        cx, cy = x + w / 2, y + h / 2
+    else:  # CORNER
+        cx, cy = x + w/2, y + h/2
         corners = [
-            (x,     y),
-            (x + w, y),
-            (x + w, y + h),
-            (x,     y + h),
+            (x,     y),     (x + w, y),
+            (x + w, y + h), (x,     y + h),
         ]
 
     rad = _deg(angle)
     rotated = [_rotate(cx, cy, px, py, rad) for px, py in corners]
 
-    # 닫힌 3D 폴리라인 (시작점 반복으로 닫기)
     flat = []
     for px, py in rotated:
         flat += [px, py, 0.0]
-    flat += list(rotated[0]) + [0.0]   # 마지막 = 첫점
+    flat += list(rotated[0]) + [0.0]
 
     pts = win32com.client.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_R8, flat)
     obj = mspace.Add3DPoly(pts)
     apply_props(obj, row)
-    return obj
+    return [obj]
 
 
 # ---------------------------------------------------------------------------
@@ -167,40 +183,28 @@ def draw_rectangle(mspace, doc, row):
 # ---------------------------------------------------------------------------
 
 def draw_arc(mspace, doc, row):
-    x, y        = _f(row, "x"),           _f(row, "y")
-    radius      = _f(row, "radius",       0.0)
-    start_angle = _f(row, "start_angle",  0.0)
-    end_angle   = _f(row, "end_angle",    90.0)
+    x, y        = _f(row, "x"),          _f(row, "y")
+    radius      = _f(row, "radius",      0.0)
+    start_angle = _f(row, "start_angle", 0.0)
+    end_angle   = _f(row, "end_angle",   90.0)
     direction   = row.get("direction", "CCW").strip().upper()
 
     if radius <= 0:
         raise ValueError(f"radius={radius} 는 양수여야 합니다.")
 
-    # CW 지정 시 각도를 반전하여 AutoCAD CCW API에 맞춤
     if direction == "CW":
         start_angle, end_angle = -start_angle, -end_angle
 
     obj = mspace.AddArc(_pt(x, y), radius, _deg(start_angle), _deg(end_angle))
     apply_props(obj, row)
-    return obj
+    return [obj]
 
 
 # ---------------------------------------------------------------------------
-# SLOT  (직사각형 + 양 끝 반원)
+# SLOT
 # ---------------------------------------------------------------------------
 
 def draw_slot(mspace, doc, row):
-    """
-    장공(슬롯) = 직선부 직사각형 + 양쪽 반원 2개.
-
-    내부 그리기 순서 (angle=0 기준, 좌→우 방향):
-      ① 우측 반원 (중심 = Cr, 시작 -90°, 끝 +90°)
-      ② 상단 직선 (우상 → 좌상)
-      ③ 좌측 반원 (중심 = Cl, 시작 +90°, 끝 -90°  / 즉 90°→270°)
-      ④ 하단 직선 (좌하 → 우하)
-
-    회전각(angle)은 각 엔티티를 개별 회전하여 적용.
-    """
     x, y   = _f(row, "x"),     _f(row, "y")
     w, h   = _f(row, "width"), _f(row, "height")
     angle  = _f(row, "angle",  0.0)
@@ -209,67 +213,131 @@ def draw_slot(mspace, doc, row):
     if w <= 0 or h <= 0:
         raise ValueError(f"width={w}, height={h} 모두 양수여야 합니다.")
     if h > w:
-        raise ValueError(f"SLOT: height({h}) > width({w}) — width 가 긴 방향이어야 합니다.")
-
-    r = h / 2          # 반원 반지름
-    straight = w - h   # 직선부 길이
-
-    if straight < 0:
         raise ValueError("SLOT: width 가 height 보다 커야 합니다.")
 
-    # angle=0 기준 좌표계에서 중심 계산
+    r = h / 2
+    straight = w - h
+
     if origin == "CENTER":
         cx, cy = x, y
-    else:  # CORNER — x,y = 바운딩 박스 좌하단
-        cx, cy = x + w / 2, y + h / 2
+    else:
+        cx, cy = x + w/2, y + h/2
 
-    # 직선부 좌·우 중심
-    # (angle=0 기준: 우측 반원 중심 = cx + straight/2, 좌측 = cx - straight/2)
     rad = _deg(angle)
 
     def rot(px, py):
         return _rotate(cx, cy, px, py, rad)
 
-    cr_local = (cx + straight / 2, cy)   # 우측 반원 중심 (로컬)
-    cl_local = (cx - straight / 2, cy)   # 좌측 반원 중심 (로컬)
+    cr_local = (cx + straight/2, cy)
+    cl_local = (cx - straight/2, cy)
     cr = rot(*cr_local)
     cl = rot(*cl_local)
 
     created = []
 
-    # ① 우측 반원 (로컬: 270° → 90°, CCW = 반시계)
-    sa_r = _deg(angle + 270)   # 회전 후 각도 = 로컬각 + angle
-    ea_r = _deg(angle + 90)
-    obj1 = mspace.AddArc(_pt(*cr), r, sa_r, ea_r)
-    apply_props(obj1, row)
-    created.append(obj1)
+    obj1 = mspace.AddArc(_pt(*cr), r, _deg(angle + 270), _deg(angle + 90))
+    apply_props(obj1, row); created.append(obj1)
 
-    # ② 상단 직선 (우상 → 좌상)
-    # 우상 = cr_local + (0, r) 회전
-    # 좌상 = cl_local + (0, r) 회전
-    top_r = rot(cr_local[0], cr_local[1] + r)
-    top_l = rot(cl_local[0], cl_local[1] + r)
     if straight > 0:
-        obj2 = mspace.AddLine(_pt(*top_r), _pt(*top_l))
-        apply_props(obj2, row)
-        created.append(obj2)
+        obj2 = mspace.AddLine(
+            _pt(*rot(cr_local[0], cr_local[1] + r)),
+            _pt(*rot(cl_local[0], cl_local[1] + r))
+        )
+        apply_props(obj2, row); created.append(obj2)
 
-    # ③ 좌측 반원 (로컬: 90° → 270°, CCW)
-    sa_l = _deg(angle + 90)
-    ea_l = _deg(angle + 270)
-    obj3 = mspace.AddArc(_pt(*cl), r, sa_l, ea_l)
-    apply_props(obj3, row)
-    created.append(obj3)
+    obj3 = mspace.AddArc(_pt(*cl), r, _deg(angle + 90), _deg(angle + 270))
+    apply_props(obj3, row); created.append(obj3)
 
-    # ④ 하단 직선 (좌하 → 우하)
-    bot_l = rot(cl_local[0], cl_local[1] - r)
-    bot_r = rot(cr_local[0], cr_local[1] - r)
     if straight > 0:
-        obj4 = mspace.AddLine(_pt(*bot_l), _pt(*bot_r))
-        apply_props(obj4, row)
-        created.append(obj4)
+        obj4 = mspace.AddLine(
+            _pt(*rot(cl_local[0], cl_local[1] - r)),
+            _pt(*rot(cr_local[0], cr_local[1] - r))
+        )
+        apply_props(obj4, row); created.append(obj4)
 
-    return created   # 여러 엔티티 반환
+    return created
+
+
+# ---------------------------------------------------------------------------
+# SECTOR  (원호 + 양 끝 직사각형 막대)
+# ---------------------------------------------------------------------------
+
+def draw_sector(mspace, doc, row):
+    """
+    링 섹터: 원호(외호)의 양 끝에서 중심 방향으로 직사각형 막대가 뻗는 형태.
+
+    start_angle=0, end_angle=90 예시 (CCW):
+
+           90°
+            │  ← 막대(ㅣ)
+            │
+      ──────┼──────────╮  ← 외호
+      막대  │   내호    │
+     (ㅡ)  ╰────────── ┤
+            0°
+
+    엔티티 4개:
+      ① 외호  r_outer, start→end (CCW)
+      ② 직선  end_angle 방향, r_outer → r_inner
+      ③ 내호  r_inner, end→start (CW, 즉 역방향)
+      ④ 직선  start_angle 방향, r_inner → r_outer
+    """
+    cx, cy      = _f(row, "x"),           _f(row, "y")
+    r_inner     = _f(row, "r_inner",      0.0)
+    r_outer     = _f(row, "r_outer",      0.0)
+    start_angle = _f(row, "start_angle",  0.0)
+    end_angle   = _f(row, "end_angle",    90.0)
+    direction   = row.get("direction", "CCW").strip().upper()
+    offset      = _f(row, "angle",        0.0)   # 전체 회전 오프셋
+
+    if r_inner < 0 or r_outer <= 0:
+        raise ValueError(f"r_outer={r_outer} 양수, r_inner={r_inner} 0 이상이어야 합니다.")
+    if r_inner >= r_outer:
+        raise ValueError(f"r_inner({r_inner}) < r_outer({r_outer}) 이어야 합니다.")
+
+    # 전체 회전 오프셋 적용
+    sa = start_angle + offset
+    ea = end_angle   + offset
+
+    # CW 지정 시 시작·끝 교환 (내부는 CCW API)
+    if direction == "CW":
+        sa, ea = ea, sa
+
+    # 4개 꼭짓점 (극좌표 → 직교)
+    p_outer_start = _polar(cx, cy, r_outer, sa)
+    p_outer_end   = _polar(cx, cy, r_outer, ea)
+    p_inner_end   = _polar(cx, cy, r_inner, ea)
+    p_inner_start = _polar(cx, cy, r_inner, sa)
+
+    created = []
+
+    # ① 외호 (sa → ea, CCW)
+    arc_outer = mspace.AddArc(_pt(cx, cy), r_outer, _deg(sa), _deg(ea))
+    apply_props(arc_outer, row)
+    created.append(arc_outer)
+
+    # ② end_angle 쪽 막대 (r_outer → r_inner)
+    line_end = mspace.AddLine(_pt(*p_outer_end), _pt(*p_inner_end))
+    apply_props(line_end, row)
+    created.append(line_end)
+
+    # ③ 내호 (ea → sa, CW = AddArc에 순서 뒤집어서)
+    if r_inner > 0:
+        arc_inner = mspace.AddArc(_pt(cx, cy), r_inner, _deg(ea), _deg(sa))
+        apply_props(arc_inner, row)
+        created.append(arc_inner)
+    else:
+        # r_inner=0 이면 중심점으로 수렴 → 직선 2개만 (순수 부채꼴)
+        line_inner = mspace.AddLine(_pt(*p_inner_end), _pt(*p_inner_start))
+        apply_props(line_inner, row)
+        created.append(line_inner)
+
+    # ④ start_angle 쪽 막대 (r_inner → r_outer)
+    line_start = mspace.AddLine(_pt(*p_inner_start), _pt(*p_outer_start))
+    apply_props(line_start, row)
+    created.append(line_start)
+
+    return created
 
 
 # ---------------------------------------------------------------------------
@@ -280,6 +348,7 @@ HANDLERS = {
     "RECTANGLE": draw_rectangle,
     "ARC":       draw_arc,
     "SLOT":      draw_slot,
+    "SECTOR":    draw_sector,
 }
 
 
