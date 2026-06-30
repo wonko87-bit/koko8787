@@ -17,8 +17,8 @@ object OAuthManager {
     val TODOIST_CLIENT_ID     get() = com.taskbridge.BuildConfig.TODOIST_CLIENT_ID
     val TODOIST_CLIENT_SECRET get() = com.taskbridge.BuildConfig.TODOIST_CLIENT_SECRET
 
-    const val GOOGLE_REDIRECT_URI  = "https://koko8787-production.up.railway.app/auth/mobile/google/callback"
-    const val TODOIST_REDIRECT_URI = "https://koko8787-production.up.railway.app/auth/mobile/todoist/callback"
+    const val GOOGLE_REDIRECT_URI  = "https://wonko87-bit.github.io/koko8787/auth/google/callback"
+    const val TODOIST_REDIRECT_URI = "https://wonko87-bit.github.io/koko8787/auth/todoist/callback"
 
     private val GOOGLE_SCOPES = "https://www.googleapis.com/auth/calendar.events"
 
