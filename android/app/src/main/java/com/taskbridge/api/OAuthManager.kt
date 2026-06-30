@@ -59,7 +59,10 @@ object OAuthManager {
             Request.Builder().url("https://oauth2.googleapis.com/token").post(body).build()
         ).execute()
 
-        if (!resp.isSuccessful) throw IOException("Google token exchange failed: ${resp.code}")
+        if (!resp.isSuccessful) {
+            val errBody = resp.body?.string().orEmpty().take(300)
+            throw IOException("Google token exchange failed (${resp.code}): $errBody")
+        }
 
         val json = JSONObject(resp.body!!.string())
         TokenStore.saveGoogle(
@@ -105,7 +108,10 @@ object OAuthManager {
             Request.Builder().url("https://todoist.com/oauth/access_token").post(body).build()
         ).execute()
 
-        if (!resp.isSuccessful) throw IOException("Todoist token exchange failed: ${resp.code}")
+        if (!resp.isSuccessful) {
+            val errBody = resp.body?.string().orEmpty().take(300)
+            throw IOException("Todoist token exchange failed (${resp.code}): $errBody")
+        }
 
         val json = JSONObject(resp.body!!.string())
         TokenStore.saveTodoist(ctx, json.getString("access_token"))
