@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OfficeBridge</title>
+  <link rel="stylesheet" href="taskpane.css"/>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+</head>
+<body>
+  <div id="app">
+
+    <!-- 헤더 -->
+    <header class="header">
+      <span class="logo">⚡ OfficeBridge</span>
+      <div class="header-actions">
+        <span id="userName" class="user-name"></span>
+        <button id="authBtn" class="btn-auth">로그인</button>
+        <button id="settingsBtn" class="btn-icon" title="설정">⚙</button>
+      </div>
+    </header>
+
+    <!-- 설정 패널 (접었다 펼칠 수 있음) -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <h3>설정</h3>
+      <label>Azure AD 클라이언트 ID
+        <input id="cfgClientId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+      </label>
+      <label>Azure AD 테넌트 ID
+        <input id="cfgTenantId" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+      </label>
+      <label>Teams Incoming Webhook URL <small>(선택)</small>
+        <input id="cfgWebhook" type="text" placeholder="https://outlook.office.com/webhook/..."/>
+      </label>
+      <button id="saveSettingsBtn" class="btn-primary">저장</button>
+      <p class="settings-hint">
+        Azure AD 앱 등록 후 클라이언트 ID와 테넌트 ID를 입력하세요.<br/>
+        리다이렉트 URI: <code id="redirectUriHint"></code>
+      </p>
+    </div>
+
+    <!-- 현재 메일 컨텍스트 -->
+    <div id="mailContext" class="mail-context hidden">
+      <span id="mailContextText"></span>
+      <button id="loadMailBtn" class="btn-mini">현재 메일 가져오기</button>
+    </div>
+
+    <!-- 입력 섹션 -->
+    <main class="main">
+      <div class="input-wrap">
+        <textarea id="nlInput" class="nl-input" rows="5"
+          placeholder="자연어로 입력하세요
+
+  #task  할 일 등록
+  예) 보고서 초안 작성 내일까지 #task
+
+  #meeting  회의 일정 등록
+  예) 팀 주간 회의 내일 오전 10시 1시간 #meeting
+
+  #mail  메일 초안 작성
+  예) 홍길동에게 프로젝트 현황 공유 #mail
+
+  #teams  Teams 채널 메시지
+  예) 배포 완료 알림 #teams"></textarea>
+        <button id="submitBtn" class="btn-submit">실행 ↵</button>
+      </div>
+
+      <!-- 실행 결과 -->
+      <div id="resultPanel" class="result-panel hidden"></div>
+
+      <!-- 최근 실행 기록 -->
+      <div class="history-section">
+        <div class="history-header">
+          <span>최근 실행</span>
+          <button id="clearHistoryBtn" class="btn-mini">지우기</button>
+        </div>
+        <ul id="historyList" class="history-list"></ul>
+      </div>
+    </main>
+
+  </div>
+  <script src="taskpane.js"></script>
+</body>
+</html>
