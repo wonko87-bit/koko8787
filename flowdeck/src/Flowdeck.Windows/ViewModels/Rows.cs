@@ -222,6 +222,9 @@ public sealed class RecurringRow : ObservableObject
     /// <summary>Only todos get a checkbox; an event has nothing to complete.</summary>
     public bool IsTodo { get; }
 
+    /// <summary>Removes the repeat rule itself, not one occurrence of it.</summary>
+    public ICommand DeleteCommand { get; }
+
     /// <summary>
     /// Ticking a repeating todo does not close it — the repository rolls its due date on
     /// to the next occurrence, so this row stays put and its "다음" date moves.
