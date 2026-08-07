@@ -55,9 +55,10 @@ public sealed class AppSettings
 
     public WidgetPinMode PinMode { get; set; } = WidgetPinMode.Desktop;
 
-    public double WidgetLeft { get; set; } = double.NaN;
+    /// <summary>Null until the widget has been placed once. Never NaN — see <see cref="WindowPlacement"/>.</summary>
+    public double? WidgetLeft { get; set; }
 
-    public double WidgetTop { get; set; } = double.NaN;
+    public double? WidgetTop { get; set; }
 
     public double WidgetWidth { get; set; } = 340;
 

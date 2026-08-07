@@ -292,7 +292,10 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
   workspace.json     할일과 일정
   workspace.json.bak 직전 저장본
   settings.json      환경설정
+  crash.log          오류 기록 (문제가 있을 때만 생김)
 ```
+
+문제가 생기면 `crash.log` 를 먼저 보세요. 오류가 나도 앱은 계속 돌아가고, 트레이에 알림이 뜨면서 자세한 내용이 이 파일에 쌓입니다.
 
 저장은 임시 파일에 쓴 뒤 바꿔치기하는 방식이라, 저장 도중에 꺼져도 이전 파일이 깨지지 않습니다.
 

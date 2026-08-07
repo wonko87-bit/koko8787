@@ -91,9 +91,9 @@ public partial class WidgetWindow : Window
 
         var area = SystemParameters.WorkArea;
 
-        // NaN means "first run": park the widget at the top right of the work area.
-        var left = double.IsNaN(_settings.WidgetLeft) ? area.Right - Width - 24 : _settings.WidgetLeft;
-        var top = double.IsNaN(_settings.WidgetTop) ? area.Top + 24 : _settings.WidgetTop;
+        // No stored position means first run: park the widget at the top right.
+        var left = _settings.WidgetLeft ?? area.Right - Width - 24;
+        var top = _settings.WidgetTop ?? area.Top + 24;
 
         // Keep it reachable if a monitor was unplugged since the position was saved.
         Left = Math.Clamp(left, area.Left - Width + 80, area.Right - 80);

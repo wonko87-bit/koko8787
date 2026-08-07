@@ -3,6 +3,7 @@ using System.Windows.Input;
 using Flowdeck.Core.Models;
 using Flowdeck.Core.Services;
 using Flowdeck.Windows.Infrastructure;
+using Flowdeck.Windows.Services;
 
 namespace Flowdeck.Windows.ViewModels;
 
@@ -155,7 +156,10 @@ public sealed class TodoRow : ObservableObject
         set
         {
             if (value == _item.IsDone) return;
-            _ = _toggle(this);
+
+            // The checkbox has no way to await this, so the task is watched instead of
+            // being dropped on the floor.
+            CrashReporter.Observe(_toggle(this), "TodoRow.IsDone");
             Raise();
         }
     }
@@ -235,7 +239,8 @@ public sealed class RecurringRow : ObservableObject
         set
         {
             if (_todo is null || _toggle is null || value == _todo.IsDone) return;
-            _ = _toggle(this);
+
+            CrashReporter.Observe(_toggle(this), "RecurringRow.IsDone");
             Raise();
         }
     }

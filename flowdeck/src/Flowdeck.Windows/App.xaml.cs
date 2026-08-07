@@ -60,6 +60,10 @@ public partial class App : Application, IAppShell
         // No main window: closing the widget must not end the process.
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+        // Installed before anything else so even a failure during startup is written down.
+        Directory.CreateDirectory(DataFolder);
+        CrashReporter.Install(DataFolder, (title, message) => _tray?.Notify(title, message));
+
         try
         {
             await StartAsync();

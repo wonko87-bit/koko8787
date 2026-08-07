@@ -53,6 +53,11 @@ public sealed class AsyncRelayCommand : ICommand
 
     public bool CanExecute(object? parameter) => !_running && (_canExecute?.Invoke(parameter) ?? true);
 
+    /// <summary>
+    /// Async void, so an exception escaping here would reach no caller and end the
+    /// process. It is handed to the dispatcher instead, where the crash reporter logs it
+    /// and lets the app carry on.
+    /// </summary>
     public async void Execute(object? parameter)
     {
         if (!CanExecute(parameter)) return;
@@ -62,6 +67,10 @@ public sealed class AsyncRelayCommand : ICommand
         try
         {
             await _execute(parameter);
+        }
+        catch (Exception e)
+        {
+            Services.CrashReporter.ReportRecovered("Command", e);
         }
         finally
         {

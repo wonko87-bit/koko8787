@@ -69,10 +69,10 @@ public partial class AgendaWindow : Window
         Width = Math.Max(MinWidth, _placement.Width);
         Height = Math.Max(MinHeight, _placement.Height);
 
-        if (_placement.HasPosition)
+        if (_placement.Left.HasValue && _placement.Top.HasValue)
         {
-            Left = _placement.Left;
-            Top = _placement.Top;
+            Left = _placement.Left.Value;
+            Top = _placement.Top.Value;
         }
         else
         {
