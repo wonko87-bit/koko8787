@@ -22,6 +22,55 @@
     <infra:BoolToVisibilityConverter x:Key="BoolToVisibility" />
     <infra:StringToVisibilityConverter x:Key="StringToVisibility" />
 
+    <!-- A filter chip: outlined when off, filled when on. -->
+    <Style x:Key="Chip.Filter" TargetType="Button">
+      <Setter Property="FontFamily" Value="{StaticResource Font.UI}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="Margin" Value="0,0,5,5" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Root"
+                    Padding="8,3"
+                    Background="Transparent"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="9">
+              <ContentPresenter VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.SurfaceHover}" />
+                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.BorderStrong}" />
+              </Trigger>
+              <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                <Setter TargetName="Root" Property="Background" Value="{DynamicResource Brush.Accent}" />
+                <Setter TargetName="Root" Property="BorderBrush" Value="{DynamicResource Brush.Accent}" />
+                <Setter Property="Foreground" Value="{DynamicResource Brush.OnAccent}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+              </DataTrigger>
+              <!-- Last, so a disabled chip stays dimmed whatever else matched. -->
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.35" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <DataTemplate DataType="{x:Type vm:TagChip}">
+      <Button Command="{Binding ToggleCommand}" Style="{StaticResource Chip.Filter}">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="{Binding Label}" />
+          <TextBlock Margin="5,0,0,0" Opacity="0.6" Text="{Binding CountLabel}" />
+        </StackPanel>
+      </Button>
+    </DataTemplate>
+
     <Style x:Key="Row.Delete" TargetType="Button" BasedOn="{StaticResource Button.Icon}">
       <Setter Property="Width" Value="22" />
       <Setter Property="Height" Value="22" />
@@ -243,6 +292,7 @@
     <Grid Margin="20,14,20,14">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
@@ -284,8 +334,46 @@
         </StackPanel>
       </Grid>
 
+      <!-- ============ tag filter ============ -->
+      <Grid Grid.Row="1"
+            Margin="0,12,0,-5"
+            Visibility="{Binding HasTagChips, Converter={StaticResource BoolToVisibility}}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Button Command="{Binding ClearTagsCommand}"
+                Content="전체"
+                IsEnabled="{Binding HasTagFilter}"
+                Style="{StaticResource Chip.Filter}"
+                ToolTip="태그 필터 해제" />
+
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding TagChips}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+        </ItemsControl>
+
+        <!-- Only matters once a second tag is picked, but showing it from the first
+             makes the choice discoverable before it is needed. -->
+        <Button Grid.Column="2"
+                Margin="6,0,0,5"
+                Padding="8,3"
+                VerticalAlignment="Top"
+                Click="OnMatchModeClick"
+                Content="{Binding MatchModeLabel}"
+                FontSize="11"
+                Style="{StaticResource Button.Ghost}"
+                ToolTip="여러 태그를 골랐을 때: 모두 포함 / 하나라도"
+                Visibility="{Binding HasTagFilter, Converter={StaticResource BoolToVisibility}}" />
+      </Grid>
+
       <!-- ============ the list ============ -->
-      <ScrollViewer Grid.Row="1"
+      <ScrollViewer Grid.Row="2"
                     Margin="0,14,0,0"
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto">
@@ -313,7 +401,7 @@
       </ScrollViewer>
 
       <Thumb x:Name="ResizeGrip"
-             Grid.Row="2"
+             Grid.Row="3"
              Width="16"
              Height="16"
              Margin="0,0,-12,-10"

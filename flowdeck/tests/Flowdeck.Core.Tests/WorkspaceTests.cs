@@ -222,6 +222,53 @@ public class WorkspaceRepositoryTests
     }
 
     [Fact]
+    public async Task TodoTagsCountEveryUseAndSortByPopularity()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!TD 내일 보고서 제출 #업무 #보고"), Now);
+        await repo.CaptureAsync(Parse("!TD 내일 자료 정리 #업무"), Now);
+        await repo.CaptureAsync(Parse("!TD 내일 장보기 #개인"), Now);
+
+        var tags = repo.TodoTags(includeCompleted: false);
+
+        Assert.Equal(new[] { "업무", "개인", "보고" }, tags.Select(t => t.Tag));
+        Assert.Equal(2, tags[0].Count);
+    }
+
+    [Fact]
+    public async Task TagCountsFollowTheCompletedFilter()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!TD 영수증 정리 #개인"), Now);
+        await repo.ToggleTodoAsync(repo.Todos[0].Id, Now);
+
+        Assert.Empty(repo.TodoTags(includeCompleted: false));
+        Assert.Single(repo.TodoTags(includeCompleted: true));
+    }
+
+    [Fact]
+    public async Task ARepeatingEventCountsItsTagsOnce()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!CD 매주 화요일 오전 10시 주간회의 #팀"), Now);
+
+        Assert.Equal(1, Assert.Single(repo.EventTags()).Count);
+    }
+
+    [Fact]
+    public async Task TagsAreGroupedWithoutRegardToCase()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!TD 내일 배포 준비 #Work"), Now);
+        await repo.CaptureAsync(Parse("!TD 내일 릴리스 노트 #work"), Now);
+
+        var tag = Assert.Single(repo.TodoTags(includeCompleted: false));
+
+        Assert.Equal(2, tag.Count);
+        Assert.Equal("Work", tag.Tag); // the first spelling seen wins
+    }
+
+    [Fact]
     public async Task PurgeRemovesOldCompletedItems()
     {
         var (repo, _) = Build();

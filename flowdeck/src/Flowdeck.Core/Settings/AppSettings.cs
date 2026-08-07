@@ -43,6 +43,12 @@ public sealed class AppSettings
     /// <summary>Whether the todo list window includes items that are already done.</summary>
     public bool AgendaShowCompleted { get; set; }
 
+    /// <summary>
+    /// With several tags picked in a list window, true narrows to entries carrying all of
+    /// them and false widens to entries carrying any.
+    /// </summary>
+    public bool AgendaMatchAllTags { get; set; } = true;
+
     public WindowPlacement AgendaEventsPlacement { get; set; } = new();
 
     public WindowPlacement AgendaTodosPlacement { get; set; } = new();

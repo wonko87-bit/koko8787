@@ -4,6 +4,9 @@ using Flowdeck.Core.Storage;
 
 namespace Flowdeck.Core.Services;
 
+/// <summary>A tag and how many entries carry it.</summary>
+public sealed record TagCount(string Tag, int Count);
+
 /// <summary>One occurrence of an event, with the repeat rule already applied.</summary>
 public sealed class EventOccurrence
 {
@@ -209,6 +212,37 @@ public sealed class WorkspaceRepository
             .ThenBy(t => t.DueAt ?? DateTime.MaxValue)
             .ThenByDescending(t => t.Priority)
             .ToList();
+
+    /// <summary>
+    /// Tags in use on the calendar, most used first. A repeating event counts once — it is
+    /// one entry, however many times it comes round.
+    /// </summary>
+    public IReadOnlyList<TagCount> EventTags() => CountTags(_workspace.Events.Select(e => e.Tags));
+
+    /// <summary>Tags in use on the todo list, most used first.</summary>
+    public IReadOnlyList<TagCount> TodoTags(bool includeCompleted) =>
+        CountTags(_workspace.Todos.Where(t => includeCompleted || !t.IsDone).Select(t => t.Tags));
+
+    /// <summary>
+    /// Groups case-insensitively so "#Work" and "#work" are one tag, keeping whichever
+    /// spelling was seen first for display.
+    /// </summary>
+    private static IReadOnlyList<TagCount> CountTags(IEnumerable<IEnumerable<string>> tagLists)
+    {
+        var counts = new Dictionary<string, TagCount>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var tag in tagLists.SelectMany(tags => tags))
+        {
+            counts[tag] = counts.TryGetValue(tag, out var seen)
+                ? seen with { Count = seen.Count + 1 }
+                : new TagCount(tag, 1);
+        }
+
+        return counts.Values
+            .OrderByDescending(t => t.Count)
+            .ThenBy(t => t.Tag, StringComparer.CurrentCulture)
+            .ToList();
+    }
 
     /// <summary>Which days in a range have at least one event, for dotting the month grid.</summary>
     public HashSet<DateTime> DaysWithEvents(DateTime from, DateTime to) =>

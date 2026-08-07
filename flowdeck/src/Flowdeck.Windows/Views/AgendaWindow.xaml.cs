@@ -28,6 +28,7 @@ public partial class AgendaWindow : Window
         _settings = settings;
 
         if (viewModel.Mode == AgendaMode.Todos) viewModel.ShowCompleted = settings.AgendaShowCompleted;
+        viewModel.MatchAllTags = settings.AgendaMatchAllTags;
 
         Title = "Flowdeck · " + viewModel.Title;
         ApplyPlacement();
@@ -47,6 +48,9 @@ public partial class AgendaWindow : Window
             return;
         }
 
+        // Start unfiltered every time. A filter left on from an earlier session would
+        // silently hide entries, and there would be nothing on screen saying why.
+        ViewModel.ClearTags();
         ViewModel.Reload();
         EnsureOnScreen();
         Show();
@@ -119,6 +123,12 @@ public partial class AgendaWindow : Window
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Dismiss();
+
+    private void OnMatchModeClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.MatchAllTags = !ViewModel.MatchAllTags;
+        _settings.AgendaMatchAllTags = ViewModel.MatchAllTags;
+    }
 
     private void PersistPlacement()
     {
