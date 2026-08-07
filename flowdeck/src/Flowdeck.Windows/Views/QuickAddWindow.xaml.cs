@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using Flowdeck.Core.Models;
 using Flowdeck.Windows.ViewModels;
 

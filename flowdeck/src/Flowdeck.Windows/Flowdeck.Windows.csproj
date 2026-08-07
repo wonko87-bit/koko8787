@@ -13,11 +13,19 @@
     <RootNamespace>Flowdeck.Windows</RootNamespace>
     <ApplicationIcon>Assets\flowdeck.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- Lets the project be compile-checked from a non-Windows agent. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- UseWindowsForms would otherwise import these globally, and almost every WPF
+         type name (Application, MessageBox, Size, FontStyle, Cursor) has a Windows
+         Forms twin. The tray icon is the only place that needs them, and it qualifies
+         those types by hand. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Flowdeck.Core\Flowdeck.Core.csproj" />

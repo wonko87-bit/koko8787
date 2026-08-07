@@ -1,6 +1,5 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!-- Every brush below is a DynamicResource so a theme swap takes effect live. -->
 
@@ -9,7 +8,6 @@
   <!-- Ships with Windows 10 and 11; the second name is the Windows 10 fallback. -->
   <FontFamily x:Key="Font.Icon">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
-  <sys:Double x:Key="Radius.Small">6</sys:Double>
   <CornerRadius x:Key="Corner.Small" TopLeft="6" TopRight="6" BottomLeft="6" BottomRight="6" />
   <CornerRadius x:Key="Corner.Medium" TopLeft="10" TopRight="10" BottomLeft="10" BottomRight="10" />
   <CornerRadius x:Key="Corner.Large" TopLeft="14" TopRight="14" BottomLeft="14" BottomRight="14" />
