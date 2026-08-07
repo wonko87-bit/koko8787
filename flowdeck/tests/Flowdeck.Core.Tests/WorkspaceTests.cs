@@ -168,6 +168,59 @@ public class WorkspaceRepositoryTests
     }
 
     [Fact]
+    public async Task AllOccurrencesKeepsOneOffsOutsideTheWindow()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!CD 2029-01-15 장기 계약 갱신"), Now);
+        await repo.CaptureAsync(Parse("!CD 매주 화요일 오전 10시 주간회의"), Now);
+
+        var list = repo.AllOccurrences(Now.Date, Now.Date.AddDays(21));
+
+        // The 2029 one-off survives despite sitting far outside the window; the repeating
+        // meeting contributes only the occurrences inside it.
+        Assert.Contains(list, o => o.Title == "장기 계약 갱신");
+        Assert.Equal(3, list.Count(o => o.Title == "주간회의"));
+    }
+
+    [Fact]
+    public async Task AllOccurrencesAreSortedByStart()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!CD 8월 20일 늦은 일정"), Now);
+        await repo.CaptureAsync(Parse("!CD 8월 10일 이른 일정"), Now);
+
+        var list = repo.AllOccurrences(Now.Date, Now.Date.AddDays(60));
+
+        Assert.Equal("이른 일정", list[0].Title);
+        Assert.Equal("늦은 일정", list[1].Title);
+    }
+
+    [Fact]
+    public async Task AllTodosOrdersByDueDateAndParksUndatedItemsLast()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!TD 언젠가 책 읽기"), Now);
+        await repo.CaptureAsync(Parse("!TD 8월 20일 정산"), Now);
+        await repo.CaptureAsync(Parse("!TD 어제 밀린 보고서"), Now);
+
+        var open = repo.AllTodos(includeCompleted: false);
+
+        Assert.Equal(new[] { "밀린 보고서", "정산", "언젠가 책 읽기" }, open.Select(t => t.Title));
+        Assert.Null(open[2].DueAt);
+    }
+
+    [Fact]
+    public async Task AllTodosCanIncludeCompletedItems()
+    {
+        var (repo, _) = Build();
+        await repo.CaptureAsync(Parse("!TD 영수증 정리"), Now);
+        await repo.ToggleTodoAsync(repo.Todos[0].Id, Now);
+
+        Assert.Empty(repo.AllTodos(includeCompleted: false));
+        Assert.Single(repo.AllTodos(includeCompleted: true));
+    }
+
+    [Fact]
     public async Task PurgeRemovesOldCompletedItems()
     {
         var (repo, _) = Build();

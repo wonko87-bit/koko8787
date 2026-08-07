@@ -361,18 +361,32 @@
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto">
         <StackPanel>
-          <TextBlock Margin="0,0,0,6"
-                     Style="{StaticResource Text.Section}"
-                     Text="일정" />
+          <Grid Margin="0,0,0,6">
+            <TextBlock Style="{StaticResource Text.Section}" Text="일정" />
+            <Button HorizontalAlignment="Right"
+                    Padding="6,1"
+                    Click="OnEventsAgendaClick"
+                    Content="전체"
+                    FontSize="10"
+                    Style="{StaticResource Button.Ghost}"
+                    ToolTip="누적 일정 전체 보기" />
+          </Grid>
           <ItemsControl ItemTemplate="{StaticResource EventTemplate}" ItemsSource="{Binding Events}" />
           <TextBlock Margin="0,0,0,4"
                      Style="{StaticResource Text.Meta}"
                      Text="등록된 일정이 없습니다"
                      Visibility="{Binding HasEvents, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}" />
 
-          <TextBlock Margin="0,14,0,6"
-                     Style="{StaticResource Text.Section}"
-                     Text="{Binding TodoSectionLabel}" />
+          <Grid Margin="0,14,0,6">
+            <TextBlock Style="{StaticResource Text.Section}" Text="{Binding TodoSectionLabel}" />
+            <Button HorizontalAlignment="Right"
+                    Padding="6,1"
+                    Click="OnTodosAgendaClick"
+                    Content="전체"
+                    FontSize="10"
+                    Style="{StaticResource Button.Ghost}"
+                    ToolTip="누적 할일 전체 보기" />
+          </Grid>
           <ItemsControl ItemTemplate="{StaticResource TodoTemplate}" ItemsSource="{Binding Todos}" />
           <TextBlock Style="{StaticResource Text.Meta}"
                      Text="할일이 없습니다"

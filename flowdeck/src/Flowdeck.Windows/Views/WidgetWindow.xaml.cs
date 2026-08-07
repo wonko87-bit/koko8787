@@ -61,6 +61,11 @@ public partial class WidgetWindow : Window
     /// <summary>Raised when the settings button is pressed.</summary>
     public event EventHandler? SettingsRequested;
 
+    /// <summary>Raised by the "전체" shortcuts beside each section heading.</summary>
+    public event EventHandler? EventsAgendaRequested;
+
+    public event EventHandler? TodosAgendaRequested;
+
     /// <summary>Re-reads opacity and pin mode after the settings window changes them.</summary>
     public void ApplySettings()
     {
@@ -150,6 +155,12 @@ public partial class WidgetWindow : Window
                 break;
         }
     }
+
+    private void OnEventsAgendaClick(object sender, RoutedEventArgs e) =>
+        EventsAgendaRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnTodosAgendaClick(object sender, RoutedEventArgs e) =>
+        TodosAgendaRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) =>
         SettingsRequested?.Invoke(this, EventArgs.Empty);

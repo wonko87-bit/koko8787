@@ -34,6 +34,19 @@ public sealed class AppSettings
     /// <summary>Shows or hides the desktop widget.</summary>
     public string ToggleWidgetHotkey { get; set; } = "Ctrl+Alt+D";
 
+    /// <summary>Opens or closes the full calendar list. C for calendar.</summary>
+    public string AgendaEventsHotkey { get; set; } = "Ctrl+Alt+C";
+
+    /// <summary>Opens or closes the full todo list.</summary>
+    public string AgendaTodosHotkey { get; set; } = "Ctrl+Alt+T";
+
+    /// <summary>Whether the todo list window includes items that are already done.</summary>
+    public bool AgendaShowCompleted { get; set; }
+
+    public WindowPlacement AgendaEventsPlacement { get; set; } = new();
+
+    public WindowPlacement AgendaTodosPlacement { get; set; } = new();
+
     public WidgetPinMode PinMode { get; set; } = WidgetPinMode.Desktop;
 
     public double WidgetLeft { get; set; } = double.NaN;

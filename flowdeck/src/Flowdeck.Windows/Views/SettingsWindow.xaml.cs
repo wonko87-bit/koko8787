@@ -47,6 +47,8 @@ public partial class SettingsWindow : Window
 
         QuickAddHotkey.Text = Settings.QuickAddHotkey;
         ToggleWidgetHotkey.Text = Settings.ToggleWidgetHotkey;
+        AgendaEventsHotkey.Text = Settings.AgendaEventsHotkey;
+        AgendaTodosHotkey.Text = Settings.AgendaTodosHotkey;
 
         KeywordHints.IsChecked = Settings.Routing.UseKeywordHints;
         AfternoonBias.IsChecked = Settings.AssumeAfternoonForBareHours;
@@ -192,10 +194,24 @@ public partial class SettingsWindow : Window
             QuickAddHotkey.Text = gesture;
             Settings.QuickAddHotkey = gesture;
         }
-        else
+        else if (ReferenceEquals(sender, ToggleWidgetHotkey))
         {
             ToggleWidgetHotkey.Text = gesture;
             Settings.ToggleWidgetHotkey = gesture;
+        }
+        else if (ReferenceEquals(sender, AgendaEventsHotkey))
+        {
+            AgendaEventsHotkey.Text = gesture;
+            Settings.AgendaEventsHotkey = gesture;
+        }
+        else if (ReferenceEquals(sender, AgendaTodosHotkey))
+        {
+            AgendaTodosHotkey.Text = gesture;
+            Settings.AgendaTodosHotkey = gesture;
+        }
+        else
+        {
+            return;
         }
 
         var problem = _shell.ReapplyHotKeys();

@@ -33,6 +33,8 @@ public partial class App : Application, IAppShell
     private WidgetWindow? _widget;
     private QuickAddWindow? _quickAdd;
     private SettingsWindow? _settingsWindow;
+    private AgendaWindow? _eventsAgenda;
+    private AgendaWindow? _todosAgenda;
 
     public AppSettings Settings => _settings;
 
@@ -90,12 +92,26 @@ public partial class App : Application, IAppShell
         _widget = new WidgetWindow(new WidgetViewModel(_repository, _parser), _settings);
         _widget.SettingsRequested += (_, _) => ShowSettings();
         _widget.HideRequested += (_, _) => _tray?.SetWidgetVisible(false);
+        _widget.EventsAgendaRequested += (_, _) => ToggleEventsAgenda();
+        _widget.TodosAgendaRequested += (_, _) => ToggleTodosAgenda();
 
         _quickAdd = new QuickAddWindow(new QuickAddViewModel(_repository, _parser));
+
+        _eventsAgenda = new AgendaWindow(
+            new AgendaViewModel(_repository, AgendaMode.Events),
+            _settings.AgendaEventsPlacement,
+            _settings);
+
+        _todosAgenda = new AgendaWindow(
+            new AgendaViewModel(_repository, AgendaMode.Todos),
+            _settings.AgendaTodosPlacement,
+            _settings);
 
         _tray = new TrayIconController();
         _tray.QuickAddRequested += (_, _) => ShowQuickAdd();
         _tray.WidgetToggleRequested += (_, _) => ToggleWidget();
+        _tray.EventsAgendaRequested += (_, _) => ToggleEventsAgenda();
+        _tray.TodosAgendaRequested += (_, _) => ToggleTodosAgenda();
         _tray.SettingsRequested += (_, _) => ShowSettings();
         _tray.ExitRequested += (_, _) => Shutdown();
 
@@ -135,6 +151,8 @@ public partial class App : Application, IAppShell
         var problems = new StringBuilder();
         Claim(_settings.QuickAddHotkey, "빠른 입력", ShowQuickAdd);
         Claim(_settings.ToggleWidgetHotkey, "위젯 표시/숨기기", ToggleWidget);
+        Claim(_settings.AgendaEventsHotkey, "일정 목록", ToggleEventsAgenda);
+        Claim(_settings.AgendaTodosHotkey, "할일 목록", ToggleTodosAgenda);
         return problems.ToString().TrimEnd();
 
         void Claim(string gesture, string label, Action action)
@@ -142,7 +160,8 @@ public partial class App : Application, IAppShell
             switch (hotKeys.Register(gesture, action))
             {
                 case HotKeyResult.AlreadyTaken:
-                    problems.AppendLine($"{label} 단축키 {gesture} 은(는) 다른 프로그램이 사용 중입니다.");
+                    // Either another application owns it, or it duplicates one of ours.
+                    problems.AppendLine($"{label} 단축키 {gesture} 은(는) 이미 사용 중인 조합입니다.");
                     break;
 
                 case HotKeyResult.InvalidGesture:
@@ -180,6 +199,10 @@ public partial class App : Application, IAppShell
     }
 
     public void ShowQuickAdd() => _quickAdd?.Summon();
+
+    public void ToggleEventsAgenda() => _eventsAgenda?.Toggle();
+
+    public void ToggleTodosAgenda() => _todosAgenda?.Toggle();
 
     // ---- internals ---------------------------------------------------------
 

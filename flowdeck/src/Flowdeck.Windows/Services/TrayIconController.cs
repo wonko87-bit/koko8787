@@ -25,6 +25,12 @@ public sealed class TrayIconController : IDisposable
         _widgetItem = new WinForms.ToolStripMenuItem("위젯 표시");
         _widgetItem.Click += (_, _) => WidgetToggleRequested?.Invoke(this, EventArgs.Empty);
 
+        var eventsList = new WinForms.ToolStripMenuItem("일정 목록");
+        eventsList.Click += (_, _) => EventsAgendaRequested?.Invoke(this, EventArgs.Empty);
+
+        var todosList = new WinForms.ToolStripMenuItem("할일 목록");
+        todosList.Click += (_, _) => TodosAgendaRequested?.Invoke(this, EventArgs.Empty);
+
         var settings = new WinForms.ToolStripMenuItem("설정");
         settings.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
@@ -33,6 +39,9 @@ public sealed class TrayIconController : IDisposable
 
         menu.Items.Add(quickAdd);
         menu.Items.Add(_widgetItem);
+        menu.Items.Add(new WinForms.ToolStripSeparator());
+        menu.Items.Add(eventsList);
+        menu.Items.Add(todosList);
         menu.Items.Add(new WinForms.ToolStripSeparator());
         menu.Items.Add(settings);
         menu.Items.Add(exit);
@@ -51,6 +60,10 @@ public sealed class TrayIconController : IDisposable
     public event EventHandler? QuickAddRequested;
 
     public event EventHandler? WidgetToggleRequested;
+
+    public event EventHandler? EventsAgendaRequested;
+
+    public event EventHandler? TodosAgendaRequested;
 
     public event EventHandler? SettingsRequested;
 

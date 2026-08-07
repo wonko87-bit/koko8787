@@ -163,6 +163,54 @@ public sealed class WorkspaceRepository
             .ToList();
     }
 
+    /// <summary>
+    /// Everything on the calendar, for the standalone list window.
+    ///
+    /// One-off events are always included, whatever their date, so nothing a user typed
+    /// can quietly fall off the list. Repeating events have no last occurrence, so those
+    /// are expanded only across the supplied window.
+    /// </summary>
+    public IReadOnlyList<EventOccurrence> AllOccurrences(DateTime from, DateTime to)
+    {
+        var results = new List<EventOccurrence>();
+
+        foreach (var source in _workspace.Events)
+        {
+            var span = source.End - source.Start;
+            if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+
+            if (!source.Recurrence.IsRepeating)
+            {
+                results.Add(new EventOccurrence
+                {
+                    Source = source,
+                    Start = source.Start,
+                    End = source.Start + span,
+                });
+                continue;
+            }
+
+            foreach (var start in RecurrenceExpander.Occurrences(source.Start, source.Recurrence, from, to))
+            {
+                results.Add(new EventOccurrence { Source = source, Start = start, End = start + span });
+            }
+        }
+
+        return results.OrderBy(o => o.Start).ToList();
+    }
+
+    /// <summary>
+    /// Every todo, oldest due date first, with undated items last. Completed items are
+    /// left out unless asked for.
+    /// </summary>
+    public IReadOnlyList<TodoItem> AllTodos(bool includeCompleted) =>
+        _workspace.Todos
+            .Where(t => includeCompleted || !t.IsDone)
+            .OrderBy(t => t.DueAt.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueAt ?? DateTime.MaxValue)
+            .ThenByDescending(t => t.Priority)
+            .ToList();
+
     /// <summary>Which days in a range have at least one event, for dotting the month grid.</summary>
     public HashSet<DateTime> DaysWithEvents(DateTime from, DateTime to) =>
         OccurrencesBetween(from, to).Select(o => o.Start.Date).ToHashSet();

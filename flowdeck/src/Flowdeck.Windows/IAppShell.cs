@@ -37,4 +37,10 @@ public interface IAppShell
     void HideWidget();
 
     void ShowQuickAdd();
+
+    /// <summary>Opens the accumulated calendar list, or closes it if it is already up.</summary>
+    void ToggleEventsAgenda();
+
+    /// <summary>Opens the accumulated todo list, or closes it if it is already up.</summary>
+    void ToggleTodosAgenda();
 }

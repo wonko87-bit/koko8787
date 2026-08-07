@@ -209,6 +209,48 @@
             </Border>
           </Grid>
 
+          <Grid Style="{StaticResource Row}">
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Body}" Text="일정 목록 열기/닫기" />
+              <TextBlock Style="{StaticResource Text.Meta}" Text="예) Ctrl+Alt+C" />
+            </StackPanel>
+            <Border Width="150"
+                    Padding="10,6"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Corner.Small}">
+              <TextBox x:Name="AgendaEventsHotkey"
+                       IsReadOnly="True"
+                       PreviewKeyDown="OnHotkeyCapture"
+                       Style="{StaticResource TextBox.Flat}"
+                       ToolTip="이 칸을 클릭한 뒤 원하는 조합을 누르세요" />
+            </Border>
+          </Grid>
+
+          <Grid Style="{StaticResource Row}">
+            <StackPanel VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Body}" Text="할일 목록 열기/닫기" />
+              <TextBlock Style="{StaticResource Text.Meta}" Text="예) Ctrl+Alt+T" />
+            </StackPanel>
+            <Border Width="150"
+                    Padding="10,6"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Corner.Small}">
+              <TextBox x:Name="AgendaTodosHotkey"
+                       IsReadOnly="True"
+                       PreviewKeyDown="OnHotkeyCapture"
+                       Style="{StaticResource TextBox.Flat}"
+                       ToolTip="이 칸을 클릭한 뒤 원하는 조합을 누르세요" />
+            </Border>
+          </Grid>
+
           <TextBlock x:Name="HotkeyWarning"
                      Margin="0,-6,0,14"
                      Style="{StaticResource Text.Meta}"
