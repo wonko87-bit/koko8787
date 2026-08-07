@@ -1,0 +1,55 @@
+name: Flowdeck (Windows)
+
+# The WPF app can only be built on Windows, so this workflow is where the desktop
+# project is actually compiled. The core library and its tests run here too.
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "flowdeck/**"
+      - ".github/workflows/flowdeck-windows.yml"
+  pull_request:
+    paths:
+      - "flowdeck/**"
+      - ".github/workflows/flowdeck-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        working-directory: flowdeck
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore Flowdeck.sln
+
+      - name: Build
+        run: dotnet build Flowdeck.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/Flowdeck.Core.Tests/Flowdeck.Core.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Publish
+        run: >
+          dotnet publish src/Flowdeck.Windows/Flowdeck.Windows.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained false
+          --output publish
+
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowdeck-win-x64
+          path: flowdeck/publish
+          if-no-files-found: error

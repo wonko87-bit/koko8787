@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!-- Only for the tray icon: WPF has no NotifyIcon of its own. -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Flowdeck</AssemblyName>
+    <RootNamespace>Flowdeck.Windows</RootNamespace>
+    <ApplicationIcon>Assets\flowdeck.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Lets the project be compile-checked from a non-Windows agent. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Flowdeck.Core\Flowdeck.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\flowdeck.ico" />
+  </ItemGroup>
+
+</Project>

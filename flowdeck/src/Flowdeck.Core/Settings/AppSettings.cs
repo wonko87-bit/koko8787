@@ -54,6 +54,12 @@ public sealed class AppSettings
     /// <summary>Hide undated todos in the widget list.</summary>
     public bool HideUndatedTodos { get; set; }
 
+    /// <summary>
+    /// Reads a bare "2시" as 14:00 rather than 02:00. See
+    /// <c>NaturalLanguageParser.AssumeAfternoonForBareHours</c>.
+    /// </summary>
+    public bool AssumeAfternoonForBareHours { get; set; } = true;
+
     /// <summary>Editable so the routing vocabulary can be tuned without a rebuild.</summary>
     public RoutingRules Routing { get; set; } = new();
 
