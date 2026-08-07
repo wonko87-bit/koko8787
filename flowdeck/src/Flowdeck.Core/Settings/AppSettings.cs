@@ -42,7 +42,8 @@ public sealed class AppSettings
 
     public double WidgetWidth { get; set; } = 340;
 
-    public double WidgetHeight { get; set; } = 520;
+    /// <summary>Derived from the width by the widget's fixed aspect ratio; stored for reference.</summary>
+    public double WidgetHeight { get; set; } = 551;
 
     /// <summary>0.35 – 1.0. Applied to the widget's background, never to its text.</summary>
     public double WidgetOpacity { get; set; } = 0.92;
@@ -53,6 +54,18 @@ public sealed class AppSettings
 
     /// <summary>Hide undated todos in the widget list.</summary>
     public bool HideUndatedTodos { get; set; }
+
+    /// <summary>
+    /// Which column the month grid starts on. This also decides what "이번주 금요일" means,
+    /// so the parser and the calendar always agree about where a week begins.
+    /// </summary>
+    public DayOfWeek FirstDayOfWeek { get; set; } = DayOfWeek.Monday;
+
+    /// <summary>
+    /// Opt in to a blue Saturday and a red Sunday. Off by default: the palette is
+    /// otherwise monochrome, and weekends are already set apart by a lighter grey.
+    /// </summary>
+    public bool ColorWeekends { get; set; }
 
     /// <summary>
     /// Reads a bare "2시" as 14:00 rather than 02:00. See

@@ -128,6 +128,42 @@
             </Border>
           </Grid>
 
+          <!-- ============ calendar ============ -->
+          <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="달력" />
+
+          <Grid Style="{StaticResource Row}">
+            <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Body}" Text="주 시작 요일" />
+            <Border HorizontalAlignment="Right"
+                    Background="{DynamicResource Brush.SurfaceAlt}"
+                    CornerRadius="{StaticResource Corner.Small}">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="WeekStartMonday"
+                             Checked="OnWeekStartChanged"
+                             Content="월 ~ 일"
+                             GroupName="WeekStart"
+                             Style="{StaticResource RadioButton.Segment}" />
+                <RadioButton x:Name="WeekStartSunday"
+                             Checked="OnWeekStartChanged"
+                             Content="일 ~ 토"
+                             GroupName="WeekStart"
+                             Style="{StaticResource RadioButton.Segment}" />
+              </StackPanel>
+            </Border>
+          </Grid>
+
+          <Grid Style="{StaticResource Row}">
+            <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Body}" Text="토요일 파랑 · 일요일 빨강" />
+              <TextBlock Style="{StaticResource Text.Meta}"
+                         Text="끄면 주말도 나머지와 같은 회색조로 표시됩니다"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <CheckBox x:Name="ColorWeekends"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      Style="{StaticResource CheckBox.Setting}" />
+          </Grid>
+
           <!-- ============ hot keys ============ -->
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="단축키" />
 

@@ -14,6 +14,19 @@ namespace Flowdeck.Windows.Views;
 /// </summary>
 public partial class WidgetWindow : Window
 {
+    /// <summary>
+    /// Height as a multiple of width. Resizing preserves this, so the widget can grow
+    /// or shrink but never turns into a letterbox or a column.
+    /// </summary>
+    private const double AspectRatio = 1.62;
+
+    /// <summary>Width bounds. Height follows from <see cref="AspectRatio"/>.</summary>
+    private const double MinWidgetWidth = 300;
+    private const double MaxWidgetWidth = 440;
+
+    /// <summary>Left and right margins plus the border, subtracted to get the grid's width.</summary>
+    private const double HorizontalChrome = 30;
+
     private readonly AppSettings _settings;
     private readonly WindowPinService _pin;
     private readonly DispatcherTimer _clockTimer;
@@ -30,6 +43,7 @@ public partial class WidgetWindow : Window
 
         ApplyGeometry();
         ApplySettings();
+        ViewModel.UpdateMetrics(Width - HorizontalChrome);
 
         // Catches midnight, and any overdue todo tipping over as the hour turns.
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -52,6 +66,7 @@ public partial class WidgetWindow : Window
     {
         Root.Opacity = Math.Clamp(_settings.WidgetOpacity, 0.35, 1.0);
         _pin.Apply(_settings.PinMode);
+        ViewModel.ApplyCalendarSettings(_settings);
     }
 
     /// <summary>Puts the caret in the inline box, for the "capture here" hot key.</summary>
@@ -64,8 +79,10 @@ public partial class WidgetWindow : Window
 
     private void ApplyGeometry()
     {
-        Width = Math.Max(MinWidth, _settings.WidgetWidth);
-        Height = Math.Max(MinHeight, _settings.WidgetHeight);
+        // The height is always derived, so a settings file written before the ratio
+        // existed — or hand-edited — still opens in proportion.
+        Width = Math.Clamp(_settings.WidgetWidth, MinWidgetWidth, MaxWidgetWidth);
+        Height = Width * AspectRatio;
 
         var area = SystemParameters.WorkArea;
 
@@ -94,11 +111,27 @@ public partial class WidgetWindow : Window
         PersistGeometry();
     }
 
+    /// <summary>
+    /// Corner drag. Whichever axis the user pulled harder decides the new width, and the
+    /// height is derived from it, so the widget scales as a whole instead of stretching.
+    /// </summary>
     private void OnResize(object sender, DragDeltaEventArgs e)
     {
-        Width = Math.Max(MinWidth, Width + e.HorizontalChange);
-        Height = Math.Max(MinHeight, Height + e.VerticalChange);
+        var fromWidth = Width + e.HorizontalChange;
+        var fromHeight = (Height + e.VerticalChange) / AspectRatio;
+
+        var target = Math.Abs(e.HorizontalChange) >= Math.Abs(e.VerticalChange) ? fromWidth : fromHeight;
+
+        Width = Math.Clamp(target, MinWidgetWidth, MaxWidgetWidth);
+        Height = Width * AspectRatio;
         PersistGeometry();
+    }
+
+    private void OnWidgetSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged) return;
+
+        ViewModel.UpdateMetrics(e.NewSize.Width - HorizontalChrome);
     }
 
     private void OnInlineInputKeyDown(object sender, KeyEventArgs e)

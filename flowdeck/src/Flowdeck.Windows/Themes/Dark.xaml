@@ -27,8 +27,13 @@
   <SolidColorBrush x:Key="Brush.Accent" Color="{StaticResource Color.Accent}" />
   <SolidColorBrush x:Key="Brush.OnAccent" Color="{StaticResource Color.OnAccent}" />
 
-  <!-- Weekend day numbers sit one step back from weekdays rather than turning red. -->
+  <!-- By default weekend day numbers sit one step back from weekdays rather than turning red. -->
   <SolidColorBrush x:Key="Brush.Weekend" Color="{StaticResource Color.TextTertiary}" />
+
+  <!-- Only used when the weekend colour option is switched on. Muted on purpose, so they
+       read as an accent inside a grey palette rather than as warning colours. -->
+  <SolidColorBrush x:Key="Brush.Saturday" Color="#6E9BE8" />
+  <SolidColorBrush x:Key="Brush.Sunday" Color="#E8767C" />
 
   <Color x:Key="Color.Shadow">#000000</Color>
 

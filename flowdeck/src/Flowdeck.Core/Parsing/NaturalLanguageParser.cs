@@ -52,13 +52,19 @@ public sealed class NaturalLanguageParser
     /// <summary>Bare hours at or below this are read as afternoon when the rule is on.</summary>
     private const int AfternoonCutoff = 7;
 
+    /// <summary>
+    /// Where a week begins, which decides what "이번주 일요일" resolves to. Kept in step with
+    /// the calendar's first column so the text and the grid never disagree.
+    /// </summary>
+    public DayOfWeek FirstDayOfWeek { get; set; } = DayOfWeek.Monday;
+
     public ParsedEntry Parse(string input, DateTime now)
     {
         var entry = new ParsedEntry { RawInput = input ?? string.Empty };
         if (string.IsNullOrWhiteSpace(input)) return entry;
 
         var explicitTarget = _rules.FindMarker(input, out var body);
-        var tokens = TemporalScanner.Scan(body, now);
+        var tokens = TemporalScanner.Scan(body, now, FirstDayOfWeek);
 
         ApplyTokens(entry, tokens, now, ref explicitTarget);
 

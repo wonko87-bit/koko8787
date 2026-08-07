@@ -122,6 +122,7 @@ public partial class App : Application, IAppShell
         if (_parser is null) return;
 
         _parser.AssumeAfternoonForBareHours = _settings.AssumeAfternoonForBareHours;
+        _parser.FirstDayOfWeek = _settings.FirstDayOfWeek;
     }
 
     public string ReapplyHotKeys()

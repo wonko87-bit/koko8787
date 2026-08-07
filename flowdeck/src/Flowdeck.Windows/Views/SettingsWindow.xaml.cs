@@ -41,6 +41,10 @@ public partial class SettingsWindow : Window
         Opacity92.IsChecked = Settings.WidgetOpacity is >= 0.87 and < 0.97;
         Opacity100.IsChecked = Settings.WidgetOpacity >= 0.97;
 
+        WeekStartMonday.IsChecked = Settings.FirstDayOfWeek != DayOfWeek.Sunday;
+        WeekStartSunday.IsChecked = Settings.FirstDayOfWeek == DayOfWeek.Sunday;
+        ColorWeekends.IsChecked = Settings.ColorWeekends;
+
         QuickAddHotkey.Text = Settings.QuickAddHotkey;
         ToggleWidgetHotkey.Text = Settings.ToggleWidgetHotkey;
 
@@ -57,6 +61,8 @@ public partial class SettingsWindow : Window
         KeywordHints.Unchecked += OnParserOptionChanged;
         AfternoonBias.Checked += OnParserOptionChanged;
         AfternoonBias.Unchecked += OnParserOptionChanged;
+        ColorWeekends.Checked += OnWeekStartChanged;
+        ColorWeekends.Unchecked += OnWeekStartChanged;
         LaunchAtStartup.Checked += OnStartupChanged;
         LaunchAtStartup.Unchecked += OnStartupChanged;
         ShowWidgetOnStart.Checked += OnShowOnStartChanged;
@@ -95,6 +101,22 @@ public partial class SettingsWindow : Window
             : Opacity92.IsChecked == true ? 0.92
             : 1.0;
 
+        _shell.ApplyWidgetSettings();
+        _shell.SaveSettings();
+    }
+
+    /// <summary>
+    /// The week-start choice feeds the parser as well as the grid, so that "이번주 일요일"
+    /// lands on the Sunday the user can actually see in the calendar.
+    /// </summary>
+    private void OnWeekStartChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        Settings.FirstDayOfWeek = WeekStartSunday.IsChecked == true ? DayOfWeek.Sunday : DayOfWeek.Monday;
+        Settings.ColorWeekends = ColorWeekends.IsChecked == true;
+
+        _shell.ApplyParserSettings();
         _shell.ApplyWidgetSettings();
         _shell.SaveSettings();
     }

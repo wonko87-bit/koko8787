@@ -11,17 +11,55 @@ internal static class Ko
     public static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("ko-KR");
 }
 
+/// <summary>A column heading in the month grid.</summary>
+public sealed class WeekdayHeader
+{
+    public WeekdayHeader(DayOfWeek day, bool colorWeekends)
+    {
+        Label = day switch
+        {
+            DayOfWeek.Monday => "월",
+            DayOfWeek.Tuesday => "화",
+            DayOfWeek.Wednesday => "수",
+            DayOfWeek.Thursday => "목",
+            DayOfWeek.Friday => "금",
+            DayOfWeek.Saturday => "토",
+            _ => "일",
+        };
+
+        IsSaturday = day == DayOfWeek.Saturday;
+        IsSunday = day == DayOfWeek.Sunday;
+        ColorWeekends = colorWeekends;
+    }
+
+    public string Label { get; }
+
+    public bool IsSaturday { get; }
+
+    public bool IsSunday { get; }
+
+    public bool ColorWeekends { get; }
+}
+
 /// <summary>One cell in the month grid.</summary>
 public sealed class CalendarDay : ObservableObject
 {
     private bool _isSelected;
 
-    public CalendarDay(DateTime date, DateTime visibleMonth, DateTime today, Action<DateTime> onSelect)
+    public CalendarDay(
+        DateTime date,
+        DateTime visibleMonth,
+        DateTime today,
+        bool colorWeekends,
+        Action<DateTime> onSelect)
     {
         Date = date;
         IsCurrentMonth = date.Month == visibleMonth.Month && date.Year == visibleMonth.Year;
         IsToday = date.Date == today.Date;
-        IsWeekend = date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+        IsSaturday = date.DayOfWeek == DayOfWeek.Saturday;
+        IsSunday = date.DayOfWeek == DayOfWeek.Sunday;
+        IsWeekend = IsSaturday || IsSunday;
+        ColorWeekends = colorWeekends;
         SelectCommand = new RelayCommand(() => onSelect(Date));
     }
 
@@ -34,6 +72,13 @@ public sealed class CalendarDay : ObservableObject
     public bool IsToday { get; }
 
     public bool IsWeekend { get; }
+
+    public bool IsSaturday { get; }
+
+    public bool IsSunday { get; }
+
+    /// <summary>Carried per cell so the template can decide without reaching for global state.</summary>
+    public bool ColorWeekends { get; }
 
     /// <summary>Drawn as a small dot under the number.</summary>
     public bool HasEvents { get; set; }

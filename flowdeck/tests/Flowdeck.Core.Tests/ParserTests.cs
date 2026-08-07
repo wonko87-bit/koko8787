@@ -73,6 +73,32 @@ public class ParserTests
         Assert.Equal(new DateTime(y, m, d), Parse(input).Start);
 
     [Fact]
+    public void SundayFirstWeeksShiftWhatThisWeekMeans()
+    {
+        // Now is Thursday 6 Aug. Monday-first, this week opened on the 3rd, so
+        // "이번주 일요일" is the 9th. Sunday-first, it opened on the 2nd — already past.
+        var mondayFirst = new NaturalLanguageParser { FirstDayOfWeek = DayOfWeek.Monday };
+        var sundayFirst = new NaturalLanguageParser { FirstDayOfWeek = DayOfWeek.Sunday };
+
+        Assert.Equal(new DateTime(2026, 8, 9), mondayFirst.Parse("이번주 일요일 정리", Now).Start);
+        Assert.Equal(new DateTime(2026, 8, 2), sundayFirst.Parse("이번주 일요일 정리", Now).Start);
+
+        Assert.Equal(new DateTime(2026, 8, 16), mondayFirst.Parse("다음주 일요일 정리", Now).Start);
+        Assert.Equal(new DateTime(2026, 8, 9), sundayFirst.Parse("다음주 일요일 정리", Now).Start);
+    }
+
+    [Fact]
+    public void WeekStartDoesNotDisturbMidWeekDays()
+    {
+        var sundayFirst = new NaturalLanguageParser { FirstDayOfWeek = DayOfWeek.Sunday };
+
+        // Friday sits in the same week either way, as does a bare weekday.
+        Assert.Equal(new DateTime(2026, 8, 7), sundayFirst.Parse("이번주 금요일 회고", Now).Start);
+        Assert.Equal(new DateTime(2026, 8, 7), sundayFirst.Parse("금요일 회고", Now).Start);
+        Assert.Equal(new DateTime(2026, 8, 8), sundayFirst.Parse("주말 등산", Now).Start);
+    }
+
+    [Fact]
     public void NextMonthWithDay() =>
         Assert.Equal(new DateTime(2026, 9, 5), Parse("다음달 5일 정기점검").Start);
 

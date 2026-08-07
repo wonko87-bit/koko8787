@@ -4,9 +4,12 @@
         xmlns:infra="clr-namespace:Flowdeck.Windows.Infrastructure"
         Title="Flowdeck"
         Width="340"
-        Height="520"
-        MinWidth="280"
-        MinHeight="360"
+        Height="551"
+        MinWidth="300"
+        MinHeight="486"
+        MaxWidth="440"
+        MaxHeight="713"
+        SizeChanged="OnWidgetSizeChanged"
         AllowsTransparency="True"
         Background="Transparent"
         FontFamily="{StaticResource Font.UI}"
@@ -41,7 +44,7 @@
               <StackPanel Margin="0,3,0,2" VerticalAlignment="Center">
                 <TextBlock x:Name="Num"
                            HorizontalAlignment="Center"
-                           FontSize="12"
+                           FontSize="{Binding DataContext.DayFontSize, RelativeSource={RelativeSource AncestorType=Window}}"
                            Foreground="{TemplateBinding Foreground}"
                            Text="{Binding DayNumber}" />
                 <StackPanel Height="4"
@@ -74,6 +77,23 @@
               <DataTrigger Binding="{Binding IsWeekend}" Value="True">
                 <Setter TargetName="Num" Property="Foreground" Value="{DynamicResource Brush.Weekend}" />
               </DataTrigger>
+
+              <!-- Opt-in only; the grey above stays the default. -->
+              <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                  <Condition Binding="{Binding ColorWeekends}" Value="True" />
+                  <Condition Binding="{Binding IsSaturday}" Value="True" />
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="Num" Property="Foreground" Value="{DynamicResource Brush.Saturday}" />
+              </MultiDataTrigger>
+              <MultiDataTrigger>
+                <MultiDataTrigger.Conditions>
+                  <Condition Binding="{Binding ColorWeekends}" Value="True" />
+                  <Condition Binding="{Binding IsSunday}" Value="True" />
+                </MultiDataTrigger.Conditions>
+                <Setter TargetName="Num" Property="Foreground" Value="{DynamicResource Brush.Sunday}" />
+              </MultiDataTrigger>
+
               <DataTrigger Binding="{Binding IsCurrentMonth}" Value="False">
                 <Setter TargetName="Num" Property="Opacity" Value="0.32" />
                 <Setter TargetName="EventDot" Property="Opacity" Value="0.32" />
@@ -289,10 +309,27 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <TextBlock Margin="0,0,0,4"
+              <TextBlock x:Name="Head"
+                         Margin="0,0,0,5"
                          HorizontalAlignment="Center"
                          Style="{StaticResource Text.Section}"
-                         Text="{Binding}" />
+                         Text="{Binding Label}" />
+              <DataTemplate.Triggers>
+                <MultiDataTrigger>
+                  <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding ColorWeekends}" Value="True" />
+                    <Condition Binding="{Binding IsSaturday}" Value="True" />
+                  </MultiDataTrigger.Conditions>
+                  <Setter TargetName="Head" Property="Foreground" Value="{DynamicResource Brush.Saturday}" />
+                </MultiDataTrigger>
+                <MultiDataTrigger>
+                  <MultiDataTrigger.Conditions>
+                    <Condition Binding="{Binding ColorWeekends}" Value="True" />
+                    <Condition Binding="{Binding IsSunday}" Value="True" />
+                  </MultiDataTrigger.Conditions>
+                  <Setter TargetName="Head" Property="Foreground" Value="{DynamicResource Brush.Sunday}" />
+                </MultiDataTrigger>
+              </DataTemplate.Triggers>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -305,15 +342,16 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Button Height="32"
+              <Button Height="{Binding DataContext.DayCellSize, RelativeSource={RelativeSource AncestorType=Window}}"
                       Command="{Binding SelectCommand}"
                       Style="{StaticResource Day.Button}" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
 
+        <!-- Sits directly under the grid, so it travels down as the cells grow. -->
         <Border Height="1"
-                Margin="0,10,0,0"
+                Margin="0,12,0,0"
                 Background="{DynamicResource Brush.Border}" />
       </StackPanel>
 

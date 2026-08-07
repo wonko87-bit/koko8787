@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Services;
+using Flowdeck.Core.Settings;
 using Flowdeck.Windows.Infrastructure;
 
 namespace Flowdeck.Windows.ViewModels;
@@ -25,6 +26,11 @@ public sealed class WidgetViewModel : ObservableObject
     private string _quickInput = string.Empty;
     private string _previewText = string.Empty;
     private bool _hasPreview;
+    private double _dayCellSize = 38;
+    private double _dayFontSize = 12;
+
+    private DayOfWeek _firstDayOfWeek = DayOfWeek.Monday;
+    private bool _colorWeekends;
 
     public WidgetViewModel(
         WorkspaceRepository repository,
@@ -50,6 +56,7 @@ public sealed class WidgetViewModel : ObservableObject
         _dispatcher = Dispatcher.FromThread(Thread.CurrentThread);
         _repository.Changed += (_, _) => OnRepositoryChanged();
 
+        BuildWeekdayHeaders();
         Refresh();
     }
 
@@ -59,8 +66,25 @@ public sealed class WidgetViewModel : ObservableObject
 
     public ObservableCollection<TodoRow> Todos { get; } = new();
 
-    /// <summary>Column headers, Monday first.</summary>
-    public IReadOnlyList<string> WeekdayHeaders { get; } = new[] { "월", "화", "수", "목", "금", "토", "일" };
+    /// <summary>Column headers, starting on whichever day the user chose.</summary>
+    public ObservableCollection<WeekdayHeader> WeekdayHeaders { get; } = new();
+
+    /// <summary>
+    /// Edge length of one day cell. Driven by the widget's width so the grid keeps its
+    /// proportions as the window grows, which is also what moves the divider below it.
+    /// </summary>
+    public double DayCellSize
+    {
+        get => _dayCellSize;
+        private set => Set(ref _dayCellSize, value);
+    }
+
+    /// <summary>Scales with the cell so a larger grid does not end up mostly empty space.</summary>
+    public double DayFontSize
+    {
+        get => _dayFontSize;
+        private set => Set(ref _dayFontSize, value);
+    }
 
     public ICommand PreviousMonthCommand { get; }
 
@@ -122,6 +146,44 @@ public sealed class WidgetViewModel : ObservableObject
     {
         BuildMonth();
         BuildDayLists();
+    }
+
+    /// <summary>Re-reads the calendar options after the settings window changes them.</summary>
+    public void ApplyCalendarSettings(AppSettings settings)
+    {
+        var changed = _firstDayOfWeek != settings.FirstDayOfWeek || _colorWeekends != settings.ColorWeekends;
+        if (!changed) return;
+
+        _firstDayOfWeek = settings.FirstDayOfWeek;
+        _colorWeekends = settings.ColorWeekends;
+
+        BuildWeekdayHeaders();
+        Refresh();
+    }
+
+    /// <summary>
+    /// Recomputes the grid metrics for the widget's current content width. Cells are square,
+    /// so the calendar's height follows from the width and the layout stays in proportion.
+    /// </summary>
+    public void UpdateMetrics(double contentWidth)
+    {
+        if (contentWidth <= 0) return;
+
+        DayCellSize = Math.Clamp(contentWidth / 7d, MinDayCell, MaxDayCell);
+        DayFontSize = Math.Clamp(DayCellSize * 0.30, 11d, 16d);
+    }
+
+    private const double MinDayCell = 30;
+    private const double MaxDayCell = 62;
+
+    private void BuildWeekdayHeaders()
+    {
+        WeekdayHeaders.Clear();
+        for (var i = 0; i < 7; i++)
+        {
+            var day = (DayOfWeek)(((int)_firstDayOfWeek + i) % 7);
+            WeekdayHeaders.Add(new WeekdayHeader(day, _colorWeekends));
+        }
     }
 
     /// <summary>
@@ -190,8 +252,8 @@ public sealed class WidgetViewModel : ObservableObject
     {
         var today = _clock().Date;
 
-        // Six full weeks starting on the Monday on or before the 1st, so the grid
-        // never changes height as the user pages through months.
+        // Six full weeks starting on the week-opening day on or before the 1st, so the
+        // grid never changes height as the user pages through months.
         var gridStart = _visibleMonth.AddDays(-WeekIndex(_visibleMonth.DayOfWeek));
         var gridEnd = gridStart.AddDays(41);
 
@@ -205,7 +267,7 @@ public sealed class WidgetViewModel : ObservableObject
         for (var i = 0; i < 42; i++)
         {
             var date = gridStart.AddDays(i);
-            Days.Add(new CalendarDay(date, _visibleMonth, today, SelectDay)
+            Days.Add(new CalendarDay(date, _visibleMonth, today, _colorWeekends, SelectDay)
             {
                 HasEvents = eventDays.Contains(date),
                 HasTodos = todoDays.Contains(date),
@@ -273,5 +335,5 @@ public sealed class WidgetViewModel : ObservableObject
 
     private Task DeleteEventAsync(EventRow row) => _repository.DeleteEventAsync(row.Id);
 
-    private static int WeekIndex(DayOfWeek day) => ((int)day + 6) % 7;
+    private int WeekIndex(DayOfWeek day) => ((int)day - (int)_firstDayOfWeek + 7) % 7;
 }

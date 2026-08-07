@@ -29,6 +29,10 @@
 
   <SolidColorBrush x:Key="Brush.Weekend" Color="{StaticResource Color.TextTertiary}" />
 
+  <!-- Darker than the dark-theme pair so they hold their contrast on white. -->
+  <SolidColorBrush x:Key="Brush.Saturday" Color="#2E62C8" />
+  <SolidColorBrush x:Key="Brush.Sunday" Color="#C8383F" />
+
   <Color x:Key="Color.Shadow">#5A5A5A</Color>
 
 </ResourceDictionary>

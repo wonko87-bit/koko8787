@@ -63,14 +63,14 @@ internal static class TemporalScanner
     private const int RankPriority = 55;
     private const int RankNoise = 5;
 
-    public static List<Token> Scan(string text, DateTime now)
+    public static List<Token> Scan(string text, DateTime now, DayOfWeek firstDayOfWeek = DayOfWeek.Monday)
     {
         var candidates = new List<Token>();
 
         AddReminders(text, candidates);
         AddDurations(text, candidates);
         AddRecurrences(text, candidates);
-        AddDates(text, now, candidates);
+        AddDates(text, now, firstDayOfWeek, candidates);
         AddTimes(text, candidates);
         AddTags(text, candidates);
         AddPriorities(text, candidates);
@@ -221,7 +221,7 @@ internal static class TemporalScanner
         }
     }
 
-    private static void AddDates(string text, DateTime now, List<Token> into)
+    private static void AddDates(string text, DateTime now, DayOfWeek firstDayOfWeek, List<Token> into)
     {
         var today = now.Date;
 
@@ -298,7 +298,8 @@ internal static class TemporalScanner
                     "지난주" or "저번주" => -7,
                     _ => 0, // 이번주, 금주
                 };
-                date = StartOfWeek(today).AddDays(weekShift + WeekIndex(target));
+                date = StartOfWeek(today, firstDayOfWeek)
+                    .AddDays(weekShift + WeekIndex(target, firstDayOfWeek));
             }
 
             AddDate(into, m, date);
@@ -313,7 +314,11 @@ internal static class TemporalScanner
                 "다다음" => 14,
                 _ => 0,
             };
-            AddDate(into, m, StartOfWeek(today).AddDays(weekShift + WeekIndex(DayOfWeek.Saturday)));
+            AddDate(
+                into,
+                m,
+                StartOfWeek(today, firstDayOfWeek)
+                    .AddDays(weekShift + WeekIndex(DayOfWeek.Saturday, firstDayOfWeek)));
         }
 
         foreach (Match m in RelMonthDay.Matches(text))
@@ -332,7 +337,7 @@ internal static class TemporalScanner
 
         foreach (Match m in WeekOnly.Matches(text))
         {
-            AddDate(into, m, StartOfWeek(today).AddDays(7));
+            AddDate(into, m, StartOfWeek(today, firstDayOfWeek).AddDays(7));
         }
 
         foreach (Match m in NthDay.Matches(text))
@@ -506,8 +511,10 @@ internal static class TemporalScanner
         _ => DayOfWeek.Sunday,
     };
 
-    /// <summary>Weeks run Monday to Sunday, which is how Korean calendars are read.</summary>
-    private static DateTime StartOfWeek(DateTime date) => date.AddDays(-WeekIndex(date.DayOfWeek));
+    private static DateTime StartOfWeek(DateTime date, DayOfWeek firstDayOfWeek) =>
+        date.AddDays(-WeekIndex(date.DayOfWeek, firstDayOfWeek));
 
-    private static int WeekIndex(DayOfWeek day) => ((int)day + 6) % 7;
+    /// <summary>Position of <paramref name="day"/> within a week that opens on <paramref name="firstDayOfWeek"/>.</summary>
+    private static int WeekIndex(DayOfWeek day, DayOfWeek firstDayOfWeek) =>
+        ((int)day - (int)firstDayOfWeek + 7) % 7;
 }
