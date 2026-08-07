@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Flowdeck.Core.Settings;
 using Flowdeck.Windows.Interop;
 using Flowdeck.Windows.ViewModels;
@@ -15,6 +16,7 @@ public partial class WidgetWindow : Window
 {
     private readonly AppSettings _settings;
     private readonly WindowPinService _pin;
+    private readonly DispatcherTimer _clockTimer;
 
     public WidgetWindow(WidgetViewModel viewModel, AppSettings settings)
     {
@@ -28,6 +30,11 @@ public partial class WidgetWindow : Window
 
         ApplyGeometry();
         ApplySettings();
+
+        // Catches midnight, and any overdue todo tipping over as the hour turns.
+        _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _clockTimer.Tick += (_, _) => ViewModel.TickClock();
+        _clockTimer.Start();
 
         Closing += OnClosing;
     }
@@ -123,6 +130,7 @@ public partial class WidgetWindow : Window
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         PersistGeometry();
+        _clockTimer.Stop();
         _pin.Dispose();
     }
 

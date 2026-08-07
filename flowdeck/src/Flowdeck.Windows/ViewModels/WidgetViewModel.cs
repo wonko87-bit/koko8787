@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using System.Windows.Threading;
 using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Services;
 using Flowdeck.Windows.Infrastructure;
@@ -16,9 +17,11 @@ public sealed class WidgetViewModel : ObservableObject
     private readonly WorkspaceRepository _repository;
     private readonly NaturalLanguageParser _parser;
     private readonly Func<DateTime> _clock;
+    private readonly Dispatcher? _dispatcher;
 
     private DateTime _visibleMonth;
     private DateTime _selectedDate;
+    private DateTime _knownToday;
     private string _quickInput = string.Empty;
     private string _previewText = string.Empty;
     private bool _hasPreview;
@@ -35,13 +38,18 @@ public sealed class WidgetViewModel : ObservableObject
         var today = _clock().Date;
         _visibleMonth = new DateTime(today.Year, today.Month, 1);
         _selectedDate = today;
+        _knownToday = today;
 
         PreviousMonthCommand = new RelayCommand(() => ShiftMonth(-1));
         NextMonthCommand = new RelayCommand(() => ShiftMonth(1));
         TodayCommand = new RelayCommand(GoToToday);
         SubmitCommand = new AsyncRelayCommand(SubmitAsync, () => !string.IsNullOrWhiteSpace(QuickInput));
 
-        _repository.Changed += (_, _) => Refresh();
+        // The view model is built on the UI thread; a repository change raised anywhere
+        // else still has to land here, because these collections are bound to the widget.
+        _dispatcher = Dispatcher.FromThread(Thread.CurrentThread);
+        _repository.Changed += (_, _) => OnRepositoryChanged();
+
         Refresh();
     }
 
@@ -114,6 +122,39 @@ public sealed class WidgetViewModel : ObservableObject
     {
         BuildMonth();
         BuildDayLists();
+    }
+
+    /// <summary>
+    /// Called on a timer. A widget that sits on the desktop for days has to notice
+    /// midnight passing, otherwise "오늘" keeps pointing at yesterday.
+    /// </summary>
+    public void TickClock()
+    {
+        var today = _clock().Date;
+        if (today == _knownToday) return;
+
+        var wasFollowingToday = _selectedDate.Date == _knownToday;
+        _knownToday = today;
+
+        if (wasFollowingToday)
+        {
+            GoToToday();
+        }
+        else
+        {
+            Refresh();
+        }
+    }
+
+    private void OnRepositoryChanged()
+    {
+        if (_dispatcher is null || _dispatcher.CheckAccess())
+        {
+            Refresh();
+            return;
+        }
+
+        _dispatcher.Invoke(Refresh);
     }
 
     private void ShiftMonth(int delta)

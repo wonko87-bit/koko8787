@@ -38,9 +38,14 @@ public sealed class WorkspaceRepository
 
     public IReadOnlyList<CalendarEvent> Events => _workspace.Events;
 
+    /// <summary>
+    /// Note the deliberate absence of ConfigureAwait(false) here and in every mutation:
+    /// <see cref="Changed"/> has to reach the caller's context, because on the desktop the
+    /// handler updates collections that are bound to the UI and may only be touched there.
+    /// </summary>
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        _workspace = await _store.LoadAsync(cancellationToken).ConfigureAwait(false);
+        _workspace = await _store.LoadAsync(cancellationToken);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -56,7 +61,7 @@ public sealed class WorkspaceRepository
         if (result.Todo is not null) _workspace.Todos.Add(result.Todo);
         if (result.Event is not null) _workspace.Events.Add(result.Event);
 
-        await SaveAsync().ConfigureAwait(false);
+        await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
         return result;
     }
@@ -87,7 +92,7 @@ public sealed class WorkspaceRepository
         todo.CompletedAt = todo.IsDone ? now : null;
         todo.UpdatedAt = now;
 
-        await SaveAsync().ConfigureAwait(false);
+        await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -102,7 +107,7 @@ public sealed class WorkspaceRepository
             linked.LinkedTodoId = null;
         }
 
-        await SaveAsync().ConfigureAwait(false);
+        await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -117,7 +122,7 @@ public sealed class WorkspaceRepository
             linked.LinkedEventId = null;
         }
 
-        await SaveAsync().ConfigureAwait(false);
+        await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -127,7 +132,7 @@ public sealed class WorkspaceRepository
         var removed = _workspace.Todos.RemoveAll(t => t.IsDone && t.CompletedAt.HasValue && t.CompletedAt < cutoff);
         if (removed == 0) return 0;
 
-        await SaveAsync().ConfigureAwait(false);
+        await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
         return removed;
     }
@@ -193,7 +198,7 @@ public sealed class WorkspaceRepository
     public async Task ReplaceAsync(Workspace workspace)
     {
         _workspace = workspace;
-        await SaveAsync().ConfigureAwait(false);
+        await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

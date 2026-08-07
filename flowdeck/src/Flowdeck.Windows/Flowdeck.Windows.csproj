@@ -14,6 +14,10 @@
     <ApplicationIcon>Assets\flowdeck.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- WFAC010 tells Windows Forms apps to set high DPI in code instead of the
+         manifest. This is a WPF app that only borrows NotifyIcon, and WPF reads its
+         DPI awareness from the manifest, so the manifest is the right place. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <!-- Lets the project be compile-checked from a non-Windows agent. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
