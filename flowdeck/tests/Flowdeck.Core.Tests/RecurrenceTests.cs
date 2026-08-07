@@ -127,6 +127,55 @@ public class RecurrenceTests
         Assert.Equal(new DateTime(2026, 8, 7, 7, 0, 0), RecurrenceExpander.Next(start, rule, start));
     }
 
+    [Theory]
+    [InlineData(RecurrenceKind.Daily, 1, "매일")]
+    [InlineData(RecurrenceKind.Daily, 3, "3일마다")]
+    [InlineData(RecurrenceKind.Weekdays, 1, "평일")]
+    [InlineData(RecurrenceKind.Weekly, 2, "격주 목")]
+    [InlineData(RecurrenceKind.Weekly, 3, "3주마다 목")]
+    public void ShortFormWithoutExplicitWeekdaysFallsBackToTheAnchor(
+        RecurrenceKind kind,
+        int interval,
+        string expected)
+    {
+        var rule = new Recurrence { Kind = kind, Interval = interval };
+
+        // A Thursday, so a weekly rule with no listed days reads off the anchor.
+        Assert.Equal(expected, rule.DescribeShort(new DateTime(2026, 8, 6)));
+    }
+
+    [Fact]
+    public void ShortFormListsWeekdaysInOrder()
+    {
+        var rule = new Recurrence
+        {
+            Kind = RecurrenceKind.Weekly,
+            Interval = 1,
+            // Deliberately out of order: the label should still read 월,목.
+            DaysOfWeek = { DayOfWeek.Thursday, DayOfWeek.Monday },
+        };
+
+        Assert.Equal("매주 월,목", rule.DescribeShort());
+    }
+
+    [Fact]
+    public void ShortFormTakesTheDayOfMonthFromTheAnchor()
+    {
+        var monthly = new Recurrence { Kind = RecurrenceKind.Monthly };
+        var yearly = new Recurrence { Kind = RecurrenceKind.Yearly };
+        var anchor = new DateTime(2026, 3, 10);
+
+        Assert.Equal("매달 10일", monthly.DescribeShort(anchor));
+        Assert.Equal("매년 3월 10일", yearly.DescribeShort(anchor));
+
+        // With nothing to read the day from, the label degrades rather than inventing one.
+        Assert.Equal("매달", monthly.DescribeShort());
+    }
+
+    [Fact]
+    public void ShortFormIsEmptyForAOneOff() =>
+        Assert.Equal(string.Empty, Recurrence.None.DescribeShort(new DateTime(2026, 8, 6)));
+
     [Fact]
     public void NextReturnsNothingForAOneOff() =>
         Assert.Null(RecurrenceExpander.Next(new DateTime(2026, 8, 6), Recurrence.None, new DateTime(2026, 8, 6)));

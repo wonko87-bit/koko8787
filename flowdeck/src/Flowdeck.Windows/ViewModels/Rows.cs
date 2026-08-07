@@ -163,6 +163,86 @@ public sealed class TodoRow : ObservableObject
     public ICommand DeleteCommand { get; }
 }
 
+/// <summary>
+/// A repeat rule collapsed to one line — "3분할 운동 - 상체 [매주 월,목]".
+///
+/// The list windows show these instead of scattering every occurrence through the date
+/// groups, which would bury the one-off entries under a rule that never ends.
+/// </summary>
+public sealed class RecurringRow : ObservableObject
+{
+    private readonly TodoItem? _todo;
+    private readonly Func<RecurringRow, Task>? _toggle;
+
+    /// <summary>A repeating todo. Its due date is the occurrence currently pending.</summary>
+    public RecurringRow(TodoItem todo, Func<RecurringRow, Task> toggle, Func<RecurringRow, Task> delete)
+    {
+        _todo = todo;
+        _toggle = toggle;
+
+        Id = todo.Id;
+        Title = todo.Title;
+        IsTodo = true;
+        PatternLabel = Wrap(todo.Recurrence.DescribeShort(todo.DueAt));
+        NextLabel = todo.DueAt.HasValue ? "다음 " + FormatNext(todo.DueAt.Value, todo.HasTime) : string.Empty;
+        TagLabel = string.Join("  ", todo.Tags.Select(t => "#" + t));
+        HasTags = todo.Tags.Count > 0;
+        DeleteCommand = new AsyncRelayCommand(() => delete(this));
+    }
+
+    /// <summary>A repeating event. The next occurrence is worked out from the rule.</summary>
+    public RecurringRow(CalendarEvent source, DateTime now, Func<RecurringRow, Task> delete)
+    {
+        Id = source.Id;
+        Title = source.Title;
+        IsTodo = false;
+        PatternLabel = Wrap(source.Recurrence.DescribeShort(source.Start));
+
+        var next = RecurrenceExpander.Next(source.Start, source.Recurrence, now);
+        NextLabel = next.HasValue ? "다음 " + FormatNext(next.Value, !source.IsAllDay) : string.Empty;
+
+        TagLabel = string.Join("  ", source.Tags.Select(t => "#" + t));
+        HasTags = source.Tags.Count > 0;
+        DeleteCommand = new AsyncRelayCommand(() => delete(this));
+    }
+
+    public string Id { get; }
+
+    public string Title { get; }
+
+    /// <summary>The repeat rule in brackets, e.g. "[매주 월,목]".</summary>
+    public string PatternLabel { get; }
+
+    public string NextLabel { get; }
+
+    public string TagLabel { get; }
+
+    public bool HasTags { get; }
+
+    /// <summary>Only todos get a checkbox; an event has nothing to complete.</summary>
+    public bool IsTodo { get; }
+
+    /// <summary>
+    /// Ticking a repeating todo does not close it — the repository rolls its due date on
+    /// to the next occurrence, so this row stays put and its "다음" date moves.
+    /// </summary>
+    public bool IsDone
+    {
+        get => _todo?.IsDone ?? false;
+        set
+        {
+            if (_todo is null || _toggle is null || value == _todo.IsDone) return;
+            _ = _toggle(this);
+            Raise();
+        }
+    }
+
+    private static string Wrap(string pattern) => pattern.Length == 0 ? string.Empty : $"[{pattern}]";
+
+    private static string FormatNext(DateTime when, bool hasTime) =>
+        hasTime ? when.ToString("M월 d일 HH:mm", Ko.Culture) : when.ToString("M월 d일", Ko.Culture);
+}
+
 /// <summary>One occurrence of an event in the day list.</summary>
 public sealed class EventRow : ObservableObject
 {

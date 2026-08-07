@@ -143,6 +143,61 @@
       </DataTemplate.Triggers>
     </DataTemplate>
 
+    <!-- A repeat rule on one line: title, the pattern in brackets, then the next date. -->
+    <DataTemplate DataType="{x:Type vm:RecurringRow}">
+      <Grid x:Name="Row" Margin="0,0,0,5" Background="Transparent">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <CheckBox Margin="0,2,10,0"
+                  VerticalAlignment="Top"
+                  IsChecked="{Binding IsDone, Mode=TwoWay}"
+                  Style="{StaticResource CheckBox.Todo}"
+                  ToolTip="완료하고 다음 차례로 넘기기"
+                  Visibility="{Binding IsTodo, Converter={StaticResource BoolToVisibility}}" />
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal">
+          <TextBlock Style="{StaticResource Text.Body}"
+                     Text="{Binding Title}"
+                     TextTrimming="CharacterEllipsis" />
+          <TextBlock Margin="7,0,0,0"
+                     VerticalAlignment="Center"
+                     FontWeight="SemiBold"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding PatternLabel}" />
+          <TextBlock Margin="8,0,0,0"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource Brush.TextTertiary}"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding TagLabel}"
+                     Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <TextBlock Margin="8,0,0,0"
+                     VerticalAlignment="Center"
+                     Foreground="{DynamicResource Brush.TextTertiary}"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding NextLabel}"
+                     Visibility="{Binding NextLabel, Converter={StaticResource StringToVisibility}}" />
+          <Button x:Name="Delete"
+                  Command="{Binding DeleteCommand}"
+                  Content="&#xE711;"
+                  Style="{StaticResource Row.Delete}"
+                  ToolTip="반복 삭제" />
+        </StackPanel>
+      </Grid>
+
+      <DataTemplate.Triggers>
+        <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+          <Setter TargetName="Delete" Property="Opacity" Value="1" />
+        </Trigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
     <!-- One day: a heading with a count, then its entries. -->
     <DataTemplate DataType="{x:Type vm:AgendaGroup}">
       <StackPanel x:Name="GroupRoot" Margin="0,0,0,16">
@@ -234,24 +289,28 @@
                     Margin="0,14,0,0"
                     HorizontalScrollBarVisibility="Disabled"
                     VerticalScrollBarVisibility="Auto">
-        <Grid Margin="0,0,8,0">
-          <ItemsControl ItemsSource="{Binding Groups}" />
-          <TextBlock Margin="0,20,0,0"
-                     HorizontalAlignment="Center"
-                     Style="{StaticResource Text.Meta}"
-                     Text="{Binding EmptyMessage}"
-                     Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
-        </Grid>
-      </ScrollViewer>
+        <StackPanel Margin="0,0,8,0">
+          <Grid>
+            <ItemsControl ItemsSource="{Binding Groups}" />
+            <TextBlock Margin="0,20,0,0"
+                       HorizontalAlignment="Center"
+                       Style="{StaticResource Text.Meta}"
+                       Text="{Binding EmptyMessage}"
+                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}" />
+          </Grid>
 
-      <!-- ============ footer ============ -->
-      <TextBlock Grid.Row="2"
-                 Margin="0,12,0,0"
-                 Foreground="{DynamicResource Brush.TextTertiary}"
-                 FontSize="11"
-                 Text="{Binding FooterNote}"
-                 TextWrapping="Wrap"
-                 Visibility="{Binding HasFooterNote, Converter={StaticResource BoolToVisibility}}" />
+          <!-- ============ repeats, gathered at the bottom ============ -->
+          <StackPanel Visibility="{Binding HasRecurring, Converter={StaticResource BoolToVisibility}}">
+            <Grid Margin="0,4,0,7">
+              <TextBlock Style="{StaticResource Text.Section}" Text="{Binding RecurringSectionLabel}" />
+            </Grid>
+            <Border Height="1"
+                    Margin="0,0,0,8"
+                    Background="{DynamicResource Brush.Border}" />
+            <ItemsControl ItemsSource="{Binding Recurring}" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
 
       <Thumb x:Name="ResizeGrip"
              Grid.Row="2"

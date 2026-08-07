@@ -44,10 +44,6 @@ public sealed class AgendaGroup
 /// </summary>
 public sealed class AgendaViewModel : ObservableObject
 {
-    /// <summary>How far back and forward repeating events are expanded for the list.</summary>
-    private static readonly int PastDays = 90;
-    private static readonly int FutureDays = 365;
-
     private readonly WorkspaceRepository _repository;
     private readonly Func<DateTime> _clock;
     private readonly Dispatcher? _dispatcher;
@@ -70,6 +66,13 @@ public sealed class AgendaViewModel : ObservableObject
     public AgendaMode Mode { get; }
 
     public ObservableCollection<AgendaGroup> Groups { get; } = new();
+
+    /// <summary>Repeat rules, one line each, shown below the dated groups.</summary>
+    public ObservableCollection<RecurringRow> Recurring { get; } = new();
+
+    public bool HasRecurring => Recurring.Count > 0;
+
+    public string RecurringSectionLabel => Mode == AgendaMode.Events ? "반복 일정" : "반복 할일";
 
     public string Title => Mode == AgendaMode.Events ? "일정" : "할일";
 
@@ -94,18 +97,13 @@ public sealed class AgendaViewModel : ObservableObject
 
     public string EmptyMessage => Mode == AgendaMode.Events ? "등록된 일정이 없습니다" : "등록된 할일이 없습니다";
 
-    /// <summary>Explains the horizon so a missing far-future repeat does not look like a bug.</summary>
-    public string FooterNote => Mode == AgendaMode.Events
-        ? $"반복 일정은 지난 {PastDays}일부터 향후 {FutureDays / 365}년까지 펼쳐서 표시합니다"
-        : string.Empty;
-
-    public bool HasFooterNote => FooterNote.Length > 0;
-
     public void Reload()
     {
         var now = _clock();
 
         Groups.Clear();
+        Recurring.Clear();
+
         if (Mode == AgendaMode.Events)
         {
             LoadEvents(now);
@@ -115,19 +113,16 @@ public sealed class AgendaViewModel : ObservableObject
             LoadTodos(now);
         }
 
-        IsEmpty = Groups.Count == 0;
+        IsEmpty = Groups.Count == 0 && Recurring.Count == 0;
+        Raise(nameof(HasRecurring));
         Raise(nameof(TotalLabel));
     }
 
-    public string TotalLabel => $"{Groups.Sum(g => g.Items.Count)}건";
+    public string TotalLabel => $"{Groups.Sum(g => g.Items.Count) + Recurring.Count}건";
 
     private void LoadEvents(DateTime now)
     {
-        var occurrences = _repository.AllOccurrences(
-            now.Date.AddDays(-PastDays),
-            now.Date.AddDays(FutureDays));
-
-        foreach (var byDay in occurrences.GroupBy(o => o.Start.Date).OrderBy(g => g.Key))
+        foreach (var byDay in _repository.OneOffOccurrences().GroupBy(o => o.Start.Date).OrderBy(g => g.Key))
         {
             var group = CreateGroup(byDay.Key, now);
             foreach (var occurrence in byDay.OrderBy(o => o.IsAllDay ? 0 : 1).ThenBy(o => o.Start))
@@ -136,6 +131,11 @@ public sealed class AgendaViewModel : ObservableObject
             }
 
             Groups.Add(group);
+        }
+
+        foreach (var source in _repository.RepeatingEvents())
+        {
+            Recurring.Add(new RecurringRow(source, now, DeleteRecurringEventAsync));
         }
     }
 
@@ -146,7 +146,7 @@ public sealed class AgendaViewModel : ObservableObject
         // Undated items have no day to sit under, so they collect in a group of their own
         // at the end rather than being dropped or pinned to today.
         foreach (var byDay in todos
-                     .Where(t => t.DueAt.HasValue)
+                     .Where(t => !t.Recurrence.IsRepeating && t.DueAt.HasValue)
                      .GroupBy(t => t.DueAt!.Value.Date)
                      .OrderBy(g => g.Key))
         {
@@ -159,16 +159,22 @@ public sealed class AgendaViewModel : ObservableObject
             Groups.Add(group);
         }
 
-        var undated = todos.Where(t => !t.DueAt.HasValue).ToList();
-        if (undated.Count == 0) return;
-
-        var tail = new AgendaGroup("날짜 없음", isToday: false, isPast: false, isUndated: true);
-        foreach (var todo in undated)
+        var undated = todos.Where(t => !t.Recurrence.IsRepeating && !t.DueAt.HasValue).ToList();
+        if (undated.Count > 0)
         {
-            tail.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+            var tail = new AgendaGroup("날짜 없음", isToday: false, isPast: false, isUndated: true);
+            foreach (var todo in undated)
+            {
+                tail.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+            }
+
+            Groups.Add(tail);
         }
 
-        Groups.Add(tail);
+        foreach (var todo in todos.Where(t => t.Recurrence.IsRepeating))
+        {
+            Recurring.Add(new RecurringRow(todo, ToggleRecurringTodoAsync, DeleteRecurringTodoAsync));
+        }
     }
 
     private static AgendaGroup CreateGroup(DateTime day, DateTime now)
@@ -207,4 +213,10 @@ public sealed class AgendaViewModel : ObservableObject
     private Task DeleteTodoAsync(TodoRow row) => _repository.DeleteTodoAsync(row.Id);
 
     private Task DeleteEventAsync(EventRow row) => _repository.DeleteEventAsync(row.Id);
+
+    private Task ToggleRecurringTodoAsync(RecurringRow row) => _repository.ToggleTodoAsync(row.Id, _clock());
+
+    private Task DeleteRecurringTodoAsync(RecurringRow row) => _repository.DeleteTodoAsync(row.Id);
+
+    private Task DeleteRecurringEventAsync(RecurringRow row) => _repository.DeleteEventAsync(row.Id);
 }

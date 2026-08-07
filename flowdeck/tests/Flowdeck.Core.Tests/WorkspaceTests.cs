@@ -168,28 +168,29 @@ public class WorkspaceRepositoryTests
     }
 
     [Fact]
-    public async Task AllOccurrencesKeepsOneOffsOutsideTheWindow()
+    public async Task OneOffOccurrencesKeepDistantDatesAndLeaveOutRepeats()
     {
         var (repo, _) = Build();
         await repo.CaptureAsync(Parse("!CD 2029-01-15 장기 계약 갱신"), Now);
         await repo.CaptureAsync(Parse("!CD 매주 화요일 오전 10시 주간회의"), Now);
 
-        var list = repo.AllOccurrences(Now.Date, Now.Date.AddDays(21));
+        var oneOffs = repo.OneOffOccurrences();
 
-        // The 2029 one-off survives despite sitting far outside the window; the repeating
-        // meeting contributes only the occurrences inside it.
-        Assert.Contains(list, o => o.Title == "장기 계약 갱신");
-        Assert.Equal(3, list.Count(o => o.Title == "주간회의"));
+        // The 2029 entry survives however far off it is; the repeating meeting is a rule,
+        // so it belongs to RepeatingEvents rather than to the dated list.
+        Assert.Single(oneOffs);
+        Assert.Equal("장기 계약 갱신", oneOffs[0].Title);
+        Assert.Equal("주간회의", Assert.Single(repo.RepeatingEvents()).Title);
     }
 
     [Fact]
-    public async Task AllOccurrencesAreSortedByStart()
+    public async Task OneOffOccurrencesAreSortedByStart()
     {
         var (repo, _) = Build();
         await repo.CaptureAsync(Parse("!CD 8월 20일 늦은 일정"), Now);
         await repo.CaptureAsync(Parse("!CD 8월 10일 이른 일정"), Now);
 
-        var list = repo.AllOccurrences(Now.Date, Now.Date.AddDays(60));
+        var list = repo.OneOffOccurrences();
 
         Assert.Equal("이른 일정", list[0].Title);
         Assert.Equal("늦은 일정", list[1].Title);

@@ -57,6 +57,71 @@ public sealed class Recurrence
         return baseLabel;
     }
 
+    /// <summary>
+    /// A compact one-line form for list views: "매주 월,목", "격주 목", "매달 10일".
+    ///
+    /// Monthly and yearly rules carry their day in the entry's own date rather than in the
+    /// rule, so <paramref name="anchor"/> supplies it — pass the event's start or the todo's
+    /// due date. Without it those degrade to plain "매달" / "매년".
+    /// </summary>
+    public string DescribeShort(DateTime? anchor = null)
+    {
+        if (!IsRepeating) return string.Empty;
+
+        var every = Math.Max(1, Interval);
+
+        switch (Kind)
+        {
+            case RecurrenceKind.Daily:
+                return every > 1 ? $"{every}일마다" : "매일";
+
+            case RecurrenceKind.Weekdays:
+                return "평일";
+
+            case RecurrenceKind.Weekly:
+            {
+                var head = every == 2 ? "격주" : every > 1 ? $"{every}주마다" : "매주";
+
+                var days = DaysOfWeek.Count > 0
+                    ? DaysOfWeek.Distinct().OrderBy(WeekOrder).Select(ShortDayName).ToList()
+                    : anchor.HasValue
+                        ? new List<string> { ShortDayName(anchor.Value.DayOfWeek) }
+                        : new List<string>();
+
+                return days.Count == 0 ? head : $"{head} {string.Join(",", days)}";
+            }
+
+            case RecurrenceKind.Monthly:
+            {
+                var head = every > 1 ? $"{every}개월마다" : "매달";
+                return anchor.HasValue ? $"{head} {anchor.Value.Day}일" : head;
+            }
+
+            case RecurrenceKind.Yearly:
+            {
+                var head = every > 1 ? $"{every}년마다" : "매년";
+                return anchor.HasValue ? $"{head} {anchor.Value.Month}월 {anchor.Value.Day}일" : head;
+            }
+
+            default:
+                return string.Empty;
+        }
+    }
+
+    /// <summary>Single-letter weekday, as weekdays are listed in Korean: 월 화 수 목 금 토 일.</summary>
+    public static string ShortDayName(DayOfWeek d) => d switch
+    {
+        DayOfWeek.Monday => "월",
+        DayOfWeek.Tuesday => "화",
+        DayOfWeek.Wednesday => "수",
+        DayOfWeek.Thursday => "목",
+        DayOfWeek.Friday => "금",
+        DayOfWeek.Saturday => "토",
+        _ => "일",
+    };
+
+    private static int WeekOrder(DayOfWeek d) => ((int)d + 6) % 7;
+
     public static string KoreanDayName(DayOfWeek d) => d switch
     {
         DayOfWeek.Monday => "월요일",

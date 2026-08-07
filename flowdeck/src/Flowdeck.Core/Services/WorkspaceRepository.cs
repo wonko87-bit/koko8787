@@ -164,40 +164,39 @@ public sealed class WorkspaceRepository
     }
 
     /// <summary>
-    /// Everything on the calendar, for the standalone list window.
+    /// Events that happen exactly once, in date order and regardless of how far off they
+    /// are — nothing a user typed should quietly fall off the list.
     ///
-    /// One-off events are always included, whatever their date, so nothing a user typed
-    /// can quietly fall off the list. Repeating events have no last occurrence, so those
-    /// are expanded only across the supplied window.
+    /// Repeating events are excluded on purpose: they have no last occurrence, so listing
+    /// them by date would bury the one-offs. <see cref="RepeatingEvents"/> returns those as
+    /// rules instead.
     /// </summary>
-    public IReadOnlyList<EventOccurrence> AllOccurrences(DateTime from, DateTime to)
+    public IReadOnlyList<EventOccurrence> OneOffOccurrences()
     {
         var results = new List<EventOccurrence>();
 
-        foreach (var source in _workspace.Events)
+        foreach (var source in _workspace.Events.Where(e => !e.Recurrence.IsRepeating))
         {
             var span = source.End - source.Start;
             if (span < TimeSpan.Zero) span = TimeSpan.Zero;
 
-            if (!source.Recurrence.IsRepeating)
+            results.Add(new EventOccurrence
             {
-                results.Add(new EventOccurrence
-                {
-                    Source = source,
-                    Start = source.Start,
-                    End = source.Start + span,
-                });
-                continue;
-            }
-
-            foreach (var start in RecurrenceExpander.Occurrences(source.Start, source.Recurrence, from, to))
-            {
-                results.Add(new EventOccurrence { Source = source, Start = start, End = start + span });
-            }
+                Source = source,
+                Start = source.Start,
+                End = source.Start + span,
+            });
         }
 
         return results.OrderBy(o => o.Start).ToList();
     }
+
+    /// <summary>The repeat rules themselves, one entry per event, earliest start first.</summary>
+    public IReadOnlyList<CalendarEvent> RepeatingEvents() =>
+        _workspace.Events
+            .Where(e => e.Recurrence.IsRepeating)
+            .OrderBy(e => e.Start)
+            .ToList();
 
     /// <summary>
     /// Every todo, oldest due date first, with undated items last. Completed items are
