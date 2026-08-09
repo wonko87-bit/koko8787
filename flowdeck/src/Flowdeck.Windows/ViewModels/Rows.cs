@@ -140,7 +140,14 @@ public sealed class TodoRow : ObservableObject
         {
             if (!_item.DueAt.HasValue) return string.Empty;
             var due = _item.DueAt.Value;
-            return _item.HasTime ? due.ToString("tt h:mm", Ko.Culture) : due.ToString("M월 d일", Ko.Culture);
+
+            if (!_item.HasTime) return due.ToString("M월 d일", Ko.Culture);
+
+            // An overdue item carries its date, because it shows up under today: a bare
+            // "오후 9:00" there reads as due tonight rather than as left over from before.
+            return IsOverdue
+                ? due.ToString("M월 d일 tt h:mm", Ko.Culture)
+                : due.ToString("tt h:mm", Ko.Culture);
         }
     }
 

@@ -15,14 +15,27 @@ namespace Flowdeck.Windows.Views;
 public partial class WidgetWindow : Window
 {
     /// <summary>
-    /// Height as a multiple of width. Resizing preserves this, so the widget can grow
-    /// or shrink but never turns into a letterbox or a column.
+    /// Width bounds. Width alone sets the month grid's proportions, so it stays tightly
+    /// bounded — the day cells are square and would look wrong at any other scale.
     /// </summary>
-    private const double AspectRatio = 1.62;
-
-    /// <summary>Width bounds. Height follows from <see cref="AspectRatio"/>.</summary>
     private const double MinWidgetWidth = 300;
     private const double MaxWidgetWidth = 440;
+
+    /// <summary>
+    /// Height is free within these bounds and does not affect the calendar at all.
+    /// Every extra pixel goes to the events and todos list, which is the only row that
+    /// stretches, so a taller widget simply shows more of them.
+    /// </summary>
+    private const double MaxWidgetHeight = 1000;
+
+    /// <summary>
+    /// Everything the height needs besides the month grid and the list: margins, the
+    /// header, the weekday row, the divider and the capture box.
+    /// </summary>
+    private const double VerticalChrome = 175;
+
+    /// <summary>The least the list may be squeezed to — roughly three rows.</summary>
+    private const double MinListHeight = 90;
 
     /// <summary>Left and right margins plus the border, subtracted to get the grid's width.</summary>
     private const double HorizontalChrome = 30;
@@ -43,7 +56,6 @@ public partial class WidgetWindow : Window
 
         ApplyGeometry();
         ApplySettings();
-        ViewModel.UpdateMetrics(Width - HorizontalChrome);
 
         // Catches midnight, and any overdue todo tipping over as the hour turns.
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -82,12 +94,17 @@ public partial class WidgetWindow : Window
         InlineInput.CaretIndex = InlineInput.Text.Length;
     }
 
+    /// <summary>
+    /// The shortest the widget may be at its current width. Grows with the calendar,
+    /// since the month grid is sized from the width and cannot be cropped.
+    /// </summary>
+    private double MinimumHeight => VerticalChrome + (ViewModel.DayCellSize * 6) + MinListHeight;
+
     private void ApplyGeometry()
     {
-        // The height is always derived, so a settings file written before the ratio
-        // existed — or hand-edited — still opens in proportion.
         Width = Math.Clamp(_settings.WidgetWidth, MinWidgetWidth, MaxWidgetWidth);
-        Height = Width * AspectRatio;
+        ViewModel.UpdateMetrics(Width - HorizontalChrome);
+        ApplyHeight(_settings.WidgetHeight);
 
         var area = SystemParameters.WorkArea;
 
@@ -117,18 +134,14 @@ public partial class WidgetWindow : Window
     }
 
     /// <summary>
-    /// Corner drag. Whichever axis the user pulled harder decides the new width, and the
-    /// height is derived from it, so the widget scales as a whole instead of stretching.
+    /// Corner drag. The two axes move independently: width rescales the calendar within
+    /// its narrow band, height just lengthens the list below it.
     /// </summary>
     private void OnResize(object sender, DragDeltaEventArgs e)
     {
-        var fromWidth = Width + e.HorizontalChange;
-        var fromHeight = (Height + e.VerticalChange) / AspectRatio;
-
-        var target = Math.Abs(e.HorizontalChange) >= Math.Abs(e.VerticalChange) ? fromWidth : fromHeight;
-
-        Width = Math.Clamp(target, MinWidgetWidth, MaxWidgetWidth);
-        Height = Width * AspectRatio;
+        Width = Math.Clamp(Width + e.HorizontalChange, MinWidgetWidth, MaxWidgetWidth);
+        ViewModel.UpdateMetrics(Width - HorizontalChrome);
+        ApplyHeight(Height + e.VerticalChange);
         PersistGeometry();
     }
 
@@ -137,6 +150,18 @@ public partial class WidgetWindow : Window
         if (!e.WidthChanged) return;
 
         ViewModel.UpdateMetrics(e.NewSize.Width - HorizontalChrome);
+
+        // A wider widget has a taller calendar and so a taller floor. Raising MinHeight
+        // lets WPF stretch the window itself if it has just become too short.
+        MinHeight = MinimumHeight;
+    }
+
+    private void ApplyHeight(double desired)
+    {
+        var minimum = MinimumHeight;
+
+        MinHeight = minimum;
+        Height = Math.Clamp(desired, minimum, Math.Max(minimum, MaxWidgetHeight));
     }
 
     private void OnInlineInputKeyDown(object sender, KeyEventArgs e)

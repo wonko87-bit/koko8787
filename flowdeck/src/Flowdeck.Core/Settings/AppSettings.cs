@@ -62,8 +62,8 @@ public sealed class AppSettings
 
     public double WidgetWidth { get; set; } = 340;
 
-    /// <summary>Derived from the width by the widget's fixed aspect ratio; stored for reference.</summary>
-    public double WidgetHeight { get; set; } = 551;
+    /// <summary>Independent of the width; every pixel above the minimum goes to the list.</summary>
+    public double WidgetHeight { get; set; } = 620;
 
     /// <summary>0.35 – 1.0. Applied to the widget's background, never to its text.</summary>
     public double WidgetOpacity { get; set; } = 0.92;
