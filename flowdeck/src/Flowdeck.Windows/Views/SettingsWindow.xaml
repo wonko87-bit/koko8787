@@ -419,6 +419,10 @@
               <TextBlock Style="{StaticResource Text.Meta}"
                          TextWrapping="Wrap"
                          LineHeight="19"><Run FontWeight="SemiBold" Text="반복 · 우선순위 · 태그 · 알림" /><LineBreak /><Run Text="매일 · 평일 · 매주 화요일 · 격주 · 매월 · 3일마다" /><LineBreak /><Run Text="!1 (가장 급함) ~ !4" /><LineBreak /><Run Text="#태그" /><LineBreak /><Run Text="30분 전 알림 · 1시간 전 알림" /></TextBlock>
+              <Border Height="1" Margin="0,10" Background="{DynamicResource Brush.Border}" />
+              <TextBlock Style="{StaticResource Text.Meta}"
+                         TextWrapping="Wrap"
+                         LineHeight="19"><Run FontWeight="SemiBold" Text="메모" /><LineBreak /><Run Text="/* 뒤로는 전부 메모 (닫는 */ 는 생략 가능)" /><LineBreak /><Run Text="메모 안의 날짜와 #태그는 해석하지 않습니다" /><LineBreak /><Run Text="줄바꿈은 \n" /></TextBlock>
             </StackPanel>
           </Border>
         </StackPanel>

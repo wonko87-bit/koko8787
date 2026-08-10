@@ -147,6 +147,12 @@
           <TextBlock Style="{StaticResource Text.Body}"
                      Text="{Binding Title}"
                      TextTrimming="CharacterEllipsis" />
+          <TextBlock Foreground="{DynamicResource Brush.TextTertiary}"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding NotePreview}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding Notes}"
+                     Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
           <StackPanel Orientation="Horizontal">
             <TextBlock Style="{StaticResource Text.Meta}"
                        Text="{Binding RecurrenceLabel}"
@@ -191,6 +197,12 @@
                      Style="{StaticResource Text.Body}"
                      Text="{Binding Title}"
                      TextTrimming="CharacterEllipsis" />
+          <TextBlock Foreground="{DynamicResource Brush.TextTertiary}"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding NotePreview}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding Notes}"
+                     Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}" />
           <StackPanel Orientation="Horizontal">
             <TextBlock x:Name="DueText"
                        Style="{StaticResource Text.Meta}"

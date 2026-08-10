@@ -85,10 +85,13 @@ public sealed class RoutingRules
     };
 
     /// <summary>
-    /// Everything past this becomes the note, verbatim. Only counts with a space in front
-    /// of it, which is what keeps the "//" of "https://" from cutting a line in half.
+    /// Opens a note. Everything from here to <see cref="NoteClose"/> is kept verbatim and
+    /// taken out of the line; with no closer, the note simply runs to the end.
     /// </summary>
-    public string NoteSeparator { get; set; } = "//";
+    public string NoteOpen { get; set; } = "/*";
+
+    /// <summary>Closes a note and hands the rest of the line back to the parser.</summary>
+    public string NoteClose { get; set; } = "*/";
 
     /// <summary>Typed inside a note to break the line, since a text box has only one.</summary>
     public string NoteLineBreak { get; set; } = @"\n";

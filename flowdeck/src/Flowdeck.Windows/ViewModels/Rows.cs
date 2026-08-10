@@ -134,6 +134,23 @@ public sealed class TodoRow : ObservableObject
 
     public bool HasPriority => _item.Priority >= Priority.Normal;
 
+    /// <summary>The first line of the note, so a row says whether there is more to read.</summary>
+    public string NotePreview => FirstLine(_item.Notes);
+
+    /// <summary>The whole note, for the tooltip — the only place a long one fits.</summary>
+    public string Notes => _item.Notes;
+
+    public bool HasNote => _item.Notes.Length > 0;
+
+    internal static string FirstLine(string notes)
+    {
+        if (string.IsNullOrEmpty(notes)) return string.Empty;
+
+        var end = notes.IndexOf('\n');
+        var first = end < 0 ? notes : notes[..end];
+        return end < 0 ? first : first + " …";
+    }
+
     public string DueLabel
     {
         get
@@ -264,6 +281,9 @@ public sealed class EventRow : ObservableObject
     public EventRow(EventOccurrence occurrence, Func<EventRow, Task> delete)
     {
         Id = occurrence.Source.Id;
+        Notes = occurrence.Source.Notes;
+        NotePreview = TodoRow.FirstLine(occurrence.Source.Notes);
+        HasNote = occurrence.Source.Notes.Length > 0;
         Title = occurrence.Title;
         IsAllDay = occurrence.IsAllDay;
         IsRecurring = occurrence.IsRecurring;
@@ -299,6 +319,12 @@ public sealed class EventRow : ObservableObject
     public string TagLabel { get; }
 
     public bool HasTags { get; }
+
+    public string NotePreview { get; }
+
+    public string Notes { get; }
+
+    public bool HasNote { get; }
 
     public ICommand DeleteCommand { get; }
 }

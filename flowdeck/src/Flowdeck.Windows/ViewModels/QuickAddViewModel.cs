@@ -86,6 +86,25 @@ public sealed class QuickAddViewModel : ObservableObject
     public bool HasReminder => Effective().ReminderMinutesBefore.HasValue;
 
     /// <summary>
+    /// How many lines of note are being written. The note itself is not repeated here — it
+    /// is already on screen, in the box being typed into. What the preview has to confirm is
+    /// that it was read as a note, and so is not going to end up in the title.
+    /// </summary>
+    public string NoteLabel
+    {
+        get
+        {
+            var note = Effective().Notes;
+            if (note.Length == 0) return string.Empty;
+
+            var lines = note.Split('\n').Length;
+            return lines > 1 ? $"메모 {lines}줄" : "메모";
+        }
+    }
+
+    public bool HasNote => Effective().Notes.Length > 0;
+
+    /// <summary>
     /// True when this entry will also be written into Outlook. Reports what will actually
     /// happen, not what was asked for: with no Outlook on the machine, or the integration
     /// switched off, <c>!OL</c> is going nowhere and the preview should not claim otherwise.
@@ -203,6 +222,8 @@ public sealed class QuickAddViewModel : ObservableObject
         Raise(nameof(HasPriority));
         Raise(nameof(ReminderLabel));
         Raise(nameof(HasReminder));
+        Raise(nameof(NoteLabel));
+        Raise(nameof(HasNote));
         Raise(nameof(PushesToOutlook));
         Raise(nameof(OpensTeamsMeeting));
         Raise(nameof(AttendeeLabel));

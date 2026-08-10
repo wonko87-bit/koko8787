@@ -12,17 +12,29 @@ public class NoteParsingTests
 
     private static ParsedEntry Parse(string input) => new NaturalLanguageParser().Parse(input, Now);
 
+    /// <summary>The everyday case: open a note and keep typing to the end of the line.</summary>
     [Fact]
-    public void EverythingAfterTheSeparatorIsTheNote()
+    public void AnUnclosedNoteRunsToTheEndOfTheLine()
     {
-        var entry = Parse("!TD 금요일까지 보고서 제출 // 3장부터 다시 검토할 것");
+        var entry = Parse("!TD 금요일까지 보고서 제출 /* 3장부터 다시 검토할 것");
 
         Assert.Equal("보고서 제출", entry.Title);
         Assert.Equal("3장부터 다시 검토할 것", entry.Notes);
     }
 
+    /// <summary>Closing it hands the rest of the line back, schedule and all.</summary>
     [Fact]
-    public void WithoutASeparatorThereIsNoNote() =>
+    public void ClosingTheNoteReturnsTheRestOfTheLine()
+    {
+        var entry = Parse("!TD 보고서 제출 /* 3장부터 다시 검토 */ 금요일까지");
+
+        Assert.Equal("보고서 제출", entry.Title);
+        Assert.Equal("3장부터 다시 검토", entry.Notes);
+        Assert.Equal(new DateTime(2026, 8, 14), entry.Start!.Value.Date);
+    }
+
+    [Fact]
+    public void WithoutAnOpenerThereIsNoNote() =>
         Assert.Equal(string.Empty, Parse("!TD 금요일까지 보고서 제출").Notes);
 
     /// <summary>
@@ -32,7 +44,7 @@ public class NoteParsingTests
     [Fact]
     public void TheNoteIsNotParsedForDatesOrTags()
     {
-        var entry = Parse("!TD 금요일까지 보고서 제출 // 내일 오후 3시에 팀장님이 얘기한 #급함 건");
+        var entry = Parse("!TD 금요일까지 보고서 제출 /* 내일 오후 3시에 팀장님이 얘기한 #급함 건");
 
         Assert.Equal(new DateTime(2026, 8, 14), entry.Start!.Value.Date);
         Assert.Empty(entry.Tags);
@@ -42,19 +54,20 @@ public class NoteParsingTests
     [Fact]
     public void BackslashNBreaksTheLine()
     {
-        var entry = Parse(@"!TD 장보기 // 우유\n계란\n빵");
+        var entry = Parse(@"!TD 장보기 /* 우유\n계란\n빵");
 
         Assert.Equal("우유\n계란\n빵", entry.Notes);
         Assert.Equal(3, entry.Notes.Split('\n').Length);
     }
 
     /// <summary>
-    /// A link is exactly the sort of thing that ends up in a note, and it carries a "//" of
-    /// its own. Without the space rule it would cut the line in half.
+    /// The whole point of the "/*" pair over "//": a link carries slashes of its own, and
+    /// none of them mean anything to the parser now.
     /// </summary>
     [Theory]
-    [InlineData("!TD 자료 확인 // https://example.com/a//b", "자료 확인", "https://example.com/a//b")]
+    [InlineData("!TD 자료 확인 /* https://example.com/a//b", "자료 확인", "https://example.com/a//b")]
     [InlineData("!TD https://example.com 열어보기", "https://example.com 열어보기", "")]
+    [InlineData("!TD 링크 https://example.com 확인 // 한 번 더", "링크 https://example.com 확인 // 한 번 더", "")]
     public void ALinkSurvives(string input, string title, string note)
     {
         var entry = Parse(input);
@@ -63,39 +76,44 @@ public class NoteParsingTests
         Assert.Equal(note, entry.Notes);
     }
 
+    /// <summary>Two blocks on one line read as two lines of one note.</summary>
     [Fact]
-    public void OnlyTheFirstSeparatorSplits()
+    public void SeveralBlocksJoinIntoOneNote()
     {
-        var entry = Parse("!TD 정리 // 첫째 // 둘째");
+        var entry = Parse("!TD 정리 /* 첫째 */ 하고 /* 둘째");
 
-        Assert.Equal("정리", entry.Title);
-        Assert.Equal("첫째 // 둘째", entry.Notes);
+        Assert.Equal("정리 하고", entry.Title);
+        Assert.Equal("첫째\n둘째", entry.Notes);
     }
 
-    [Fact]
-    public void AnEmptyNoteIsNoNote()
+    [Theory]
+    [InlineData("!TD 보고서 제출 /*")]
+    [InlineData("!TD 보고서 제출 /**/")]
+    [InlineData("!TD 보고서 제출 /*   */")]
+    public void AnEmptyNoteIsNoNote(string input)
     {
-        var entry = Parse("!TD 보고서 제출 //");
+        var entry = Parse(input);
 
         Assert.Equal("보고서 제출", entry.Title);
         Assert.Equal(string.Empty, entry.Notes);
     }
 
     [Fact]
-    public void TheSeparatorCanBeChanged()
+    public void TheMarkersCanBeChanged()
     {
-        var rules = new RoutingRules { NoteSeparator = ";;" };
-        var entry = new NaturalLanguageParser(rules).Parse("!TD 보고서 제출 ;; 메모입니다", Now);
+        var rules = new RoutingRules { NoteOpen = "((", NoteClose = "))" };
+        var entry = new NaturalLanguageParser(rules).Parse("!TD 보고서 제출 ((메모입니다)) 금요일까지", Now);
 
         Assert.Equal("보고서 제출", entry.Title);
         Assert.Equal("메모입니다", entry.Notes);
+        Assert.Equal(new DateTime(2026, 8, 14), entry.Start!.Value.Date);
     }
 
     /// <summary>Markers are peeled first, so a note does not stop them being found.</summary>
     [Fact]
     public void MarkersStillWorkAlongsideANote()
     {
-        var entry = Parse("!CD 내일 오후 3시 팀 회의 #업무 // 안건 정리해서 갈 것");
+        var entry = Parse("!CD 내일 오후 3시 팀 회의 #업무 /* 안건 정리해서 갈 것");
 
         Assert.Equal(EntryTarget.Calendar, entry.Target);
         Assert.Equal("팀 회의", entry.Title);
@@ -118,7 +136,7 @@ public class NoteStorageTests
     [Fact]
     public async Task ATodoKeepsItsNote()
     {
-        var repository = await Capture("!TD 금요일까지 보고서 제출 // 3장부터");
+        var repository = await Capture("!TD 금요일까지 보고서 제출 /* 3장부터");
 
         Assert.Equal("3장부터", repository.Todos[0].Notes);
     }
@@ -126,7 +144,7 @@ public class NoteStorageTests
     [Fact]
     public async Task AnEventKeepsItsNote()
     {
-        var repository = await Capture("!CD 내일 오후 3시 회의 // 안건 정리");
+        var repository = await Capture("!CD 내일 오후 3시 회의 /* 안건 정리");
 
         Assert.Equal("안건 정리", repository.Events[0].Notes);
     }
@@ -135,7 +153,7 @@ public class NoteStorageTests
     [Fact]
     public async Task BothHalvesOfABothEntryCarryIt()
     {
-        var repository = await Capture("내일 오후 9시 운동 // 하체 위주");
+        var repository = await Capture("내일 오후 9시 운동 /* 하체 위주");
 
         Assert.Equal("하체 위주", repository.Todos[0].Notes);
         Assert.Equal("하체 위주", repository.Events[0].Notes);

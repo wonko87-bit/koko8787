@@ -43,6 +43,9 @@
             <Border IsVisible="{Binding HasTags}" Style="{StaticResource Chip}" Margin="0,4,6,0">
               <Label Style="{StaticResource Text.Meta}" Text="{Binding TagLabel}" />
             </Border>
+            <Border IsVisible="{Binding HasNote}" Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Meta}" Text="{Binding NoteLabel}" />
+            </Border>
             <Border IsVisible="{Binding OpensTeamsMeeting}" Style="{StaticResource Chip}" Margin="0,4,6,0">
               <Label Style="{StaticResource Text.Body}" FontSize="12" Text="→ Teams" />
             </Border>

@@ -110,6 +110,12 @@
                        Foreground="{DynamicResource Brush.TextSecondary}"
                        Text="{Binding TagLabel}" />
           </Border>
+          <Border Style="{StaticResource Chip}"
+                  Visibility="{Binding HasNote, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource Brush.TextSecondary}"
+                       Text="{Binding NoteLabel}" />
+          </Border>
           <Border BorderBrush="{DynamicResource Brush.BorderStrong}"
                   Style="{StaticResource Chip}"
                   Visibility="{Binding PushesToOutlook, Converter={StaticResource BoolToVisibility}}">

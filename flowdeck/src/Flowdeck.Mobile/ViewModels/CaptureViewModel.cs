@@ -94,6 +94,25 @@ public sealed class CaptureViewModel : ObservableObject
 
     public bool HasReminder => Effective().ReminderMinutesBefore.HasValue;
 
+    /// <summary>
+    /// How many lines of note are being written. The note is not repeated here — it is
+    /// already on screen in the box. What the preview has to confirm is that it was read as
+    /// a note, and so is not going into the title.
+    /// </summary>
+    public string NoteLabel
+    {
+        get
+        {
+            var note = Effective().Notes;
+            if (note.Length == 0) return string.Empty;
+
+            var lines = note.Split('\n').Length;
+            return lines > 1 ? $"메모 {lines}줄" : "메모";
+        }
+    }
+
+    public bool HasNote => Effective().Notes.Length > 0;
+
     /// <summary>True when the line asked for a Teams meeting, which opens the Teams app.</summary>
     public bool OpensTeamsMeeting => Effective().OpenTeamsMeeting;
 
@@ -192,6 +211,8 @@ public sealed class CaptureViewModel : ObservableObject
         Raise(nameof(HasPriority));
         Raise(nameof(ReminderLabel));
         Raise(nameof(HasReminder));
+        Raise(nameof(NoteLabel));
+        Raise(nameof(HasNote));
         Raise(nameof(OpensTeamsMeeting));
         Raise(nameof(IsTodoForced));
         Raise(nameof(IsCalendarForced));

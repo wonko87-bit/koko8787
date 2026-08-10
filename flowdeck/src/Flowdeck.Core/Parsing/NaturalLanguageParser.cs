@@ -294,37 +294,61 @@ public sealed class NaturalLanguageParser
     }
 
     /// <summary>
-    /// Cuts the note off the end of the line and hands back what is left.
+    /// Lifts the notes out of the line and hands back what is left of it.
     ///
-    /// The separator only counts with whitespace in front of it. Without that rule the "//"
-    /// inside "https://example.com" would cut a line in half, and a link is exactly the kind
-    /// of thing that ends up in a note.
+    /// A note is what sits between "/*" and "*/", the pair borrowed from code because it is
+    /// the one thing nobody types by accident — unlike "//", which lives inside every link.
+    /// Closing it is optional: "/*" with nothing after it runs to the end of the line, which
+    /// is how a note gets written in practice. Closing it is for the other case, where the
+    /// note is in the middle and the schedule is still to come.
     /// </summary>
     private string SplitNote(string body, out string note)
     {
         note = string.Empty;
 
-        var separator = _rules.NoteSeparator;
-        if (string.IsNullOrEmpty(separator)) return body;
+        var open = _rules.NoteOpen;
+        var close = _rules.NoteClose;
+        if (string.IsNullOrEmpty(open)) return body;
 
-        var at = -1;
-        for (var i = 0; i + separator.Length <= body.Length; i++)
+        var kept = new StringBuilder(body.Length);
+        var notes = new List<string>();
+        var cursor = 0;
+
+        while (true)
         {
-            if (string.CompareOrdinal(body, i, separator, 0, separator.Length) != 0) continue;
-            if (i != 0 && !char.IsWhiteSpace(body[i - 1])) continue;
+            var start = body.IndexOf(open, cursor, StringComparison.Ordinal);
+            if (start < 0) break;
 
-            at = i;
-            break;
+            kept.Append(body, cursor, start - cursor);
+
+            var from = start + open.Length;
+            var end = string.IsNullOrEmpty(close) ? -1 : body.IndexOf(close, from, StringComparison.Ordinal);
+
+            if (end < 0)
+            {
+                // Unclosed: the note owns the rest of the line, and there is nothing to keep.
+                notes.Add(body[from..]);
+                cursor = body.Length;
+                break;
+            }
+
+            notes.Add(body[from..end]);
+
+            // A space in place of the block, so the words either side do not run together.
+            kept.Append(' ');
+            cursor = end + close!.Length;
         }
 
-        if (at < 0) return body;
+        if (notes.Count == 0) return body;
 
-        note = body[(at + separator.Length)..].Trim();
+        kept.Append(body, cursor, body.Length - cursor);
+
+        note = string.Join("\n", notes.Select(n => n.Trim()).Where(n => n.Length > 0));
 
         var lineBreak = _rules.NoteLineBreak;
         if (!string.IsNullOrEmpty(lineBreak)) note = note.Replace(lineBreak, "\n", StringComparison.Ordinal);
 
-        return body[..at].Trim();
+        return kept.ToString().Trim();
     }
 
     private int EffectiveHour(TimeFragment fragment)
