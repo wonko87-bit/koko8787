@@ -89,6 +89,11 @@ public sealed class NaturalLanguageParser
         // honoured — the user asked for both and can see what they typed.
         entry.PushExternal = external ?? (PushExternalByDefault && !teams);
 
+        // Split before scanning. A note is prose the user wrote for themselves, and a date
+        // inside it — "지난주에 얘기한 대로" — is a description, not a schedule.
+        body = SplitNote(body, out var note);
+        entry.Notes = note;
+
         var tokens = TemporalScanner.Scan(body, now, FirstDayOfWeek);
 
         ApplyTokens(entry, tokens, now, ref explicitTarget);
@@ -286,6 +291,40 @@ public sealed class NaturalLanguageParser
 
             if (!progressed) return target;
         }
+    }
+
+    /// <summary>
+    /// Cuts the note off the end of the line and hands back what is left.
+    ///
+    /// The separator only counts with whitespace in front of it. Without that rule the "//"
+    /// inside "https://example.com" would cut a line in half, and a link is exactly the kind
+    /// of thing that ends up in a note.
+    /// </summary>
+    private string SplitNote(string body, out string note)
+    {
+        note = string.Empty;
+
+        var separator = _rules.NoteSeparator;
+        if (string.IsNullOrEmpty(separator)) return body;
+
+        var at = -1;
+        for (var i = 0; i + separator.Length <= body.Length; i++)
+        {
+            if (string.CompareOrdinal(body, i, separator, 0, separator.Length) != 0) continue;
+            if (i != 0 && !char.IsWhiteSpace(body[i - 1])) continue;
+
+            at = i;
+            break;
+        }
+
+        if (at < 0) return body;
+
+        note = body[(at + separator.Length)..].Trim();
+
+        var lineBreak = _rules.NoteLineBreak;
+        if (!string.IsNullOrEmpty(lineBreak)) note = note.Replace(lineBreak, "\n", StringComparison.Ordinal);
+
+        return body[..at].Trim();
     }
 
     private int EffectiveHour(TimeFragment fragment)

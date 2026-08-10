@@ -62,13 +62,19 @@ public sealed class TodoRow : ObservableObject
 {
     private readonly TodoItem _item;
 
-    public TodoRow(TodoItem item, DateTime now, Func<TodoRow, Task> toggle, Func<TodoRow, Task> delete)
+    public TodoRow(
+        TodoItem item,
+        DateTime now,
+        Func<TodoRow, Task> toggle,
+        Func<TodoRow, Task> delete,
+        Action<TodoRow>? edit = null)
     {
         _item = item;
         IsOverdue = item.IsOverdue(now);
 
         ToggleCommand = new AsyncRelayCommand(() => toggle(this));
         DeleteCommand = new AsyncRelayCommand(() => delete(this));
+        EditCommand = new RelayCommand(() => edit?.Invoke(this));
     }
 
     public string Id => _item.Id;
@@ -105,16 +111,35 @@ public sealed class TodoRow : ObservableObject
 
     public bool HasPriority => _item.Priority != Priority.None;
 
+    /// <summary>The first line of the note, so a row says whether there is more to read.</summary>
+    public string NotePreview => FirstLine(_item.Notes);
+
+    public bool HasNote => _item.Notes.Length > 0;
+
     public ICommand ToggleCommand { get; }
 
     public ICommand DeleteCommand { get; }
+
+    public ICommand EditCommand { get; }
+
+    internal static string FirstLine(string notes)
+    {
+        if (string.IsNullOrEmpty(notes)) return string.Empty;
+
+        var end = notes.IndexOf('\n');
+        var first = end < 0 ? notes : notes[..end];
+        return end < 0 ? first : first + " …";
+    }
 }
 
 public sealed class EventRow : ObservableObject
 {
-    public EventRow(EventOccurrence occurrence, Func<EventRow, Task> delete)
+    public EventRow(EventOccurrence occurrence, Func<EventRow, Task> delete, Action<EventRow>? edit = null)
     {
         Id = occurrence.Source.Id;
+        NotePreview = TodoRow.FirstLine(occurrence.Source.Notes);
+        HasNote = occurrence.Source.Notes.Length > 0;
+        EditCommand = new RelayCommand(() => edit?.Invoke(this));
         Title = occurrence.Title;
         TimeLabel = occurrence.IsAllDay ? "종일" : occurrence.Start.ToString("tt h:mm", Ko.Culture);
         TagLabel = string.Join("  ", occurrence.Source.Tags.Select(t => "#" + t));
@@ -133,7 +158,13 @@ public sealed class EventRow : ObservableObject
 
     public bool HasTags { get; }
 
+    public string NotePreview { get; }
+
+    public bool HasNote { get; }
+
     public ICommand DeleteCommand { get; }
+
+    public ICommand EditCommand { get; }
 }
 
 /// <summary>

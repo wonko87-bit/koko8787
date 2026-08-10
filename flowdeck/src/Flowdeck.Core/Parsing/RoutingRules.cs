@@ -84,6 +84,15 @@ public sealed class RoutingRules
         "!TM", "!teams", "!팀즈",
     };
 
+    /// <summary>
+    /// Everything past this becomes the note, verbatim. Only counts with a space in front
+    /// of it, which is what keeps the "//" of "https://" from cutting a line in half.
+    /// </summary>
+    public string NoteSeparator { get; set; } = "//";
+
+    /// <summary>Typed inside a note to break the line, since a text box has only one.</summary>
+    public string NoteLineBreak { get; set; } = @"\n";
+
     /// <summary>Words that suggest a block of time in the day: something you attend.</summary>
     public List<string> CalendarKeywords { get; set; } = new()
     {

@@ -70,6 +70,7 @@ public static class EntryComposer
     private static TodoItem BuildTodo(ParsedEntry entry, DateTime now) => new()
     {
         Title = entry.Title,
+        Notes = entry.Notes,
         DueAt = entry.Start,
         HasTime = entry.HasTime,
         Priority = entry.Priority,
@@ -93,6 +94,7 @@ public static class EntryComposer
         return new CalendarEvent
         {
             Title = entry.Title,
+            Notes = entry.Notes,
             Start = start,
             End = end,
             IsAllDay = !entry.HasTime,

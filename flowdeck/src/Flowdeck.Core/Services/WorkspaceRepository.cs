@@ -9,6 +9,28 @@ namespace Flowdeck.Core.Services;
 /// <summary>A tag and how many entries carry it.</summary>
 public sealed record TagCount(string Tag, int Count);
 
+/// <summary>
+/// The fields an edit screen may change. Everything else about an entry — its id, when it
+/// was created, where it was sent — belongs to the app rather than to the user.
+/// </summary>
+public sealed class EntryEdit
+{
+    public string Title { get; set; } = string.Empty;
+
+    public string Notes { get; set; } = string.Empty;
+
+    /// <summary>Null clears the date, which turns a todo back into a someday item.</summary>
+    public DateTime? When { get; set; }
+
+    public bool HasTime { get; set; }
+
+    public Priority Priority { get; set; } = Priority.None;
+
+    public List<string> Tags { get; set; } = new();
+
+    public int? ReminderMinutesBefore { get; set; }
+}
+
 /// <summary>What an import did. <paramref name="Skipped"/> counts entries already present.</summary>
 public sealed record ImportResult(int TodosAdded, int EventsAdded, int Skipped)
 {
@@ -183,6 +205,64 @@ public sealed class WorkspaceRepository
         await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Applies an edit to a todo. Returns false when the id is gone, which happens if the
+    /// entry was deleted from somewhere else while the edit screen was open.
+    /// </summary>
+    public async Task<bool> UpdateTodoAsync(string id, EntryEdit edit, DateTime now)
+    {
+        var todo = _workspace.Todos.FirstOrDefault(t => t.Id == id);
+        if (todo is null) return false;
+
+        todo.Title = Named(edit.Title);
+        todo.Notes = edit.Notes ?? string.Empty;
+        todo.DueAt = edit.When;
+        todo.HasTime = edit.When.HasValue && edit.HasTime;
+        todo.Priority = edit.Priority;
+        todo.Tags = new List<string>(edit.Tags ?? new List<string>());
+        todo.ReminderMinutesBefore = edit.When.HasValue ? edit.ReminderMinutesBefore : null;
+        todo.UpdatedAt = now;
+
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>
+    /// Applies an edit to an event. Moving the start carries the end with it: an hour-long
+    /// meeting dragged to the afternoon is still an hour long.
+    /// </summary>
+    public async Task<bool> UpdateEventAsync(string id, EntryEdit edit, DateTime now)
+    {
+        var source = _workspace.Events.FirstOrDefault(e => e.Id == id);
+        if (source is null) return false;
+
+        var span = source.End - source.Start;
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+
+        // An event has to sit somewhere, so clearing the date is not on offer here; the
+        // screen keeps the old start rather than inventing one.
+        var start = edit.When ?? source.Start;
+        var allDay = !edit.HasTime;
+
+        source.Title = Named(edit.Title);
+        source.Notes = edit.Notes ?? string.Empty;
+        source.Start = allDay ? start.Date : start;
+        source.End = allDay ? start.Date.AddDays(1).AddSeconds(-1) : source.Start + span;
+        source.IsAllDay = allDay;
+        source.Tags = new List<string>(edit.Tags ?? new List<string>());
+        source.ReminderMinutesBefore = edit.ReminderMinutesBefore;
+        source.UpdatedAt = now;
+
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>An entry with its title erased still has to be findable in a list.</summary>
+    private static string Named(string? title) =>
+        string.IsNullOrWhiteSpace(title) ? ParsedEntry.UntitledPlaceholder : title.Trim();
 
     public async Task DeleteTodoAsync(string id)
     {

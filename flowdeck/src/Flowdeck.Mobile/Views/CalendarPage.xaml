@@ -149,8 +149,17 @@
                 <Label Style="{StaticResource Text.Meta}" Text="{Binding TimeLabel}" VerticalOptions="Center" />
                 <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                   <Label Style="{StaticResource Text.Body}" Text="{Binding Title}" />
+                  <Label IsVisible="{Binding HasNote}"
+                         LineBreakMode="TailTruncation"
+                         MaxLines="1"
+                         Style="{StaticResource Text.Faint}"
+                         Text="{Binding NotePreview}" />
                   <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
                 </VerticalStackLayout>
+
+                <Grid.GestureRecognizers>
+                  <TapGestureRecognizer Command="{Binding EditCommand}" />
+                </Grid.GestureRecognizers>
               </Grid>
             </DataTemplate>
           </BindableLayout.ItemTemplate>
@@ -160,7 +169,12 @@
           <BindableLayout.ItemTemplate>
             <DataTemplate x:DataType="vm:TodoRow">
               <Grid Padding="2,9" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                <CheckBox InputTransparent="True" IsChecked="{Binding IsDone}" VerticalOptions="Center" />
+                <Border BackgroundColor="Transparent" Padding="2" Stroke="Transparent" VerticalOptions="Center">
+                  <CheckBox InputTransparent="True" IsChecked="{Binding IsDone}" />
+                  <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+                  </Border.GestureRecognizers>
+                </Border>
                 <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
                   <Label Style="{StaticResource Text.Body}" Text="{Binding Title}">
                     <Label.Triggers>
@@ -178,7 +192,7 @@
                        Text="{Binding DueLabel}"
                        VerticalOptions="Center" />
                 <Grid.GestureRecognizers>
-                  <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+                  <TapGestureRecognizer Command="{Binding EditCommand}" />
                 </Grid.GestureRecognizers>
               </Grid>
             </DataTemplate>

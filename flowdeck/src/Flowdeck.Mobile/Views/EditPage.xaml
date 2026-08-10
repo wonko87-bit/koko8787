@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage x:Class="Flowdeck.Mobile.Views.EditPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="편집"
+             Shell.NavBarIsVisible="False">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- ============ header ============ -->
+    <Grid Padding="18,16,18,10" ColumnDefinitions="Auto,*,Auto">
+      <Button Clicked="OnCancelClick"
+              FontSize="14"
+              Style="{StaticResource Button.Ghost}"
+              Text="취소" />
+      <Label Grid.Column="1"
+             HorizontalTextAlignment="Center"
+             Style="{StaticResource Text.Title}"
+             Text="{Binding HeaderLabel}"
+             VerticalOptions="Center" />
+      <Button Grid.Column="2"
+              Command="{Binding SaveCommand}"
+              FontSize="14"
+              Style="{StaticResource Button.Primary}"
+              Text="저장"
+              WidthRequest="76" />
+    </Grid>
+
+    <ScrollView Grid.Row="1">
+      <VerticalStackLayout Padding="18,4,18,24" Spacing="16">
+
+        <!-- ============ title ============ -->
+        <VerticalStackLayout Spacing="6">
+          <Label Style="{StaticResource Text.Section}" Text="제목" />
+          <Border Style="{StaticResource Card}">
+            <Entry Text="{Binding Title, Mode=TwoWay}" />
+          </Border>
+        </VerticalStackLayout>
+
+        <!-- ============ notes ============ -->
+        <VerticalStackLayout Spacing="6">
+          <Label Style="{StaticResource Text.Section}" Text="메모" />
+          <Border Style="{StaticResource Card}">
+            <Editor AutoSize="TextChanges"
+                    MinimumHeightRequest="132"
+                    Placeholder="줄바꿈 그대로 적으면 됩니다"
+                    Text="{Binding Notes, Mode=TwoWay}" />
+          </Border>
+        </VerticalStackLayout>
+
+        <!-- ============ when ============ -->
+        <VerticalStackLayout Spacing="6">
+          <Label Style="{StaticResource Text.Section}" Text="날짜" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <Label Style="{StaticResource Text.Body}" Text="날짜 지정" VerticalOptions="Center" />
+            <Switch Grid.Column="1"
+                    IsEnabled="{Binding CanClearDate}"
+                    IsToggled="{Binding HasDate, Mode=TwoWay}"
+                    VerticalOptions="Center" />
+          </Grid>
+
+          <Border IsVisible="{Binding HasDate}" Style="{StaticResource Card}">
+            <DatePicker Date="{Binding Date, Mode=TwoWay}" Format="yyyy년 M월 d일 (ddd)" />
+          </Border>
+
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasDate}">
+            <Label Style="{StaticResource Text.Body}" Text="시간 지정" VerticalOptions="Center" />
+            <Switch Grid.Column="1" IsToggled="{Binding HasTime, Mode=TwoWay}" VerticalOptions="Center" />
+          </Grid>
+
+          <Border IsVisible="{Binding ShowTime}" Style="{StaticResource Card}">
+            <TimePicker Format="tt h:mm" Time="{Binding Time, Mode=TwoWay}" />
+          </Border>
+        </VerticalStackLayout>
+
+        <!-- ============ reminder ============ -->
+        <VerticalStackLayout IsVisible="{Binding HasDate}" Spacing="6">
+          <Label Style="{StaticResource Text.Section}" Text="알림 (분 전)" />
+          <Border Style="{StaticResource Card}">
+            <Entry Keyboard="Numeric" Placeholder="예) 30" Text="{Binding Reminder, Mode=TwoWay}" />
+          </Border>
+        </VerticalStackLayout>
+
+        <!-- ============ tags ============ -->
+        <VerticalStackLayout Spacing="6">
+          <Label Style="{StaticResource Text.Section}" Text="태그" />
+          <Border Style="{StaticResource Card}">
+            <Entry Placeholder="#업무 #보고" Text="{Binding Tags, Mode=TwoWay}" />
+          </Border>
+        </VerticalStackLayout>
+
+        <!-- ============ priority ============ -->
+        <VerticalStackLayout IsVisible="{Binding IsTodo}" Spacing="6">
+          <Label Style="{StaticResource Text.Section}" Text="우선순위" />
+          <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6">
+            <Button Command="{Binding PriorityCommands[0]}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="1">
+              <Button.Triggers>
+                <DataTrigger Binding="{Binding IsUrgent}" TargetType="Button" Value="True">
+                  <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Light.BorderStrong}, Dark={StaticResource Dark.BorderStrong}}" />
+                  <Setter Property="FontAttributes" Value="Bold" />
+                </DataTrigger>
+              </Button.Triggers>
+            </Button>
+            <Button Grid.Column="1" Command="{Binding PriorityCommands[1]}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="2">
+              <Button.Triggers>
+                <DataTrigger Binding="{Binding IsHigh}" TargetType="Button" Value="True">
+                  <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Light.BorderStrong}, Dark={StaticResource Dark.BorderStrong}}" />
+                  <Setter Property="FontAttributes" Value="Bold" />
+                </DataTrigger>
+              </Button.Triggers>
+            </Button>
+            <Button Grid.Column="2" Command="{Binding PriorityCommands[2]}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="3">
+              <Button.Triggers>
+                <DataTrigger Binding="{Binding IsNormal}" TargetType="Button" Value="True">
+                  <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Light.BorderStrong}, Dark={StaticResource Dark.BorderStrong}}" />
+                  <Setter Property="FontAttributes" Value="Bold" />
+                </DataTrigger>
+              </Button.Triggers>
+            </Button>
+            <Button Grid.Column="3" Command="{Binding PriorityCommands[3]}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="4">
+              <Button.Triggers>
+                <DataTrigger Binding="{Binding IsLow}" TargetType="Button" Value="True">
+                  <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Light.BorderStrong}, Dark={StaticResource Dark.BorderStrong}}" />
+                  <Setter Property="FontAttributes" Value="Bold" />
+                </DataTrigger>
+              </Button.Triggers>
+            </Button>
+          </Grid>
+          <Label Style="{StaticResource Text.Faint}" Text="같은 숫자를 한 번 더 누르면 해제됩니다" />
+        </VerticalStackLayout>
+
+        <Label IsVisible="{Binding HasStatus}" Style="{StaticResource Text.Meta}" Text="{Binding Status}" />
+      </VerticalStackLayout>
+    </ScrollView>
+
+    <!-- ============ delete ============ -->
+    <Button Grid.Row="2"
+            Margin="18,0,18,18"
+            Clicked="OnDeleteClick"
+            FontSize="14"
+            Style="{StaticResource Button.Ghost}"
+            Text="삭제"
+            TextColor="#C05555" />
+  </Grid>
+</ContentPage>

@@ -36,6 +36,12 @@ public sealed class ListViewModel : ObservableObject
         Workspace.Repository.Changed += (_, _) => MainThread.BeginInvokeOnMainThread(Reload);
     }
 
+    /// <summary>
+    /// Raised when a row is tapped. The view model cannot navigate — that is the page's job —
+    /// so it says what was tapped and lets the page decide what a "detail sheet" means.
+    /// </summary>
+    public event EventHandler<(string Id, bool IsTodo)>? EditRequested;
+
     public ObservableCollection<DayGroup> Groups { get; } = new();
 
     public ObservableCollection<RecurringRow> Recurring { get; } = new();
@@ -235,7 +241,7 @@ public sealed class ListViewModel : ObservableObject
             var group = CreateGroup(byDay.Key, now);
             foreach (var todo in byDay.OrderBy(t => t.IsDone).ThenBy(t => t.DueAt))
             {
-                group.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+                group.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, EditTodo));
             }
 
             Groups.Add(group);
@@ -245,7 +251,7 @@ public sealed class ListViewModel : ObservableObject
         if (undated.Count > 0)
         {
             var tail = new DayGroup("날짜 없음", isToday: false, isPast: false);
-            foreach (var todo in undated) tail.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+            foreach (var todo in undated) tail.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, EditTodo));
             Groups.Add(tail);
         }
 
@@ -264,7 +270,7 @@ public sealed class ListViewModel : ObservableObject
             var group = CreateGroup(byDay.Key, now);
             foreach (var occurrence in byDay.OrderBy(o => o.IsAllDay ? 0 : 1).ThenBy(o => o.Start))
             {
-                group.Add(new EventRow(occurrence, DeleteEventAsync));
+                group.Add(new EventRow(occurrence, DeleteEventAsync, EditEvent));
             }
 
             Groups.Add(group);
@@ -297,6 +303,10 @@ public sealed class ListViewModel : ObservableObject
             isToday: day == today,
             isPast: day < today);
     }
+
+    private void EditTodo(TodoRow row) => EditRequested?.Invoke(this, (row.Id, true));
+
+    private void EditEvent(EventRow row) => EditRequested?.Invoke(this, (row.Id, false));
 
     private Task ToggleTodoAsync(TodoRow row) => Workspace.Repository.ToggleTodoAsync(row.Id, _clock());
 

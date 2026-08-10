@@ -15,6 +15,9 @@ public sealed class ParsedEntry
 
     public string Title { get; set; } = string.Empty;
 
+    /// <summary>Everything the user wrote after the note separator, line breaks and all.</summary>
+    public string Notes { get; set; } = string.Empty;
+
     public EntryTarget Target { get; set; } = EntryTarget.Both;
 
     /// <summary>True when the target came from an explicit <c>!TD</c>/<c>!CD</c> marker.</summary>

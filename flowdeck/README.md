@@ -173,7 +173,22 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 #업무 #개인                     → 태그
 
 30분 전 알림 · 1시간 전 알림      → 트레이 알림
+
+// 뒤로는 전부 메모                → 메모 (\n 으로 줄바꿈)
 ```
+
+### 메모
+
+`//` 뒤에 쓴 것은 **전부 메모**가 됩니다. 메모 안은 해석하지 않으므로, 날짜나 `#` 이 들어 있어도 일정이 옮겨가거나 태그가 붙지 않습니다.
+
+```
+!TD 금요일까지 보고서 제출 // 3장부터 다시 검토\n팀장님 코멘트 반영
+```
+
+- 줄바꿈은 **`\n`** 으로 씁니다. 위 예시는 두 줄짜리 메모가 됩니다.
+- `//` 앞에는 **공백이 있어야** 인식합니다. 그래서 `https://example.com` 은 잘리지 않습니다.
+- 첫 번째 `//` 에서만 나뉩니다. 메모 안에 `//` 를 또 써도 그대로 남습니다.
+- 구분 기호는 `settings.json` 의 `Routing.NoteSeparator` 에서 바꿀 수 있습니다.
 
 반복 할일은 체크해도 완료되지 않고 **다음 차례로 넘어갑니다**. `매일 오전 7시 스트레칭` 을 체크하면 내일 7시로 옮겨갑니다.
 
@@ -549,7 +564,7 @@ flowdeck/
 │       ├── Interop/              HotKeyService, WindowPinService, StartupService
 │       ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
 │       └── Themes/               Dark, Light, Controls
-├── tests/Flowdeck.Core.Tests/    xUnit 300개
+├── tests/Flowdeck.Core.Tests/    xUnit 320개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -565,7 +580,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 300 tests
+dotnet test tests/Flowdeck.Core.Tests    # 320 tests
 dotnet build Flowdeck.sln -c Release
 ```
 

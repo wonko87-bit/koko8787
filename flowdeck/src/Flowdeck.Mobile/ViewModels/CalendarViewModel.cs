@@ -117,6 +117,9 @@ public sealed class CalendarViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>Raised when an entry under the grid is tapped.</summary>
+    public event EventHandler<(string Id, bool IsTodo)>? EditRequested;
+
     public ObservableCollection<WeekdayHeader> WeekdayHeaders { get; } = new();
 
     public ObservableCollection<CalendarDay> Days { get; } = new();
@@ -230,7 +233,7 @@ public sealed class CalendarViewModel : ObservableObject
         Events.Clear();
         foreach (var occurrence in Workspace.Repository.OccurrencesOn(_selectedDate))
         {
-            Events.Add(new EventRow(occurrence, DeleteEventAsync));
+            Events.Add(new EventRow(occurrence, DeleteEventAsync, EditEvent));
         }
 
         Todos.Clear();
@@ -243,13 +246,17 @@ public sealed class CalendarViewModel : ObservableObject
 
         foreach (var todo in todos)
         {
-            Todos.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+            Todos.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, EditTodo));
         }
 
         Raise(nameof(HasEvents));
         Raise(nameof(HasTodos));
         Raise(nameof(IsEmpty));
     }
+
+    private void EditTodo(TodoRow row) => EditRequested?.Invoke(this, (row.Id, true));
+
+    private void EditEvent(EventRow row) => EditRequested?.Invoke(this, (row.Id, false));
 
     private Task ToggleTodoAsync(TodoRow row) => Workspace.Repository.ToggleTodoAsync(row.Id, _clock());
 

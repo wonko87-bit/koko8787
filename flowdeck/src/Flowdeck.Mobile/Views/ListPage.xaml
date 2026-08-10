@@ -18,9 +18,17 @@
         </SwipeView.RightItems>
 
         <Grid Padding="2,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-          <!-- Not interactive: the whole row is the tap target, so a tap that happens to
-               land on the box goes through the command like any other. -->
-          <CheckBox InputTransparent="True" IsChecked="{Binding IsDone}" VerticalOptions="Center" />
+          <!-- The box completes; the rest of the row opens the entry. The child recogniser
+               wins over the one on the row, which is what keeps the two apart. -->
+          <Border BackgroundColor="Transparent"
+                  Padding="2"
+                  Stroke="Transparent"
+                  VerticalOptions="Center">
+            <CheckBox InputTransparent="True" IsChecked="{Binding IsDone}" />
+            <Border.GestureRecognizers>
+              <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+            </Border.GestureRecognizers>
+          </Border>
 
           <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
             <Label Style="{StaticResource Text.Body}" Text="{Binding Title}">
@@ -31,6 +39,11 @@
                 </DataTrigger>
               </Label.Triggers>
             </Label>
+            <Label IsVisible="{Binding HasNote}"
+                   LineBreakMode="TailTruncation"
+                   MaxLines="1"
+                   Style="{StaticResource Text.Faint}"
+                   Text="{Binding NotePreview}" />
             <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
           </VerticalStackLayout>
 
@@ -46,7 +59,7 @@
           </VerticalStackLayout>
 
           <Grid.GestureRecognizers>
-            <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+            <TapGestureRecognizer Command="{Binding EditCommand}" />
           </Grid.GestureRecognizers>
         </Grid>
       </SwipeView>
@@ -66,8 +79,17 @@
           <Label Style="{StaticResource Text.Meta}" Text="{Binding TimeLabel}" VerticalOptions="Center" />
           <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
             <Label Style="{StaticResource Text.Body}" Text="{Binding Title}" />
+            <Label IsVisible="{Binding HasNote}"
+                   LineBreakMode="TailTruncation"
+                   MaxLines="1"
+                   Style="{StaticResource Text.Faint}"
+                   Text="{Binding NotePreview}" />
             <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
           </VerticalStackLayout>
+
+          <Grid.GestureRecognizers>
+            <TapGestureRecognizer Command="{Binding EditCommand}" />
+          </Grid.GestureRecognizers>
         </Grid>
       </SwipeView>
     </DataTemplate>
