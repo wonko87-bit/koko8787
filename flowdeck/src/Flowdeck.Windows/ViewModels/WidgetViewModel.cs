@@ -60,6 +60,9 @@ public sealed class WidgetViewModel : ObservableObject
         Refresh();
     }
 
+    /// <summary>Raised once a line typed into the widget's box has been filed.</summary>
+    public event EventHandler<CaptureResult>? Captured;
+
     public ObservableCollection<CalendarDay> Days { get; } = new();
 
     public ObservableCollection<EventRow> Events { get; } = new();
@@ -321,9 +324,14 @@ public sealed class WidgetViewModel : ObservableObject
 
         var now = _clock();
         var parsed = _parser.Parse(text, now);
-        await _repository.CaptureAsync(parsed, now);
+        var result = await _repository.CaptureAsync(parsed, now);
 
         QuickInput = string.Empty;
+
+        // The widget's own box files entries just as the overlay does, so whatever the
+        // shell does afterwards — reporting a failed push, opening the Teams form — has
+        // to happen here too, or the same line would behave differently in two places.
+        if (!result.IsEmpty) Captured?.Invoke(this, result);
 
         // Follow the entry so the user sees where it landed.
         if (parsed.Start.HasValue) SelectDay(parsed.Start.Value.Date);

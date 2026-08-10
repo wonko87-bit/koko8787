@@ -110,6 +110,13 @@ public sealed class AppSettings
     /// <summary>Editable so the routing vocabulary can be tuned without a rebuild.</summary>
     public RoutingRules Routing { get; set; } = new();
 
+    /// <summary>
+    /// Names for <c>@handle</c> to resolve through, kept by hand in settings.json. There is
+    /// no UI on purpose: it is a list you write once and forget, and a directory lookup
+    /// would drag in exactly the permissions this app avoids needing.
+    /// </summary>
+    public ContactBook Contacts { get; set; } = new();
+
     [JsonIgnore]
     public static string DefaultFilePath =>
         Path.Combine(

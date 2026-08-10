@@ -78,6 +78,12 @@ public sealed class RoutingRules
         "!NOL", "!local", "!로컬",
     };
 
+    /// <summary>Open the Teams new-meeting form for this entry, filled in but not sent.</summary>
+    public List<string> TeamsMarkers { get; set; } = new()
+    {
+        "!TM", "!teams", "!팀즈",
+    };
+
     /// <summary>Words that suggest a block of time in the day: something you attend.</summary>
     public List<string> CalendarKeywords { get; set; } = new()
     {
@@ -150,6 +156,29 @@ public sealed class RoutingRules
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds a <c>!TM</c> marker and returns the text with it removed.
+    ///
+    /// Another axis again: Teams is neither a kind of entry nor a place to copy one, but a
+    /// window to open with the entry already typed into it. Nothing is sent — the user
+    /// still presses Teams' own save button, which is the point of going this way round.
+    /// </summary>
+    public bool FindTeamsMarker(string input, out string remainder)
+    {
+        remainder = input.Trim();
+
+        foreach (var marker in TeamsMarkers)
+        {
+            if (TryStripMarker(remainder, marker, out var stripped))
+            {
+                remainder = stripped;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

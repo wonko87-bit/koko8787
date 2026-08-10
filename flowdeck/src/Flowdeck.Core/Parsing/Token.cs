@@ -11,6 +11,7 @@ internal enum TokenKind
     Recurrence,
     Priority,
     Tag,
+    Attendee,
     RangeSeparator,
     Noise,
 }
@@ -33,8 +34,12 @@ internal sealed class Token
     /// <summary>Tie-break when two candidates start at the same index and are the same length.</summary>
     public int Rank { get; init; }
 
-    /// <summary>False for fragments that carry meaning but should stay in the title, e.g. "긴급".</summary>
-    public bool Strip { get; init; } = true;
+    /// <summary>
+    /// False for fragments that carry meaning but should stay in the title, e.g. "긴급".
+    /// Settable because an <c>@이름</c> that turns out to match nobody has to go back into
+    /// the title, and only the parser holds the address book that decides that.
+    /// </summary>
+    public bool Strip { get; set; } = true;
 
     public DateTime? Date { get; init; }
 

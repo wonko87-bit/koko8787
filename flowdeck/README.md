@@ -6,6 +6,7 @@
 - 전역 단축키(`Ctrl+Alt+Space`)로 어디서든 뜨는 입력창
 - `내일 오후 3시 팀 회의` 처럼 그냥 쓰면 알아서 날짜·시간·반복·태그를 뽑아냄
 - `!TD` / `!CD` 로 할일과 일정을 골라서 저장, 표기가 없으면 양쪽 모두
+- `!OL` 로 Outlook에 복사, `!TM` 으로 Teams 회의 폼 열기 — 둘 다 권한·승인 없이
 - 흑백/회색조 전용 디자인 (다크 · 라이트)
 
 ---
@@ -76,7 +77,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 내일 오후 3시 스터디 할일       → 할일에만  (맨 뒤 표기)
 ```
 
-> **`!OL` 은 이 표와 다른 축입니다.** 할일이냐 일정이냐를 정하는 게 아니라 **Outlook에도 보낼지**를 정합니다. 그래서 위 표기와 같이 씁니다 — 자세한 건 [7. Outlook 연동](#7-outlook-연동).
+> **`!OL` 과 `!TM` 은 이 표와 다른 축입니다.** 할일이냐 일정이냐를 정하는 게 아니라 각각 **Outlook에도 보낼지**, **Teams 회의 폼을 열지**를 정합니다. 그래서 위 표기와 같이 씁니다 — 자세한 건 [7. Outlook 연동](#7-outlook-연동)과 [8. Teams 회의 잡기](#8-teams-회의-잡기).
 
 **② 해시태그 — 문장 아무 데나**
 
@@ -182,6 +183,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 !CD 매주 화요일 오전 10시 주간회의 #팀 30분 전 알림
 8월 10일 ~ 8월 12일 워크샵 !CD
 !TD !1 금요일까지 분기 보고서 제출 #업무
+!TM 내일 오후 3시부터 4시까지 기획 리뷰 @홍길동 @kim@corp.com
 ```
 
 ---
@@ -205,8 +207,9 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 | `Ctrl` + `2` | 이번 건만 일정으로 |
 | `Ctrl` + `3` | 이번 건만 양쪽 모두 |
 | `Ctrl` + `O` | 이번 건만 Outlook 전송 켜기 / 끄기 |
+| `Ctrl` + `M` | 이번 건만 Teams 회의 폼 열기 켜기 / 끄기 |
 
-`Ctrl`+`1`/`2`/`3` 은 **같은 키를 한 번 더 누르면 풀립니다** — 기본 분류로 되돌아갑니다. `Ctrl`+`O` 는 다른 축이라 분류와 따로 놉니다.
+`Ctrl`+`1`/`2`/`3` 은 **같은 키를 한 번 더 누르면 풀립니다** — 기본 분류로 되돌아갑니다. `Ctrl`+`O` 와 `Ctrl`+`M` 은 다른 축이라 분류와 따로 놉니다.
 
 네 단축키 모두 **설정에서 바꿀 수 있습니다.** 설정 창의 단축키 칸을 클릭하고 원하는 조합을 그대로 누르면 됩니다. 다른 프로그램이 이미 쓰고 있는 조합이면 그 자리에서 알려줍니다.
 
@@ -391,7 +394,58 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 ---
 
-## 8. 데이터
+## 8. Teams 회의 잡기
+
+한 줄로 회의를 **잡되, 보내지는 않습니다.** `!TM` 을 붙이면 Teams의 새 회의 창이 제목·시간·참석자까지 채워진 채로 열리고, **최종 저장 버튼은 사용자가 누릅니다.**
+
+```
+!TM 내일 오후 3시부터 4시까지 기획 리뷰 @홍길동 @kim@corp.com
+```
+
+- 표기: `!TM` · `!teams` · `!팀즈` (빠른 입력창에서는 `Ctrl`+`M`)
+- **로컬에도 그대로 저장됩니다.** Teams 창에서 그냥 닫아도 Flowdeck에 친 내용은 남습니다.
+
+### 왜 자동 생성이 아니라 폼을 여는가
+
+회의를 코드로 곧장 만들려면 Graph API가 필요하고 — 앱 등록, 위임 권한, 관리자 승인 — **그리고 잘못 해석된 회의가 그대로 발송됩니다.** 참석자 전원에게요.
+
+딥링크는 **URL 하나**입니다. 권한도 등록도 승인도 필요 없어서 지금 당장 되고, 무엇보다 파싱이 틀렸을 때 치르는 값이 "닫기 한 번"입니다. 회의 소집은 되돌리기가 비싼 동작이라 이쪽이 맞습니다.
+
+### 참석자 지정
+
+| 쓰는 법 | 결과 |
+|---|---|
+| `@hong@corp.com` 또는 `hong@corp.com` | 주소 그대로 |
+| `@홍길동` | 주소록에서 찾아 변환 |
+| `@모르는이름` | **제목에 그대로 남습니다** (지워지지 않음) |
+
+주소록은 `%APPDATA%\Flowdeck\settings.json` 의 `Contacts.Aliases` 에 직접 적습니다. 설정 창에는 없습니다 — 한 번 적고 잊는 목록이고, 회사 주소록을 조회하려면 결국 Graph 권한이 필요해지기 때문입니다.
+
+```json
+"Contacts": {
+  "Aliases": {
+    "홍길동": "hong@corp.com",
+    "김대리": "kim@corp.com"
+  }
+}
+```
+
+> **참석자 추출은 `!TM` 이 있을 때만 일어납니다.** `hong@corp.com 에게 회신` 같은 평범한 할일에서 주소가 제목에서 사라지면 곤란하니까요.
+
+### 알아두실 것
+
+- **시각을 안 쓰면 시각 칸은 비워둡니다.** `!TM 8월 12일 워크샵` 처럼 종일이면 임의로 시간을 찍지 않습니다. 채워진 것처럼 보이는데 틀린 폼이 빈 칸보다 나쁩니다.
+- **`!TM` 은 자동 Outlook 전송을 끕니다.** Teams가 저장할 때 Outlook 캘린더에 알아서 넣기 때문에, "항상 저장"이 켜져 있으면 같은 자리가 두 번 잡힙니다. `!OL` 을 직접 치면 그건 그대로 존중합니다.
+- 원본 입력 문장이 회의 본문에 `[Flowdeck] ...` 로 들어갑니다. 폼에서 "내가 뭐라고 쳤더라"를 확인할 수 있습니다.
+- Teams 앱이 없으면 브라우저 Teams로 열립니다.
+
+### 나중에 Graph가 열리면
+
+`TeamsDeepLink` 는 URL만 만드는 순수 함수라, 실제 회의 생성(`onlineMeeting`)으로 바꾸더라도 파서·저장·UI는 손댈 필요가 없습니다. 다만 **바꿀지 말지는 별개 문제입니다** — 위에 적은 이유로, 폼을 여는 쪽이 계속 나을 수 있습니다.
+
+---
+
+## 9. 데이터
 
 전부 로컬에 평문 JSON으로 저장됩니다. 계정도 서버도 없습니다.
 
@@ -413,26 +467,28 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 ---
 
-## 9. 프로젝트 구조
+## 10. 프로젝트 구조
 
 ```
 flowdeck/
 ├── Flowdeck.sln
 ├── src/
 │   ├── Flowdeck.Core/            플랫폼 무관 (net8.0)
-│   │   ├── Models/               TodoItem, CalendarEvent, Recurrence
-│   │   ├── Parsing/              TemporalScanner, NaturalLanguageParser, RoutingRules
+│   │   ├── Models/               TodoItem, CalendarEvent, Recurrence, ExternalLink
+│   │   ├── Parsing/              TemporalScanner, NaturalLanguageParser, RoutingRules, ContactBook
+│   │   ├── Integration/          IExternalStore, TeamsDeepLink
 │   │   ├── Services/             EntryComposer, RecurrenceExpander, WorkspaceRepository
 │   │   ├── Storage/              JsonWorkspaceStore
 │   │   ├── Export/               IcsExporter
 │   │   └── Settings/             AppSettings
 │   └── Flowdeck.Windows/         WPF (net8.0-windows)
-│       ├── Views/                WidgetWindow, QuickAddWindow, SettingsWindow
+│       ├── Views/                WidgetWindow, QuickAddWindow, SettingsWindow, AgendaWindow
 │       ├── ViewModels/
+│       ├── Integration/          OutlookBridge (COM)
 │       ├── Interop/              HotKeyService, WindowPinService, StartupService
-│       ├── Services/             TrayIconController, ThemeManager, ReminderService
+│       ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
 │       └── Themes/               Dark, Light, Controls
-├── tests/Flowdeck.Core.Tests/    xUnit 117개
+├── tests/Flowdeck.Core.Tests/    xUnit 245개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -444,11 +500,11 @@ flowdeck/
 
 ---
 
-## 10. 개발
+## 11. 개발
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 117 tests
+dotnet test tests/Flowdeck.Core.Tests    # 245 tests
 dotnet build Flowdeck.sln -c Release
 ```
 
@@ -456,7 +512,7 @@ dotnet build Flowdeck.sln -c Release
 
 ---
 
-## 11. 안드로이드 / 아이폰으로 확장하기
+## 12. 안드로이드 / 아이폰으로 확장하기
 
 `Flowdeck.Core` 는 이미 이걸 염두에 두고 짜여 있습니다. 플랫폼 API를 하나도 쓰지 않고, 시각도 `DateTime.Now` 를 직접 부르는 대신 전부 인자로 받습니다.
 

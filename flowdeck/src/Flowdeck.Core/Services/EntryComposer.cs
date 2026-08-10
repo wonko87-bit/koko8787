@@ -1,3 +1,4 @@
+using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
 using Flowdeck.Core.Parsing;
 
@@ -17,6 +18,13 @@ public sealed class CaptureResult
     /// store. The capture itself still succeeded; only the copy did not.
     /// </summary>
     public string? ExternalError { get; set; }
+
+    /// <summary>
+    /// A link the shell should open once the entry is saved — today only the Teams
+    /// scheduling form. Built here rather than launched here so nothing in Core has to
+    /// know how a browser is started.
+    /// </summary>
+    public string? LaunchUrl { get; init; }
 }
 
 /// <summary>
@@ -51,7 +59,12 @@ public static class EntryComposer
             calendarEvent.LinkedTodoId = todo.Id;
         }
 
-        return new CaptureResult { Todo = todo, Event = calendarEvent };
+        return new CaptureResult
+        {
+            Todo = todo,
+            Event = calendarEvent,
+            LaunchUrl = TeamsDeepLink.NewMeetingFor(entry),
+        };
     }
 
     private static TodoItem BuildTodo(ParsedEntry entry, DateTime now) => new()

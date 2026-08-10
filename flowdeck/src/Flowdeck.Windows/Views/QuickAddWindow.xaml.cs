@@ -78,10 +78,15 @@ public partial class QuickAddWindow : Window
                     _viewModel.ForceTarget(EntryTarget.Both);
                     return;
 
-                // A different axis from the three above, so a key away from them.
+                // Different axes from the three above, so keys away from them.
                 case Key.O:
                     e.Handled = true;
                     _viewModel.ToggleExternal();
+                    return;
+
+                case Key.M:
+                    e.Handled = true;
+                    _viewModel.ToggleTeams();
                     return;
             }
         }

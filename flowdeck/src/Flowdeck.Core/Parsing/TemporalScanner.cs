@@ -48,6 +48,15 @@ internal static class TemporalScanner
     private static readonly Regex PriorityTag = new(@"(?<![\w!])!p?([1-4])(?!\d)", Opts);
     private static readonly Regex PriorityWord = new(@"긴급|매우\s*중요|중요", Opts);
     private static readonly Regex HashTag = new(@"(?<![\w])#([^\s#]+)", Opts);
+
+    // An address is taken as written, with or without the @ that introduces it. A bare
+    // "@이름" is only a handle until the address book says otherwise, so it is matched
+    // separately and may yet be handed back to the title.
+    private static readonly Regex AttendeeAddress =
+        new(@"(?<![\w.@])@?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w@])", Opts);
+
+    private static readonly Regex AttendeeHandle =
+        new(@"(?<![\w@])@([가-힣A-Za-z][가-힣A-Za-z0-9._-]*)(?![\w@.])", Opts);
     private static readonly Regex RangeMark = new(@"[~～∼]|(?<=\d)\s*-\s*(?=\d{1,2}\s*(?:시|:))", Opts);
 
     /// <summary>Particles that trail a date or time and belong to it, not to the title.</summary>
@@ -60,6 +69,7 @@ internal static class TemporalScanner
     private const int RankDate = 80;
     private const int RankTime = 70;
     private const int RankTag = 60;
+    private const int RankAttendee = 58;
     private const int RankPriority = 55;
     private const int RankNoise = 5;
 
@@ -73,6 +83,7 @@ internal static class TemporalScanner
         AddDates(text, now, firstDayOfWeek, candidates);
         AddTimes(text, candidates);
         AddTags(text, candidates);
+        AddAttendees(text, candidates);
         AddPriorities(text, candidates);
 
         foreach (Match m in RangeMark.Matches(text))
@@ -418,6 +429,38 @@ internal static class TemporalScanner
                 Start = m.Index,
                 Length = m.Length,
                 Rank = RankTag,
+                Text = m.Groups[1].Value,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Picks out who a meeting is with. An address wins over a bare handle wherever both
+    /// could match, because "@hong@corp.com" is longer than the "@hong" inside it and the
+    /// longest candidate is the one that survives.
+    /// </summary>
+    private static void AddAttendees(string text, List<Token> into)
+    {
+        foreach (Match m in AttendeeAddress.Matches(text))
+        {
+            into.Add(new Token
+            {
+                Kind = TokenKind.Attendee,
+                Start = m.Index,
+                Length = m.Length,
+                Rank = RankAttendee,
+                Text = m.Groups[1].Value,
+            });
+        }
+
+        foreach (Match m in AttendeeHandle.Matches(text))
+        {
+            into.Add(new Token
+            {
+                Kind = TokenKind.Attendee,
+                Start = m.Index,
+                Length = m.Length,
+                Rank = RankAttendee,
                 Text = m.Groups[1].Value,
             });
         }

@@ -118,6 +118,20 @@
                        Foreground="{DynamicResource Brush.TextPrimary}"
                        Text="→ Outlook" />
           </Border>
+          <Border Style="{StaticResource Chip}"
+                  Visibility="{Binding HasAttendees, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock FontSize="11"
+                       Foreground="{DynamicResource Brush.TextSecondary}"
+                       Text="{Binding AttendeeLabel}" />
+          </Border>
+          <Border BorderBrush="{DynamicResource Brush.BorderStrong}"
+                  Style="{StaticResource Chip}"
+                  Visibility="{Binding OpensTeamsMeeting, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock FontSize="11"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"
+                       Text="→ Teams 회의 폼" />
+          </Border>
         </StackPanel>
       </Grid>
 
@@ -125,7 +139,7 @@
       <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
         <TextBlock FontSize="11"
                    Foreground="{DynamicResource Brush.TextTertiary}"
-                   Text="Enter 저장 · Esc 닫기 · Ctrl+1 할일 · Ctrl+2 일정 · Ctrl+3 둘 다 · Ctrl+O Outlook" />
+                   Text="Enter 저장 · Esc 닫기 · Ctrl+1 할일 · Ctrl+2 일정 · Ctrl+3 둘 다 · Ctrl+O Outlook · Ctrl+M Teams" />
       </StackPanel>
     </StackPanel>
   </Border>

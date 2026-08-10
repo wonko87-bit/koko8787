@@ -64,13 +64,30 @@ public sealed class NaturalLanguageParser
     /// </summary>
     public bool PushExternalByDefault { get; set; }
 
-    public ParsedEntry Parse(string input, DateTime now)
+    /// <summary>Names that <c>@handle</c> resolves through on its way to an email address.</summary>
+    public ContactBook Contacts { get; set; } = new();
+
+    /// <summary>
+    /// Reads one line.
+    ///
+    /// <paramref name="forceTeams"/> stands in for the <c>!TM</c> marker when the flag was
+    /// flipped by keyboard instead of typed. It has to go through the parse rather than be
+    /// patched onto the result, because whether there is a meeting decides whether an
+    /// <c>@이름</c> is a guest or just a word — so the title changes with it.
+    /// </summary>
+    public ParsedEntry Parse(string input, DateTime now, bool? forceTeams = null)
     {
         var entry = new ParsedEntry { RawInput = input ?? string.Empty };
         if (string.IsNullOrWhiteSpace(input)) return entry;
 
-        var explicitTarget = StripMarkers(input, out var body, out var external);
-        entry.PushExternal = external ?? PushExternalByDefault;
+        var explicitTarget = StripMarkers(input, out var body, out var external, out var teams);
+        teams = forceTeams ?? teams;
+        entry.OpenTeamsMeeting = teams;
+
+        // Teams files the meeting on the Outlook calendar itself once the user saves it,
+        // so sending it there as well would book the slot twice. An explicit !OL is still
+        // honoured — the user asked for both and can see what they typed.
+        entry.PushExternal = external ?? (PushExternalByDefault && !teams);
 
         var tokens = TemporalScanner.Scan(body, now, FirstDayOfWeek);
 
@@ -131,6 +148,24 @@ public sealed class NaturalLanguageParser
                     else if (!entry.Tags.Contains(token.Text, StringComparer.OrdinalIgnoreCase))
                     {
                         entry.Tags.Add(token.Text);
+                    }
+
+                    break;
+
+                case TokenKind.Attendee when token.Text is not null:
+                    // Only a meeting has anyone to invite. Anywhere else an address is
+                    // simply part of what was written — "hong@corp.com 에게 회신" is a todo
+                    // about an address, not a guest list — so it stays in the title.
+                    var address = entry.OpenTeamsMeeting ? Contacts.Resolve(token.Text) : null;
+                    if (address is null)
+                    {
+                        // Nobody by that name. It was probably just prose, so hand the
+                        // characters back rather than dropping them out of the title.
+                        token.Strip = false;
+                    }
+                    else if (!entry.Attendees.Contains(address, StringComparer.OrdinalIgnoreCase))
+                    {
+                        entry.Attendees.Add(address);
                     }
 
                     break;
@@ -202,17 +237,18 @@ public sealed class NaturalLanguageParser
     }
 
     /// <summary>
-    /// Peels the routing marker and the Outlook flag off the line.
+    /// Peels the routing marker, the Outlook flag and the Teams flag off the line.
     ///
-    /// Both only count at the head or the tail, so with two of them present one hides the
-    /// other: in "!CD !OL 회의" the flag is in the middle until !CD comes off. Stripping
-    /// therefore repeats until nothing more comes away, which makes the order the user
-    /// types them in irrelevant.
+    /// All three only count at the head or the tail, so with more than one present they
+    /// hide each other: in "!CD !OL 회의" the flag is in the middle until !CD comes off.
+    /// Stripping therefore repeats until nothing more comes away, which makes the order
+    /// the user types them in irrelevant.
     /// </summary>
-    private EntryTarget? StripMarkers(string input, out string body, out bool? external)
+    private EntryTarget? StripMarkers(string input, out string body, out bool? external, out bool teams)
     {
         body = input;
         external = null;
+        teams = false;
         EntryTarget? target = null;
 
         while (true)
@@ -228,6 +264,13 @@ public sealed class NaturalLanguageParser
                     body = stripped;
                     progressed = true;
                 }
+            }
+
+            if (!teams && _rules.FindTeamsMarker(body, out var withoutTeams))
+            {
+                teams = true;
+                body = withoutTeams;
+                progressed = true;
             }
 
             if (target is null)

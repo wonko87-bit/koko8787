@@ -26,6 +26,15 @@ public sealed class ParsedEntry
     /// </summary>
     public bool PushExternal { get; set; }
 
+    /// <summary>
+    /// Open the Teams new-meeting form with this entry filled in. Nothing is sent: Teams
+    /// mints the meeting only when the user presses its own save button.
+    /// </summary>
+    public bool OpenTeamsMeeting { get; set; }
+
+    /// <summary>Email addresses pulled out of the line, in the order they were written.</summary>
+    public List<string> Attendees { get; set; } = new();
+
     public DateTime? Start { get; set; }
 
     public DateTime? End { get; set; }

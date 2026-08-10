@@ -19,6 +19,7 @@ public sealed class QuickAddViewModel : ObservableObject
     private ParsedEntry _preview = new();
     private EntryTarget? _forcedTarget;
     private bool? _forcedExternal;
+    private bool? _forcedTeams;
 
     public QuickAddViewModel(
         WorkspaceRepository repository,
@@ -115,10 +116,30 @@ public sealed class QuickAddViewModel : ObservableObject
         RaisePreviewProperties();
     }
 
+    /// <summary>
+    /// Flips the Teams flag for this one entry: the keyboard twin of !TM. Re-reads the
+    /// line rather than patching the result, because turning a meeting on is what turns an
+    /// <c>@이름</c> from a word in the title into someone to invite.
+    /// </summary>
+    public void ToggleTeams()
+    {
+        _forcedTeams = !(_forcedTeams ?? _preview.OpenTeamsMeeting);
+        Reparse();
+    }
+
+    /// <summary>True when saving will also open the Teams scheduling form.</summary>
+    public bool OpensTeamsMeeting => Effective().OpenTeamsMeeting;
+
+    /// <summary>Who the meeting will be addressed to, for the preview line.</summary>
+    public string AttendeeLabel => string.Join(", ", Effective().Attendees);
+
+    public bool HasAttendees => Effective().Attendees.Count > 0;
+
     public void Reset()
     {
         _forcedTarget = null;
         _forcedExternal = null;
+        _forcedTeams = null;
         Input = string.Empty;
     }
 
@@ -137,13 +158,15 @@ public sealed class QuickAddViewModel : ObservableObject
 
     private void Reparse()
     {
-        _preview = _parser.Parse(_input, _clock());
+        _preview = _parser.Parse(_input, _clock(), _forcedTeams);
         RaisePreviewProperties();
     }
 
     /// <summary>The parse with any manual override folded in.</summary>
     private ParsedEntry Effective()
     {
+        // The Teams flag is not folded in here: it went through the parse, so the preview
+        // already carries it along with the attendees it pulled out.
         if (_preview.IsEmpty) return _preview;
         if (_forcedTarget is null && _forcedExternal is null) return _preview;
 
@@ -161,6 +184,8 @@ public sealed class QuickAddViewModel : ObservableObject
             Recurrence = _preview.Recurrence,
             ReminderMinutesBefore = _preview.ReminderMinutesBefore,
             PushExternal = _forcedExternal ?? _preview.PushExternal,
+            OpenTeamsMeeting = _preview.OpenTeamsMeeting,
+            Attendees = _preview.Attendees,
         };
     }
 
@@ -179,6 +204,9 @@ public sealed class QuickAddViewModel : ObservableObject
         Raise(nameof(ReminderLabel));
         Raise(nameof(HasReminder));
         Raise(nameof(PushesToOutlook));
+        Raise(nameof(OpensTeamsMeeting));
+        Raise(nameof(AttendeeLabel));
+        Raise(nameof(HasAttendees));
         Raise(nameof(TargetIsPinned));
     }
 }

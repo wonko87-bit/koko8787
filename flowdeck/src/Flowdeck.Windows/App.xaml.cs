@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -99,7 +100,10 @@ public partial class App : Application, IAppShell
         _parser = new NaturalLanguageParser(_settings.Routing);
         ApplyParserSettings();
 
-        _widget = new WidgetWindow(new WidgetViewModel(_repository, _parser), _settings);
+        var widgetViewModel = new WidgetViewModel(_repository, _parser);
+        widgetViewModel.Captured += OnCaptured;
+
+        _widget = new WidgetWindow(widgetViewModel, _settings);
         _widget.SettingsRequested += (_, _) => ShowSettings();
         _widget.HideRequested += (_, _) => _tray?.SetWidgetVisible(false);
         _widget.EventsAgendaRequested += (_, _) => ToggleEventsAgenda();
@@ -140,14 +144,34 @@ public partial class App : Application, IAppShell
     }
 
     /// <summary>
-    /// The entry is saved either way; this only reports that the copy to Outlook did not
-    /// happen, so the user knows to check rather than assuming it arrived.
+    /// Runs after a line has been filed. The entry is saved either way; this reports a
+    /// copy to Outlook that did not happen, and opens the Teams form when one was asked for.
     /// </summary>
     private void OnCaptured(object? sender, CaptureResult result)
     {
-        if (result.ExternalError is null) return;
+        if (result.ExternalError is not null)
+        {
+            _tray?.Notify("Outlook 저장 실패", result.ExternalError + " (항목은 저장되었습니다)");
+        }
 
-        _tray?.Notify("Outlook 저장 실패", result.ExternalError + " (항목은 저장되었습니다)");
+        if (result.LaunchUrl is not null) OpenExternally(result.LaunchUrl);
+    }
+
+    /// <summary>
+    /// Hands a link to the shell, which passes it to Teams or to the browser. Failing to
+    /// open one is not worth taking the app down for: the entry is already saved, and the
+    /// notification says what did not happen.
+    /// </summary>
+    private void OpenExternally(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _tray?.Notify("Teams를 열지 못했습니다", "항목은 저장되었습니다");
+        }
     }
 
     // ---- IAppShell ---------------------------------------------------------
@@ -163,6 +187,7 @@ public partial class App : Application, IAppShell
         _parser.AssumeAfternoonForBareHours = _settings.AssumeAfternoonForBareHours;
         _parser.FirstDayOfWeek = _settings.FirstDayOfWeek;
         _parser.PushExternalByDefault = _settings.PushToOutlookByDefault;
+        _parser.Contacts = _settings.Contacts;
     }
 
     public string ReapplyHotKeys()
