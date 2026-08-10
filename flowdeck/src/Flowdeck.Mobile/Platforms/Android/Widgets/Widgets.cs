@@ -21,7 +21,8 @@ public static class FlowdeckWidgets
         var manager = AppWidgetManager.GetInstance(context);
         if (manager is null) return;
 
-        var ids = manager.GetAppWidgetIds(new ComponentName(context, provider));
+        // ComponentName wants the Java class, not the CLR type behind it.
+        var ids = manager.GetAppWidgetIds(new ComponentName(context, Java.Lang.Class.FromType(provider)));
         if (ids is null || ids.Length == 0) return;
 
         var update = new Intent(context, provider)
@@ -73,7 +74,7 @@ public sealed class CalendarWidget : AppWidgetProvider
             }
             finally
             {
-                pending.Finish();
+                pending?.Finish();
             }
         });
     }

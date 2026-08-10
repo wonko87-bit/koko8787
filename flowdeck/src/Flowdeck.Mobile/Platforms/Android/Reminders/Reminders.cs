@@ -124,16 +124,16 @@ public static class ReminderScheduler
                 new Intent(context, typeof(MainActivity)).AddFlags(ActivityFlags.SingleTop),
                 PendingIntentFlags.UpdateCurrent | PendingIntentFlags.Immutable);
 
-            var notification = new NotificationCompat.Builder(context, ChannelId)
-                .SetSmallIcon(Resource.Mipmap.appicon)
-                .SetContentTitle(reminder.IsTodo ? "할일 알림" : "일정 알림")
-                .SetContentText($"{reminder.Title} · {ReminderPlanner.Describe(reminder)}")
-                .SetPriority((int)NotificationPriority.High)
-                .SetAutoCancel(true)
-                .SetContentIntent(open)
-                .Build();
+            var builder = new NotificationCompat.Builder(context, ChannelId);
+            builder.SetSmallIcon(Resource.Mipmap.appicon);
+            builder.SetContentTitle(reminder.IsTodo ? "할일 알림" : "일정 알림");
+            builder.SetContentText($"{reminder.Title} · {ReminderPlanner.Describe(reminder)}");
+            builder.SetPriority((int)NotificationPriority.High);
+            builder.SetAutoCancel(true);
+            if (open is not null) builder.SetContentIntent(open);
 
-            NotificationManagerCompat.From(context).Notify(reminder.AlarmId, notification);
+            var notification = builder.Build();
+            if (notification is not null) NotificationManagerCompat.From(context).Notify(reminder.AlarmId, notification);
         }
     }
 }
@@ -164,7 +164,7 @@ public sealed class ReminderReceiver : BroadcastReceiver
             }
             finally
             {
-                pending.Finish();
+                pending?.Finish();
             }
         });
     }
@@ -197,7 +197,7 @@ public sealed class BootReceiver : BroadcastReceiver
             }
             finally
             {
-                pending.Finish();
+                pending?.Finish();
             }
         });
     }

@@ -18,8 +18,9 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
     <ApplicationVersion>1</ApplicationVersion>
 
-    <!-- Android 5.0. Nothing here needs anything newer. -->
-    <SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
+    <!-- Android 7.0. Immutable pending intents, which every alarm here uses, need 23 and
+         later; the floor is put above that rather than special-casing a decade-old phone. -->
+    <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
 
     <!-- An .aab cannot be sideloaded, and sideloading is how this app gets onto a
          phone: there is no store listing and no signing identity behind it. -->
