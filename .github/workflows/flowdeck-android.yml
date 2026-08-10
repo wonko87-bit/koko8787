@@ -70,7 +70,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cp "$(ls publish-android/*.apk | head -1)" flowdeck.apk
+
+          # The build leaves two .apk files side by side and only the signed one can be
+          # installed — Android refuses a package with no certificate. Picking the first
+          # by name happened to work, but which one that is depends on the runner's
+          # collation, so name it outright and fail loudly if it is not there.
+          apk="$(ls publish-android/*-Signed.apk | head -1)"
+          cp "$apk" flowdeck.apk
+          unzip -l flowdeck.apk | grep -qE 'META-INF/.*\.(RSA|DSA|EC)$' \
+            || { echo "::error::the apk carries no signature and could not be installed"; exit 1; }
 
           gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create android-latest \
