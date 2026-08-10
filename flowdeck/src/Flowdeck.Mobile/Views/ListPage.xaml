@@ -104,10 +104,7 @@
 
     <!-- ============ tag filter ============ -->
     <ScrollView Grid.Row="2" IsVisible="{Binding HasTagChips}" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
-      <HorizontalStackLayout Spacing="6">
-        <BindableLayout.ItemsSource>
-          <Binding Path="TagChips" />
-        </BindableLayout.ItemsSource>
+      <HorizontalStackLayout BindableLayout.ItemsSource="{Binding TagChips}" Spacing="6">
         <BindableLayout.ItemTemplate>
           <DataTemplate x:DataType="vm:TagChip">
             <Border Style="{StaticResource Chip}">
@@ -140,10 +137,7 @@
                Style="{StaticResource Text.Meta}"
                Text="{Binding EmptyMessage}" />
 
-        <VerticalStackLayout>
-          <BindableLayout.ItemsSource>
-            <Binding Path="Groups" />
-          </BindableLayout.ItemsSource>
+        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Groups}">
           <BindableLayout.ItemTemplate>
             <DataTemplate x:DataType="vm:DayGroup">
               <VerticalStackLayout Margin="0,10,0,0">
@@ -158,10 +152,7 @@
         <!-- ============ repeating, one line each ============ -->
         <VerticalStackLayout IsVisible="{Binding HasRecurring}" Margin="0,18,0,0">
           <Label Style="{StaticResource Text.Section}" Text="{Binding RecurringSectionLabel}" />
-          <VerticalStackLayout>
-            <BindableLayout.ItemsSource>
-              <Binding Path="Recurring" />
-            </BindableLayout.ItemsSource>
+          <VerticalStackLayout BindableLayout.ItemsSource="{Binding Recurring}">
             <BindableLayout.ItemTemplate>
               <DataTemplate x:DataType="vm:RecurringRow">
                 <SwipeView>

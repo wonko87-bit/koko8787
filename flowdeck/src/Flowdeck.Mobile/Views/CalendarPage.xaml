@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage x:Class="Flowdeck.Mobile.Views.CalendarPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Flowdeck.Mobile.ViewModels"
+             Title="달력"
+             Shell.NavBarIsVisible="False">
+
+  <Grid Padding="14,20,14,0" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="8">
+
+    <!-- ============ month header ============ -->
+    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+      <Button Command="{Binding PreviousMonthCommand}"
+              Style="{StaticResource Button.Ghost}"
+              Text="‹"
+              WidthRequest="46" />
+      <Label Grid.Column="1"
+             HorizontalTextAlignment="Center"
+             Style="{StaticResource Text.Title}"
+             Text="{Binding MonthLabel}"
+             VerticalOptions="Center" />
+      <Button Grid.Column="2"
+              Command="{Binding NextMonthCommand}"
+              Style="{StaticResource Button.Ghost}"
+              Text="›"
+              WidthRequest="46" />
+      <Button Grid.Column="3"
+              Margin="6,0,0,0"
+              Command="{Binding TodayCommand}"
+              FontSize="13"
+              Style="{StaticResource Button.Ghost}"
+              Text="오늘" />
+    </Grid>
+
+    <!-- ============ weekday headings ============ -->
+    <FlexLayout Grid.Row="1"
+                BindableLayout.ItemsSource="{Binding WeekdayHeaders}"
+                Direction="Row"
+                JustifyContent="SpaceBetween">
+      <BindableLayout.ItemTemplate>
+        <DataTemplate x:DataType="vm:WeekdayHeader">
+          <Label FontSize="11"
+                 HorizontalTextAlignment="Center"
+                 Text="{Binding Label}"
+                 TextColor="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}"
+                 WidthRequest="44">
+            <Label.Triggers>
+              <DataTrigger Binding="{Binding IsSaturday}" TargetType="Label" Value="True">
+                <Setter Property="TextColor" Value="#5B8DEF" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding IsSunday}" TargetType="Label" Value="True">
+                <Setter Property="TextColor" Value="#E06A6A" />
+              </DataTrigger>
+            </Label.Triggers>
+          </Label>
+        </DataTemplate>
+      </BindableLayout.ItemTemplate>
+    </FlexLayout>
+
+    <!-- ============ the month ============ -->
+    <FlexLayout Grid.Row="2"
+                BindableLayout.ItemsSource="{Binding Days}"
+                Direction="Row"
+                JustifyContent="SpaceBetween"
+                Wrap="Wrap">
+      <BindableLayout.ItemTemplate>
+        <DataTemplate x:DataType="vm:CalendarDay">
+          <Border Margin="0,0,0,2"
+                  BackgroundColor="Transparent"
+                  HeightRequest="44"
+                  Stroke="Transparent"
+                  StrokeShape="RoundRectangle 8"
+                  StrokeThickness="1"
+                  WidthRequest="44">
+            <Grid RowDefinitions="*,Auto" RowSpacing="0">
+              <Label FontSize="14"
+                     HorizontalTextAlignment="Center"
+                     Text="{Binding DayNumber}"
+                     TextColor="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}"
+                     VerticalOptions="End">
+                <Label.Triggers>
+                  <DataTrigger Binding="{Binding IsSaturday}" TargetType="Label" Value="True">
+                    <Setter Property="TextColor" Value="#5B8DEF" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding IsSunday}" TargetType="Label" Value="True">
+                    <Setter Property="TextColor" Value="#E06A6A" />
+                  </DataTrigger>
+                </Label.Triggers>
+              </Label>
+
+              <HorizontalStackLayout Grid.Row="1"
+                                     Margin="0,1,0,4"
+                                     HorizontalOptions="Center"
+                                     Spacing="3">
+                <BoxView CornerRadius="2"
+                         HeightRequest="4"
+                         IsVisible="{Binding HasEvents}"
+                         WidthRequest="4"
+                         Color="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+                <BoxView CornerRadius="2"
+                         HeightRequest="4"
+                         IsVisible="{Binding HasTodos}"
+                         WidthRequest="4"
+                         Color="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}" />
+              </HorizontalStackLayout>
+            </Grid>
+
+            <Border.GestureRecognizers>
+              <TapGestureRecognizer Command="{Binding SelectCommand}" />
+            </Border.GestureRecognizers>
+
+            <Border.Triggers>
+              <DataTrigger Binding="{Binding IsCurrentMonth}" TargetType="Border" Value="False">
+                <Setter Property="Opacity" Value="0.3" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding IsSelected}" TargetType="Border" Value="True">
+                <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.SurfaceAlt}, Dark={StaticResource Dark.SurfaceAlt}}" />
+              </DataTrigger>
+              <DataTrigger Binding="{Binding IsToday}" TargetType="Border" Value="True">
+                <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Light.BorderStrong}, Dark={StaticResource Dark.BorderStrong}}" />
+              </DataTrigger>
+            </Border.Triggers>
+          </Border>
+        </DataTemplate>
+      </BindableLayout.ItemTemplate>
+    </FlexLayout>
+
+    <!-- ============ the chosen day ============ -->
+    <Grid Grid.Row="3" Margin="0,8,0,0" ColumnDefinitions="*">
+      <Label Style="{StaticResource Text.Section}" Text="{Binding SelectedLabel}" />
+    </Grid>
+
+    <ScrollView Grid.Row="4">
+      <VerticalStackLayout Spacing="2">
+
+        <Label IsVisible="{Binding IsEmpty}"
+               Margin="0,20,0,0"
+               HorizontalOptions="Center"
+               Style="{StaticResource Text.Meta}"
+               Text="이 날에는 아무것도 없습니다" />
+
+        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Events}" IsVisible="{Binding HasEvents}">
+          <BindableLayout.ItemTemplate>
+            <DataTemplate x:DataType="vm:EventRow">
+              <Grid Padding="2,9" ColumnDefinitions="62,*" ColumnSpacing="8">
+                <Label Style="{StaticResource Text.Meta}" Text="{Binding TimeLabel}" VerticalOptions="Center" />
+                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                  <Label Style="{StaticResource Text.Body}" Text="{Binding Title}" />
+                  <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
+                </VerticalStackLayout>
+              </Grid>
+            </DataTemplate>
+          </BindableLayout.ItemTemplate>
+        </VerticalStackLayout>
+
+        <VerticalStackLayout BindableLayout.ItemsSource="{Binding Todos}" IsVisible="{Binding HasTodos}">
+          <BindableLayout.ItemTemplate>
+            <DataTemplate x:DataType="vm:TodoRow">
+              <Grid Padding="2,9" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                <CheckBox InputTransparent="True" IsChecked="{Binding IsDone}" VerticalOptions="Center" />
+                <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                  <Label Style="{StaticResource Text.Body}" Text="{Binding Title}">
+                    <Label.Triggers>
+                      <DataTrigger Binding="{Binding IsDone}" TargetType="Label" Value="True">
+                        <Setter Property="TextDecorations" Value="Strikethrough" />
+                        <Setter Property="Opacity" Value="0.5" />
+                      </DataTrigger>
+                    </Label.Triggers>
+                  </Label>
+                  <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
+                </VerticalStackLayout>
+                <Label Grid.Column="2"
+                       IsVisible="{Binding HasDue}"
+                       Style="{StaticResource Text.Meta}"
+                       Text="{Binding DueLabel}"
+                       VerticalOptions="Center" />
+                <Grid.GestureRecognizers>
+                  <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+                </Grid.GestureRecognizers>
+              </Grid>
+            </DataTemplate>
+          </BindableLayout.ItemTemplate>
+        </VerticalStackLayout>
+
+        <BoxView HeightRequest="20" Color="Transparent" />
+      </VerticalStackLayout>
+    </ScrollView>
+  </Grid>
+</ContentPage>

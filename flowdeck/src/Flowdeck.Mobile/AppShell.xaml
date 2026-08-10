@@ -8,6 +8,7 @@
 
   <TabBar>
     <ShellContent Title="입력" ContentTemplate="{DataTemplate views:CapturePage}" Route="capture" />
+    <ShellContent Title="달력" ContentTemplate="{DataTemplate views:CalendarPage}" Route="calendar" />
     <ShellContent Title="목록" ContentTemplate="{DataTemplate views:ListPage}" Route="list" />
     <ShellContent Title="설정" ContentTemplate="{DataTemplate views:SettingsPage}" Route="settings" />
   </TabBar>
