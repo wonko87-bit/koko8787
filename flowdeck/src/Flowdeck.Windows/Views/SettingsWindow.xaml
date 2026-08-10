@@ -286,6 +286,22 @@
                       Style="{StaticResource CheckBox.Setting}" />
           </Grid>
 
+          <!-- ============ outlook ============ -->
+          <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="Outlook 연동" />
+
+          <Grid Style="{StaticResource Row}">
+            <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Body}" Text="새 항목을 Outlook에도 저장" />
+              <TextBlock x:Name="OutlookStatus"
+                         Style="{StaticResource Text.Meta}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <CheckBox x:Name="PushToOutlook"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      Style="{StaticResource CheckBox.Setting}" />
+          </Grid>
+
           <!-- ============ system ============ -->
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="시스템" />
 

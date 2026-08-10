@@ -5,6 +5,7 @@ using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Services;
 using Flowdeck.Core.Settings;
 using Flowdeck.Core.Storage;
+using Flowdeck.Windows.Integration;
 using Flowdeck.Windows.Interop;
 using Flowdeck.Windows.Services;
 using Flowdeck.Windows.ViewModels;
@@ -33,6 +34,7 @@ public partial class App : Application, IAppShell
     private WidgetWindow? _widget;
     private QuickAddWindow? _quickAdd;
     private SettingsWindow? _settingsWindow;
+    private OutlookBridge? _outlook;
     private AgendaWindow? _eventsAgenda;
     private AgendaWindow? _todosAgenda;
 
@@ -87,7 +89,11 @@ public partial class App : Application, IAppShell
         ThemeManager.Apply(_settings.Theme);
 
         var store = new JsonWorkspaceStore(Path.Combine(DataFolder, "workspace.json"));
-        _repository = new WorkspaceRepository(store);
+
+        // Push-only: Flowdeck writes into Outlook and never reads back, so there is
+        // nothing to reconcile. Reading is a later addition behind the same interface.
+        _outlook = new OutlookBridge();
+        _repository = new WorkspaceRepository(store, _outlook);
         await _repository.LoadAsync();
 
         _parser = new NaturalLanguageParser(_settings.Routing);
@@ -99,7 +105,9 @@ public partial class App : Application, IAppShell
         _widget.EventsAgendaRequested += (_, _) => ToggleEventsAgenda();
         _widget.TodosAgendaRequested += (_, _) => ToggleTodosAgenda();
 
-        _quickAdd = new QuickAddWindow(new QuickAddViewModel(_repository, _parser));
+        var quickAddViewModel = new QuickAddViewModel(_repository, _parser);
+        quickAddViewModel.Captured += OnCaptured;
+        _quickAdd = new QuickAddWindow(quickAddViewModel);
 
         _eventsAgenda = new AgendaWindow(
             new AgendaViewModel(_repository, AgendaMode.Events),
@@ -131,6 +139,17 @@ public partial class App : Application, IAppShell
         if (hotKeyProblem.Length > 0) _tray.Notify("Flowdeck", hotKeyProblem);
     }
 
+    /// <summary>
+    /// The entry is saved either way; this only reports that the copy to Outlook did not
+    /// happen, so the user knows to check rather than assuming it arrived.
+    /// </summary>
+    private void OnCaptured(object? sender, CaptureResult result)
+    {
+        if (result.ExternalError is null) return;
+
+        _tray?.Notify("Outlook 저장 실패", result.ExternalError + " (항목은 저장되었습니다)");
+    }
+
     // ---- IAppShell ---------------------------------------------------------
 
     public void ApplyTheme(AppTheme theme) => ThemeManager.Apply(theme);
@@ -143,6 +162,7 @@ public partial class App : Application, IAppShell
 
         _parser.AssumeAfternoonForBareHours = _settings.AssumeAfternoonForBareHours;
         _parser.FirstDayOfWeek = _settings.FirstDayOfWeek;
+        _parser.PushExternalByDefault = _settings.PushToOutlookByDefault;
     }
 
     public string ReapplyHotKeys()

@@ -110,6 +110,14 @@
                        Foreground="{DynamicResource Brush.TextSecondary}"
                        Text="{Binding TagLabel}" />
           </Border>
+          <Border BorderBrush="{DynamicResource Brush.BorderStrong}"
+                  Style="{StaticResource Chip}"
+                  Visibility="{Binding PushesToOutlook, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock FontSize="11"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource Brush.TextPrimary}"
+                       Text="→ Outlook" />
+          </Border>
         </StackPanel>
       </Grid>
 

@@ -11,6 +11,12 @@ public sealed class CaptureResult
     public CalendarEvent? Event { get; init; }
 
     public bool IsEmpty => Todo is null && Event is null;
+
+    /// <summary>
+    /// Set when the entry was saved locally but could not be copied to the external
+    /// store. The capture itself still succeeded; only the copy did not.
+    /// </summary>
+    public string? ExternalError { get; set; }
 }
 
 /// <summary>

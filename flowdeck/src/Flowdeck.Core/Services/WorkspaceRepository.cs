@@ -1,3 +1,4 @@
+using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
 using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Storage;
@@ -30,9 +31,17 @@ public sealed class EventOccurrence
 public sealed class WorkspaceRepository
 {
     private readonly IWorkspaceStore _store;
+    private readonly IExternalStore? _external;
     private Workspace _workspace = new();
 
-    public WorkspaceRepository(IWorkspaceStore store) => _store = store;
+    public WorkspaceRepository(IWorkspaceStore store, IExternalStore? external = null)
+    {
+        _store = store;
+        _external = external;
+    }
+
+    /// <summary>The external store entries are copied to, if one is configured and present.</summary>
+    public IExternalStore? External => _external?.IsAvailable == true ? _external : null;
 
     /// <summary>Raised after any mutation, on the thread that performed it.</summary>
     public event EventHandler? Changed;
@@ -66,7 +75,41 @@ public sealed class WorkspaceRepository
 
         await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
+
+        if (entry.PushExternal) await PushAsync(result);
+
         return result;
+    }
+
+    /// <summary>
+    /// Copies a freshly captured entry to the external store.
+    ///
+    /// Runs after the local save and never undoes it: Outlook being shut, busy or
+    /// unhappy is not a reason to lose what the user just typed. A failure is reported
+    /// back on the result so the caller can say so, and the entry simply carries no link.
+    /// </summary>
+    private async Task PushAsync(CaptureResult result)
+    {
+        var external = External;
+        if (external is null)
+        {
+            result.ExternalError = "Outlook을 찾을 수 없습니다";
+            return;
+        }
+
+        try
+        {
+            if (result.Event is not null) result.Event.ExternalLink = await external.PushAsync(result.Event);
+            if (result.Todo is not null) result.Todo.ExternalLink = await external.PushAsync(result.Todo);
+        }
+        catch (Exception e)
+        {
+            result.ExternalError = e.Message;
+            return;
+        }
+
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
@@ -85,7 +128,7 @@ public sealed class WorkspaceRepository
             {
                 todo.DueAt = next.Value;
                 todo.UpdatedAt = now;
-                await SaveAsync().ConfigureAwait(false);
+                await SaveAsync();
                 Changed?.Invoke(this, EventArgs.Empty);
                 return;
             }

@@ -44,6 +44,18 @@ public sealed class RoutingRules
     /// </summary>
     public bool UseKeywordHints { get; set; } = true;
 
+    /// <summary>Also copy this entry to Outlook.</summary>
+    public List<string> ExternalMarkers { get; set; } = new()
+    {
+        "!OL", "!outlook", "!아웃룩",
+    };
+
+    /// <summary>Keep this entry local, overriding the always-push setting for one line.</summary>
+    public List<string> LocalOnlyMarkers { get; set; } = new()
+    {
+        "!NOL", "!local", "!로컬",
+    };
+
     /// <summary>Words that suggest a block of time in the day: something you attend.</summary>
     public List<string> CalendarKeywords { get; set; } = new()
     {
@@ -79,6 +91,39 @@ public sealed class RoutingRules
                     remainder = stripped;
                     return target;
                 }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds an <c>!OL</c> / <c>!NOL</c> marker and returns the text with it removed.
+    ///
+    /// This sits at right angles to the todo/calendar decision rather than alongside it:
+    /// Outlook is somewhere an entry is also copied to, not a third kind of entry. So the
+    /// two combine — the routing markers pick which Outlook folder, this picks whether to
+    /// send at all. Returns null when the line says nothing either way.
+    /// </summary>
+    public bool? FindExternalMarker(string input, out string remainder)
+    {
+        remainder = input.Trim();
+
+        foreach (var marker in ExternalMarkers)
+        {
+            if (TryStripMarker(remainder, marker, out var pushed))
+            {
+                remainder = pushed;
+                return true;
+            }
+        }
+
+        foreach (var marker in LocalOnlyMarkers)
+        {
+            if (TryStripMarker(remainder, marker, out var local))
+            {
+                remainder = local;
+                return false;
             }
         }
 

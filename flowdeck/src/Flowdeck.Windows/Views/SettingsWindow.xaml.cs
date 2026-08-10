@@ -51,6 +51,12 @@ public partial class SettingsWindow : Window
         AgendaTodosHotkey.Text = Settings.AgendaTodosHotkey;
 
         KeywordHints.IsChecked = Settings.Routing.UseKeywordHints;
+        PushToOutlook.IsChecked = Settings.PushToOutlookByDefault;
+
+        var outlook = _shell.Repository.External;
+        OutlookStatus.Text = outlook is null
+            ? "Outlook을 찾지 못했습니다. 켜 두어도 저장되지 않습니다."
+            : "끄더라도 !OL 을 붙이면 그 항목만 보냅니다. 켠 뒤 !NOL 은 그 항목만 제외합니다.";
         AfternoonBias.IsChecked = Settings.AssumeAfternoonForBareHours;
 
         LaunchAtStartup.IsChecked = StartupService.IsEnabled();
@@ -63,6 +69,8 @@ public partial class SettingsWindow : Window
         KeywordHints.Unchecked += OnParserOptionChanged;
         AfternoonBias.Checked += OnParserOptionChanged;
         AfternoonBias.Unchecked += OnParserOptionChanged;
+        PushToOutlook.Checked += OnOutlookChanged;
+        PushToOutlook.Unchecked += OnOutlookChanged;
         ColorWeekends.Checked += OnWeekStartChanged;
         ColorWeekends.Unchecked += OnWeekStartChanged;
         LaunchAtStartup.Checked += OnStartupChanged;
@@ -120,6 +128,15 @@ public partial class SettingsWindow : Window
 
         _shell.ApplyParserSettings();
         _shell.ApplyWidgetSettings();
+        _shell.SaveSettings();
+    }
+
+    private void OnOutlookChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        Settings.PushToOutlookByDefault = PushToOutlook.IsChecked == true;
+        _shell.ApplyParserSettings();
         _shell.SaveSettings();
     }
 

@@ -20,6 +20,12 @@ public sealed class ParsedEntry
     /// <summary>True when the target came from an explicit <c>!TD</c>/<c>!CD</c> marker.</summary>
     public bool TargetWasExplicit { get; set; }
 
+    /// <summary>
+    /// Copy this entry to Outlook as well. Independent of <see cref="Target"/>, which
+    /// decides whether that means an appointment, a task, or both.
+    /// </summary>
+    public bool PushExternal { get; set; }
+
     public DateTime? Start { get; set; }
 
     public DateTime? End { get; set; }

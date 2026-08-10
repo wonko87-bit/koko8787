@@ -33,6 +33,9 @@ public sealed class CalendarEvent
 
     public int? ReminderMinutesBefore { get; set; }
 
+    /// <summary>Set once the record has been copied to Outlook or another external store.</summary>
+    public ExternalLink? ExternalLink { get; set; }
+
     /// <summary>True when this event covers any part of <paramref name="day"/>.</summary>
     public bool OccursOn(DateTime day)
     {

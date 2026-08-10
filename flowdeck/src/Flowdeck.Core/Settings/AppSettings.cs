@@ -93,6 +93,13 @@ public sealed class AppSettings
     /// </summary>
     public bool AssumeAfternoonForBareHours { get; set; } = true;
 
+    /// <summary>
+    /// Copy every captured entry to Outlook without typing <c>!OL</c>. A line carrying
+    /// <c>!NOL</c> still stays local. Off by default: sending work to another application
+    /// should be something the user turns on knowingly.
+    /// </summary>
+    public bool PushToOutlookByDefault { get; set; }
+
     /// <summary>Editable so the routing vocabulary can be tuned without a rebuild.</summary>
     public RoutingRules Routing { get; set; } = new();
 

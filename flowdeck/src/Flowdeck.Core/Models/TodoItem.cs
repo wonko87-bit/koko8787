@@ -38,6 +38,9 @@ public sealed class TodoItem
     /// <summary>Minutes before <see cref="DueAt"/> to raise a reminder. Null disables it.</summary>
     public int? ReminderMinutesBefore { get; set; }
 
+    /// <summary>Set once the record has been copied to Outlook or another external store.</summary>
+    public ExternalLink? ExternalLink { get; set; }
+
     public bool IsOverdue(DateTime now) => !IsDone && DueAt.HasValue && DueAt.Value < now;
 
     public TodoItem Clone() => (TodoItem)MemberwiseClone();

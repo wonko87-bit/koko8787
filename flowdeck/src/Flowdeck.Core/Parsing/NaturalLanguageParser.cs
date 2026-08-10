@@ -58,12 +58,20 @@ public sealed class NaturalLanguageParser
     /// </summary>
     public DayOfWeek FirstDayOfWeek { get; set; } = DayOfWeek.Monday;
 
+    /// <summary>
+    /// Send every entry to Outlook without needing <c>!OL</c>. A line carrying
+    /// <c>!NOL</c> still stays local.
+    /// </summary>
+    public bool PushExternalByDefault { get; set; }
+
     public ParsedEntry Parse(string input, DateTime now)
     {
         var entry = new ParsedEntry { RawInput = input ?? string.Empty };
         if (string.IsNullOrWhiteSpace(input)) return entry;
 
-        var explicitTarget = _rules.FindMarker(input, out var body);
+        var explicitTarget = StripMarkers(input, out var body, out var external);
+        entry.PushExternal = external ?? PushExternalByDefault;
+
         var tokens = TemporalScanner.Scan(body, now, FirstDayOfWeek);
 
         ApplyTokens(entry, tokens, now, ref explicitTarget);
@@ -190,6 +198,50 @@ public sealed class NaturalLanguageParser
         else
         {
             entry.End = start + (duration ?? DefaultEventDuration);
+        }
+    }
+
+    /// <summary>
+    /// Peels the routing marker and the Outlook flag off the line.
+    ///
+    /// Both only count at the head or the tail, so with two of them present one hides the
+    /// other: in "!CD !OL 회의" the flag is in the middle until !CD comes off. Stripping
+    /// therefore repeats until nothing more comes away, which makes the order the user
+    /// types them in irrelevant.
+    /// </summary>
+    private EntryTarget? StripMarkers(string input, out string body, out bool? external)
+    {
+        body = input;
+        external = null;
+        EntryTarget? target = null;
+
+        while (true)
+        {
+            var progressed = false;
+
+            if (external is null)
+            {
+                var found = _rules.FindExternalMarker(body, out var stripped);
+                if (found.HasValue)
+                {
+                    external = found;
+                    body = stripped;
+                    progressed = true;
+                }
+            }
+
+            if (target is null)
+            {
+                var found = _rules.FindMarker(body, out var stripped);
+                if (found.HasValue)
+                {
+                    target = found;
+                    body = stripped;
+                    progressed = true;
+                }
+            }
+
+            if (!progressed) return target;
         }
     }
 

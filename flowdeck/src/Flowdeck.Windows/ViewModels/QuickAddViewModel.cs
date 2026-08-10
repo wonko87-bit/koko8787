@@ -83,6 +83,9 @@ public sealed class QuickAddViewModel : ObservableObject
 
     public bool HasReminder => Effective().ReminderMinutesBefore.HasValue;
 
+    /// <summary>True when this entry will also be written into Outlook.</summary>
+    public bool PushesToOutlook => Effective().PushExternal;
+
     /// <summary>True when the target came from a marker rather than from a keyword guess.</summary>
     public bool TargetIsPinned => _forcedTarget.HasValue || _preview.TargetWasExplicit;
 
@@ -139,6 +142,7 @@ public sealed class QuickAddViewModel : ObservableObject
             Tags = _preview.Tags,
             Recurrence = _preview.Recurrence,
             ReminderMinutesBefore = _preview.ReminderMinutesBefore,
+            PushExternal = _preview.PushExternal,
         };
     }
 
@@ -156,6 +160,7 @@ public sealed class QuickAddViewModel : ObservableObject
         Raise(nameof(HasPriority));
         Raise(nameof(ReminderLabel));
         Raise(nameof(HasReminder));
+        Raise(nameof(PushesToOutlook));
         Raise(nameof(TargetIsPinned));
     }
 }
