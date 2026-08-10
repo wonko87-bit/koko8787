@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage x:Class="Flowdeck.Mobile.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="설정"
+             Shell.NavBarIsVisible="False">
+
+  <ScrollView>
+    <VerticalStackLayout Padding="18,20,18,28" Spacing="16">
+
+      <Label Style="{StaticResource Text.Title}" Text="설정" />
+
+      <!-- ============ input reading ============ -->
+      <Label Style="{StaticResource Text.Section}" Text="입력 해석" />
+
+      <VerticalStackLayout Spacing="8">
+        <Label Style="{StaticResource Text.Body}" Text="표기가 없을 때 기본 분류" />
+        <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="6">
+          <Button Command="{Binding DefaultAutoCommand}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="자동" />
+          <Button Grid.Column="1" Command="{Binding DefaultTodoCommand}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="할일" />
+          <Button Grid.Column="2" Command="{Binding DefaultCalendarCommand}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="일정" />
+          <Button Grid.Column="3" Command="{Binding DefaultBothCommand}" FontSize="13" Style="{StaticResource Button.Ghost}" Text="둘 다" />
+        </Grid>
+        <Label Style="{StaticResource Text.Faint}" Text="{Binding DefaultTargetHint}" />
+      </VerticalStackLayout>
+
+      <Grid ColumnDefinitions="*,Auto">
+        <VerticalStackLayout VerticalOptions="Center">
+          <Label Style="{StaticResource Text.Body}" Text="'2시'를 오후로 해석" />
+          <Label Style="{StaticResource Text.Faint}" Text="오전/오후 표기가 없는 1~7시" />
+        </VerticalStackLayout>
+        <Switch Grid.Column="1" IsToggled="{Binding AfternoonBias, Mode=TwoWay}" VerticalOptions="Center" />
+      </Grid>
+
+      <Grid ColumnDefinitions="*,Auto">
+        <VerticalStackLayout VerticalOptions="Center">
+          <Label Style="{StaticResource Text.Body}" Text="주 시작 요일: 월요일" />
+          <Label Style="{StaticResource Text.Faint}" Text="끄면 일요일. '이번주 금요일' 해석에 함께 적용됩니다" />
+        </VerticalStackLayout>
+        <Switch Grid.Column="1" IsToggled="{Binding WeekStartsMonday, Mode=TwoWay}" VerticalOptions="Center" />
+      </Grid>
+
+      <!-- ============ transfer ============ -->
+      <Label Style="{StaticResource Text.Section}" Text="자료 주고받기" />
+
+      <Label Style="{StaticResource Text.Meta}"
+             TextType="Text"
+             Text="다른 기기의 Flowdeck에서 내보낸 파일을 이 목록에 더합니다. 있는 항목은 건드리지 않고, 같은 파일을 두 번 넣어도 중복되지 않습니다." />
+
+      <Button Command="{Binding ImportCommand}" Style="{StaticResource Button.Primary}" Text="파일에서 가져오기" />
+
+      <Label Style="{StaticResource Text.Faint}"
+             Text="내보내기는 목록 화면 오른쪽 위에 있습니다. 태그로 걸러 두면 걸러진 만큼만 나갑니다." />
+
+      <Label IsVisible="{Binding HasStatus}" Style="{StaticResource Text.Meta}" Text="{Binding Status}" />
+
+      <!-- ============ about ============ -->
+      <Label Margin="0,10,0,0" Style="{StaticResource Text.Section}" Text="저장 위치" />
+      <Label Style="{StaticResource Text.Faint}" Text="{Binding DataFolder}" LineBreakMode="CharacterWrap" />
+
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

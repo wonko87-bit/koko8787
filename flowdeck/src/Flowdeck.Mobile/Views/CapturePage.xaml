@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage x:Class="Flowdeck.Mobile.Views.CapturePage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             Title="Flowdeck"
+             Shell.NavBarIsVisible="False">
+
+  <ScrollView>
+    <VerticalStackLayout Padding="18,20,18,24" Spacing="14">
+
+      <Label Style="{StaticResource Text.Title}" Text="한 줄로 적기" />
+      <Label Style="{StaticResource Text.Meta}"
+             Text="내일 오후 3시 팀 회의 #업무 30분 전 알림"
+             LineBreakMode="TailTruncation" />
+
+      <Border Style="{StaticResource Card}">
+        <Editor x:Name="InputBox"
+                AutoSize="TextChanges"
+                MinimumHeightRequest="96"
+                Placeholder="무엇을 기록할까요?"
+                Text="{Binding Input, Mode=TwoWay}" />
+      </Border>
+
+      <!-- ============ live reading ============ -->
+      <Border IsVisible="{Binding HasInput}" Style="{StaticResource Card}">
+        <VerticalStackLayout Spacing="8">
+          <Label Style="{StaticResource Text.Body}" Text="{Binding TitlePreview}" FontAttributes="Bold" />
+          <Label Style="{StaticResource Text.Meta}" Text="{Binding SchedulePreview}" />
+
+          <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
+            <Border Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Meta}" Text="{Binding TargetLabel}" />
+            </Border>
+            <Border IsVisible="{Binding HasRecurrence}" Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Meta}" Text="{Binding RecurrenceLabel}" />
+            </Border>
+            <Border IsVisible="{Binding HasPriority}" Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Meta}" Text="{Binding PriorityLabel}" />
+            </Border>
+            <Border IsVisible="{Binding HasReminder}" Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Meta}" Text="{Binding ReminderLabel}" />
+            </Border>
+            <Border IsVisible="{Binding HasTags}" Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Meta}" Text="{Binding TagLabel}" />
+            </Border>
+            <Border IsVisible="{Binding OpensTeamsMeeting}" Style="{StaticResource Chip}" Margin="0,4,6,0">
+              <Label Style="{StaticResource Text.Body}" FontSize="12" Text="→ Teams" />
+            </Border>
+          </FlexLayout>
+        </VerticalStackLayout>
+      </Border>
+
+      <!-- ============ target override ============ -->
+      <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+        <Button Command="{Binding ForceTodoCommand}" Style="{StaticResource Button.Ghost}" Text="할일" />
+        <Button Grid.Column="1" Command="{Binding ForceCalendarCommand}" Style="{StaticResource Button.Ghost}" Text="일정" />
+        <Button Grid.Column="2" Command="{Binding ForceBothCommand}" Style="{StaticResource Button.Ghost}" Text="둘 다" />
+      </Grid>
+      <Label Style="{StaticResource Text.Faint}"
+             Text="한 번 더 누르면 기본값으로 돌아갑니다"
+             HorizontalOptions="Center" />
+
+      <Button Command="{Binding SubmitCommand}" Style="{StaticResource Button.Primary}" Text="저장" />
+
+      <Label IsVisible="{Binding HasStatus}"
+             Style="{StaticResource Text.Meta}"
+             Text="{Binding Status}"
+             HorizontalOptions="Center" />
+
+    </VerticalStackLayout>
+  </ScrollView>
+</ContentPage>

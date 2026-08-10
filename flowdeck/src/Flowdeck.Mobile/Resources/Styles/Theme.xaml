@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  The desktop palette, carried over: white, black and greys, nothing else. Colours are
+  resolved through AppThemeBinding so the one dictionary serves both themes.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+  <!-- ==================== dark ==================== -->
+  <Color x:Key="Dark.Background">#0F0F0F</Color>
+  <Color x:Key="Dark.Surface">#1A1A1A</Color>
+  <Color x:Key="Dark.SurfaceAlt">#242424</Color>
+  <Color x:Key="Dark.Border">#2E2E2E</Color>
+  <Color x:Key="Dark.BorderStrong">#454545</Color>
+  <Color x:Key="Dark.TextPrimary">#F2F2F2</Color>
+  <Color x:Key="Dark.TextSecondary">#A8A8A8</Color>
+  <Color x:Key="Dark.TextTertiary">#6E6E6E</Color>
+  <Color x:Key="Dark.Accent">#F2F2F2</Color>
+  <Color x:Key="Dark.OnAccent">#0F0F0F</Color>
+
+  <!-- ==================== light ==================== -->
+  <Color x:Key="Light.Background">#FFFFFF</Color>
+  <Color x:Key="Light.Surface">#F6F6F6</Color>
+  <Color x:Key="Light.SurfaceAlt">#EDEDED</Color>
+  <Color x:Key="Light.Border">#E0E0E0</Color>
+  <Color x:Key="Light.BorderStrong">#BFBFBF</Color>
+  <Color x:Key="Light.TextPrimary">#141414</Color>
+  <Color x:Key="Light.TextSecondary">#5C5C5C</Color>
+  <Color x:Key="Light.TextTertiary">#8C8C8C</Color>
+  <Color x:Key="Light.Accent">#141414</Color>
+  <Color x:Key="Light.OnAccent">#FFFFFF</Color>
+
+  <!-- ==================== text ==================== -->
+  <Style x:Key="Text.Title" TargetType="Label">
+    <Setter Property="FontSize" Value="20" />
+    <Setter Property="FontAttributes" Value="Bold" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+  </Style>
+
+  <Style x:Key="Text.Section" TargetType="Label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontAttributes" Value="Bold" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}" />
+  </Style>
+
+  <Style x:Key="Text.Body" TargetType="Label">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+  </Style>
+
+  <Style x:Key="Text.Meta" TargetType="Label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextSecondary}, Dark={StaticResource Dark.TextSecondary}}" />
+  </Style>
+
+  <Style x:Key="Text.Faint" TargetType="Label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}" />
+  </Style>
+
+  <!-- ==================== surfaces ==================== -->
+  <Style x:Key="Card" TargetType="Border">
+    <Setter Property="Padding" Value="14,12" />
+    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.Surface}, Dark={StaticResource Dark.Surface}}" />
+    <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Light.Border}, Dark={StaticResource Dark.Border}}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="StrokeShape" Value="RoundRectangle 10" />
+  </Style>
+
+  <Style x:Key="Chip" TargetType="Border">
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.SurfaceAlt}, Dark={StaticResource Dark.SurfaceAlt}}" />
+    <Setter Property="Stroke" Value="Transparent" />
+    <Setter Property="StrokeShape" Value="RoundRectangle 8" />
+  </Style>
+
+  <!-- ==================== controls ==================== -->
+  <Style x:Key="Button.Primary" TargetType="Button">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontAttributes" Value="Bold" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="HeightRequest" Value="48" />
+    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.Accent}, Dark={StaticResource Dark.Accent}}" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.OnAccent}, Dark={StaticResource Dark.OnAccent}}" />
+  </Style>
+
+  <Style x:Key="Button.Ghost" TargetType="Button">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="HeightRequest" Value="44" />
+    <Setter Property="BackgroundColor" Value="Transparent" />
+    <Setter Property="BorderWidth" Value="1" />
+    <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Light.Border}, Dark={StaticResource Dark.Border}}" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+  </Style>
+
+  <Style TargetType="Editor">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="BackgroundColor" Value="Transparent" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+    <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}" />
+  </Style>
+
+  <Style TargetType="Entry">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="BackgroundColor" Value="Transparent" />
+    <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+    <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}" />
+  </Style>
+
+  <Style TargetType="Switch">
+    <Setter Property="OnColor" Value="{AppThemeBinding Light={StaticResource Light.Accent}, Dark={StaticResource Dark.Accent}}" />
+    <Setter Property="ThumbColor" Value="{AppThemeBinding Light={StaticResource Light.Background}, Dark={StaticResource Dark.TextPrimary}}" />
+  </Style>
+
+  <Style TargetType="Page" ApplyToDerivedTypes="True">
+    <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.Background}, Dark={StaticResource Dark.Background}}" />
+  </Style>
+
+  <Style TargetType="Shell" ApplyToDerivedTypes="True">
+    <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.Background}, Dark={StaticResource Dark.Background}}" />
+    <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+    <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+    <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource Light.Surface}, Dark={StaticResource Dark.Surface}}" />
+    <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+    <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}" />
+    <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Light.TextPrimary}, Dark={StaticResource Dark.TextPrimary}}" />
+  </Style>
+
+</ResourceDictionary>

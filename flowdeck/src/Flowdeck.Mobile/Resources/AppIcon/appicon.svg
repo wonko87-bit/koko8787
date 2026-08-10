@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Monochrome, like everything else: a page with a line ticked off. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect width="128" height="128" fill="#0F0F0F"/>
+  <rect x="30" y="24" width="68" height="80" rx="10" fill="none" stroke="#F2F2F2" stroke-width="6"/>
+  <line x1="46" y1="50" x2="82" y2="50" stroke="#F2F2F2" stroke-width="6" stroke-linecap="round"/>
+  <line x1="46" y1="68" x2="82" y2="68" stroke="#8A8A8A" stroke-width="6" stroke-linecap="round"/>
+  <line x1="46" y1="86" x2="66" y2="86" stroke="#8A8A8A" stroke-width="6" stroke-linecap="round"/>
+</svg>

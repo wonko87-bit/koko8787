@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage x:Class="Flowdeck.Mobile.Views.ListPage"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:Flowdeck.Mobile.ViewModels"
+             Title="목록"
+             Shell.NavBarIsVisible="False">
+
+  <ContentPage.Resources>
+    <DataTemplate x:Key="TodoTemplate" x:DataType="vm:TodoRow">
+      <SwipeView>
+        <SwipeView.RightItems>
+          <SwipeItems Mode="Execute">
+            <SwipeItem BackgroundColor="#8A2A2A"
+                       Command="{Binding DeleteCommand}"
+                       Text="삭제" />
+          </SwipeItems>
+        </SwipeView.RightItems>
+
+        <Grid Padding="2,10" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+          <!-- Not interactive: the whole row is the tap target, so a tap that happens to
+               land on the box goes through the command like any other. -->
+          <CheckBox InputTransparent="True" IsChecked="{Binding IsDone}" VerticalOptions="Center" />
+
+          <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+            <Label Style="{StaticResource Text.Body}" Text="{Binding Title}">
+              <Label.Triggers>
+                <DataTrigger Binding="{Binding IsDone}" TargetType="Label" Value="True">
+                  <Setter Property="TextDecorations" Value="Strikethrough" />
+                  <Setter Property="Opacity" Value="0.5" />
+                </DataTrigger>
+              </Label.Triggers>
+            </Label>
+            <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
+          </VerticalStackLayout>
+
+          <VerticalStackLayout Grid.Column="2" VerticalOptions="Center" HorizontalOptions="End">
+            <Label IsVisible="{Binding HasDue}"
+                   Style="{StaticResource Text.Meta}"
+                   Text="{Binding DueLabel}"
+                   HorizontalTextAlignment="End" />
+            <Label IsVisible="{Binding HasPriority}"
+                   Style="{StaticResource Text.Faint}"
+                   Text="{Binding PriorityLabel}"
+                   HorizontalTextAlignment="End" />
+          </VerticalStackLayout>
+
+          <Grid.GestureRecognizers>
+            <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+          </Grid.GestureRecognizers>
+        </Grid>
+      </SwipeView>
+    </DataTemplate>
+
+    <DataTemplate x:Key="EventTemplate" x:DataType="vm:EventRow">
+      <SwipeView>
+        <SwipeView.RightItems>
+          <SwipeItems Mode="Execute">
+            <SwipeItem BackgroundColor="#8A2A2A"
+                       Command="{Binding DeleteCommand}"
+                       Text="삭제" />
+          </SwipeItems>
+        </SwipeView.RightItems>
+
+        <Grid Padding="2,10" ColumnDefinitions="66,*" ColumnSpacing="10">
+          <Label Style="{StaticResource Text.Meta}" Text="{Binding TimeLabel}" VerticalOptions="Center" />
+          <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+            <Label Style="{StaticResource Text.Body}" Text="{Binding Title}" />
+            <Label IsVisible="{Binding HasTags}" Style="{StaticResource Text.Faint}" Text="{Binding TagLabel}" />
+          </VerticalStackLayout>
+        </Grid>
+      </SwipeView>
+    </DataTemplate>
+
+    <vm:RowTemplateSelector x:Key="RowTemplate"
+                            EventTemplate="{StaticResource EventTemplate}"
+                            TodoTemplate="{StaticResource TodoTemplate}" />
+  </ContentPage.Resources>
+
+  <Grid Padding="18,20,18,0" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10">
+
+    <!-- ============ which list ============ -->
+    <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="8">
+      <Button Command="{Binding ShowTodosCommand}" Style="{StaticResource Button.Ghost}" Text="할일" />
+      <Button Grid.Column="1" Command="{Binding ShowEventsCommand}" Style="{StaticResource Button.Ghost}" Text="일정" />
+      <Button Grid.Column="2"
+              Command="{Binding ExportCommand}"
+              Style="{StaticResource Button.Ghost}"
+              Text="내보내기" />
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+      <Label Style="{StaticResource Text.Meta}" Text="{Binding TotalLabel}" VerticalOptions="Center" />
+      <Label Grid.Column="1"
+             IsVisible="{Binding IsTodoMode}"
+             Style="{StaticResource Text.Meta}"
+             Text="완료 포함"
+             VerticalOptions="Center" />
+      <Switch Grid.Column="2"
+              IsToggled="{Binding ShowCompleted, Mode=TwoWay}"
+              IsVisible="{Binding IsTodoMode}"
+              VerticalOptions="Center" />
+    </Grid>
+
+    <!-- ============ tag filter ============ -->
+    <ScrollView Grid.Row="2" IsVisible="{Binding HasTagChips}" Orientation="Horizontal" HorizontalScrollBarVisibility="Never">
+      <HorizontalStackLayout Spacing="6">
+        <BindableLayout.ItemsSource>
+          <Binding Path="TagChips" />
+        </BindableLayout.ItemsSource>
+        <BindableLayout.ItemTemplate>
+          <DataTemplate x:DataType="vm:TagChip">
+            <Border Style="{StaticResource Chip}">
+              <HorizontalStackLayout Spacing="5">
+                <Label Style="{StaticResource Text.Meta}" Text="{Binding Label}" />
+                <Label Opacity="0.6" Style="{StaticResource Text.Faint}" Text="{Binding CountLabel}" />
+              </HorizontalStackLayout>
+              <Border.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" TargetType="Border" Value="True">
+                  <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Light.BorderStrong}, Dark={StaticResource Dark.BorderStrong}}" />
+                  <Setter Property="StrokeThickness" Value="1" />
+                </DataTrigger>
+              </Border.Triggers>
+              <Border.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding ToggleCommand}" />
+              </Border.GestureRecognizers>
+            </Border>
+          </DataTemplate>
+        </BindableLayout.ItemTemplate>
+      </HorizontalStackLayout>
+    </ScrollView>
+
+    <!-- ============ the list ============ -->
+    <ScrollView Grid.Row="3">
+      <VerticalStackLayout Spacing="4">
+
+        <Label IsVisible="{Binding IsEmpty}"
+               Margin="0,30,0,0"
+               HorizontalOptions="Center"
+               Style="{StaticResource Text.Meta}"
+               Text="{Binding EmptyMessage}" />
+
+        <VerticalStackLayout>
+          <BindableLayout.ItemsSource>
+            <Binding Path="Groups" />
+          </BindableLayout.ItemsSource>
+          <BindableLayout.ItemTemplate>
+            <DataTemplate x:DataType="vm:DayGroup">
+              <VerticalStackLayout Margin="0,10,0,0">
+                <Label Style="{StaticResource Text.Section}" Text="{Binding Header}" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding .}"
+                                     BindableLayout.ItemTemplateSelector="{StaticResource RowTemplate}" />
+              </VerticalStackLayout>
+            </DataTemplate>
+          </BindableLayout.ItemTemplate>
+        </VerticalStackLayout>
+
+        <!-- ============ repeating, one line each ============ -->
+        <VerticalStackLayout IsVisible="{Binding HasRecurring}" Margin="0,18,0,0">
+          <Label Style="{StaticResource Text.Section}" Text="{Binding RecurringSectionLabel}" />
+          <VerticalStackLayout>
+            <BindableLayout.ItemsSource>
+              <Binding Path="Recurring" />
+            </BindableLayout.ItemsSource>
+            <BindableLayout.ItemTemplate>
+              <DataTemplate x:DataType="vm:RecurringRow">
+                <SwipeView>
+                  <SwipeView.RightItems>
+                    <SwipeItems Mode="Execute">
+                      <SwipeItem BackgroundColor="#8A2A2A" Command="{Binding DeleteCommand}" Text="삭제" />
+                    </SwipeItems>
+                  </SwipeView.RightItems>
+
+                  <Grid Padding="2,9" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Label Style="{StaticResource Text.Body}" Text="{Binding Title}" VerticalOptions="Center" />
+                    <Label Grid.Column="1"
+                           Style="{StaticResource Text.Meta}"
+                           Text="{Binding PatternLabel}"
+                           VerticalOptions="Center" />
+                  </Grid>
+                </SwipeView>
+              </DataTemplate>
+            </BindableLayout.ItemTemplate>
+          </VerticalStackLayout>
+        </VerticalStackLayout>
+
+        <BoxView HeightRequest="24" Color="Transparent" />
+      </VerticalStackLayout>
+    </ScrollView>
+
+    <Label Grid.Row="4"
+           Margin="0,4,0,10"
+           HorizontalOptions="Center"
+           IsVisible="{Binding HasStatus}"
+           Style="{StaticResource Text.Meta}"
+           Text="{Binding Status}" />
+  </Grid>
+</ContentPage>
