@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-android</TargetFramework>
+    <!-- net8.0-android is out of support and the SDK refuses to build it. The core library
+         stays on net8.0 and is consumed from here unchanged: a newer app may reference an
+         older library, and it is only the workload that aged out. -->
+    <TargetFramework>net10.0-android</TargetFramework>
     <OutputType>Exe</OutputType>
     <RootNamespace>Flowdeck.Mobile</RootNamespace>
     <UseMaui>true</UseMaui>
