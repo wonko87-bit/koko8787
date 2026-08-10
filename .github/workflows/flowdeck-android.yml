@@ -21,6 +21,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    # Needed to keep the download release up to date.
+    permissions:
+      contents: write
+
     defaults:
       run:
         working-directory: flowdeck
@@ -57,3 +61,30 @@ jobs:
           name: flowdeck-android
           path: flowdeck/publish-android/*.apk
           if-no-files-found: error
+
+      # An artifact is a zip behind a login, which a phone handles badly — and a phone is
+      # the only thing that can install this. A release asset is the bare .apk on a stable
+      # URL, so installing means opening one link and tapping the file.
+      - name: Publish the apk where a phone can reach it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cp "$(ls publish-android/*.apk | head -1)" flowdeck.apk
+
+          gh release view android-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create android-latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --prerelease \
+              --title "Flowdeck Android — 최신 빌드" \
+              --notes "설치용 APK입니다."
+
+          gh release upload android-latest flowdeck.apk --repo "$GITHUB_REPOSITORY" --clobber
+
+          gh release edit android-latest --repo "$GITHUB_REPOSITORY" --notes \
+            "폰에서 아래 **flowdeck.apk** 를 받아 실행하면 설치됩니다.
+
+          빌드: \`${GITHUB_SHA:0:7}\` · 브랜치 \`${GITHUB_REF_NAME}\`
+
+          스토어를 거치지 않은 앱이라 처음 설치할 때 *출처를 알 수 없는 앱* 허용을 한 번 물어봅니다."
