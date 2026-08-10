@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 5 x 5 launcher cells. The old min* attributes are what pre-31 Android sizes by;
+     targetCell* is what 31 and later prefer. Both are given so it lands right either way. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="320dp"
+    android:minHeight="320dp"
+    android:targetCellWidth="5"
+    android:targetCellHeight="5"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/calendar_widget" />

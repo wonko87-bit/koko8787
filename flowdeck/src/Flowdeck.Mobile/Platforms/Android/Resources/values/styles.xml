@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A dialog that follows the system's light or dark setting, like the rest of the app.
+         Touches outside it reach the activity, which closes on them. -->
+    <style name="Flowdeck.QuickCapture" parent="Theme.AppCompat.DayNight.Dialog">
+        <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

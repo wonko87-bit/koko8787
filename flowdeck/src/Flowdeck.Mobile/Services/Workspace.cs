@@ -51,6 +51,7 @@ public static class Workspace
             ApplyParserSettings();
 
             await Repository.LoadAsync();
+            Repository.Changed += (_, _) => NotifyEntriesChanged();
             _loaded = true;
         }
         finally
@@ -76,6 +77,31 @@ public static class Workspace
         // of anything typed out of habit, and the link opens the Teams app on a phone just
         // as it opens it on a desktop, so removing it would cost a feature to save nothing.
         Parser.PushExternalByDefault = false;
+    }
+
+    /// <summary>
+    /// Set by the Android layer at startup. Called after anything changes so alarms and
+    /// home-screen widgets can be brought back into line — the shared code raises it
+    /// without knowing what, if anything, is listening.
+    /// </summary>
+    public static Action? EntriesChanged { get; set; }
+
+    /// <summary>
+    /// Which tab to land on, left by whatever launched the app. Read and cleared once the
+    /// shell exists — a widget tap arrives long before there is anything to navigate.
+    /// </summary>
+    public static string? PendingRoute { get; set; }
+
+    public static void NotifyEntriesChanged()
+    {
+        try
+        {
+            EntriesChanged?.Invoke();
+        }
+        catch (Exception)
+        {
+            // Rescheduling an alarm is never worth taking the app down for.
+        }
     }
 
     public static void SaveSettings()

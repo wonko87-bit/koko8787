@@ -6,10 +6,21 @@
                android:roundIcon="@mipmap/appicon_round"
                android:supportsRtl="true" />
 
-  <!-- Everything is stored inside the app's own directory, so no storage permission is
-       needed. Reading an imported file goes through the system picker, which grants access
-       to that one file, and sharing goes out through the share sheet. -->
+  <!-- Entries live inside the app's own directory, so no storage permission is needed.
+       An imported file arrives through the system picker, which grants access to that one
+       file, and exports leave through the share sheet. -->
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+  <!-- Reminders. POST_NOTIFICATIONS is asked for at runtime on Android 13 and later;
+       BOOT_COMPLETED is what lets alarms survive a restart. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <!-- Exact alarms are best-effort: where the system withholds them the scheduler falls
+       back to an inexact one, so a reminder is never lost for want of a permission. -->
+  <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+  <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
   <queries>
     <!-- Lets the share sheet see which apps can receive a file. Required from Android 11
