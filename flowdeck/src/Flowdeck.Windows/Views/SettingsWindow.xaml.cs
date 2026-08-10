@@ -6,6 +6,7 @@ using Flowdeck.Core.Export;
 using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Settings;
 using Flowdeck.Windows.Interop;
+using Flowdeck.Windows.ViewModels;
 
 namespace Flowdeck.Windows.Views;
 
@@ -63,6 +64,8 @@ public partial class SettingsWindow : Window
         PushToOutlook.IsEnabled = Settings.EnableOutlook;
 
         AfternoonBias.IsChecked = Settings.AssumeAfternoonForBareHours;
+
+        DescribeContacts();
 
         LaunchAtStartup.IsChecked = StartupService.IsEnabled();
         ShowWidgetOnStart.IsChecked = Settings.ShowWidgetOnStart;
@@ -290,6 +293,31 @@ public partial class SettingsWindow : Window
         var problem = _shell.ReapplyHotKeys();
         Warn(problem);
         _shell.SaveSettings();
+    }
+
+    /// <summary>
+    /// Opens the address book. The editor writes each change through as it is made, so
+    /// there is nothing to collect when it closes — only the summary line to refresh.
+    /// </summary>
+    private void OnContactsClick(object sender, RoutedEventArgs e)
+    {
+        var editor = new ContactsWindow(new ContactsViewModel(Settings.Contacts, _shell.SaveSettings))
+        {
+            Owner = this,
+        };
+
+        editor.ShowDialog();
+
+        _shell.ApplyParserSettings();
+        DescribeContacts();
+    }
+
+    private void DescribeContacts()
+    {
+        var count = Settings.Contacts.Aliases.Count;
+        ContactsSummary.Text = count == 0
+            ? "@이름 으로 참석자를 부르려면 여기에 등록하세요"
+            : $"{count}명 등록됨. 입력할 때 @이름 으로 부를 수 있습니다";
     }
 
     private void OnExportClick(object sender, RoutedEventArgs e)

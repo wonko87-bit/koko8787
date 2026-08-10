@@ -169,6 +169,58 @@ public class AttendeeTests
     }
 }
 
+public class ContactBookTests
+{
+    private static readonly DateTime Now = new(2026, 8, 6, 10, 0, 0);
+
+    [Theory]
+    [InlineData("홍길동")]
+    [InlineData("kim")]
+    [InlineData("kim.lee")]
+    [InlineData("박PM")]
+    public void UsableNames(string name) => Assert.True(ContactBook.IsUsableName(name));
+
+    /// <summary>
+    /// A name with a space is the trap: it saves happily and then never matches, because
+    /// "@김 대리" stops at the space. The editor has to refuse it up front.
+    /// </summary>
+    [Theory]
+    [InlineData("김 대리")]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("@홍길동")]
+    [InlineData("1번")]
+    public void UnusableNames(string name) => Assert.False(ContactBook.IsUsableName(name));
+
+    [Theory]
+    [InlineData("hong@corp.com", true)]
+    [InlineData("a.b+c@sub.corp.co.kr", true)]
+    [InlineData("hong@corp", false)]
+    [InlineData("hong", false)]
+    [InlineData("", false)]
+    public void AddressShapes(string value, bool expected) =>
+        Assert.Equal(expected, ContactBook.IsAddress(value));
+
+    /// <summary>
+    /// The editor and the scanner have to agree, or the editor cheerfully accepts entries
+    /// that are never found. Both read the same pattern, and this is what holds them to it.
+    /// </summary>
+    [Theory]
+    [InlineData("홍길동")]
+    [InlineData("kim")]
+    [InlineData("kim.lee")]
+    [InlineData("박PM")]
+    public void EveryNameTheEditorAcceptsIsANameTheParserFinds(string name)
+    {
+        var parser = new NaturalLanguageParser();
+        parser.Contacts.Aliases[name] = "someone@corp.com";
+
+        var entry = parser.Parse($"!TM 내일 3시 회의 @{name}", Now);
+
+        Assert.Equal(new[] { "someone@corp.com" }, entry.Attendees);
+    }
+}
+
 public class TeamsDeepLinkTests
 {
     private static readonly DateTime Now = new(2026, 8, 6, 10, 0, 0);

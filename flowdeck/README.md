@@ -419,7 +419,13 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 | `@홍길동` | 주소록에서 찾아 변환 |
 | `@모르는이름` | **제목에 그대로 남습니다** (지워지지 않음) |
 
-주소록은 `%APPDATA%\Flowdeck\settings.json` 의 `Contacts.Aliases` 에 직접 적습니다. 설정 창에는 없습니다 — 한 번 적고 잊는 목록이고, 회사 주소록을 조회하려면 결국 Graph 권한이 필요해지기 때문입니다.
+주소록은 **설정 → Teams 회의 → 주소록 편집** 에서 관리합니다. 이름과 메일 주소를 넣고 `추가`(또는 Enter), 지울 땐 줄 오른쪽 × 버튼. **저장 버튼은 없습니다** — 고치는 즉시 반영되고, 창을 닫아도 잃을 게 없습니다.
+
+이름 규칙 하나만 지키면 됩니다. **공백을 쓸 수 없습니다.** `@김 대리` 는 공백에서 끊기기 때문에, 이런 이름은 등록해봐야 영영 안 불립니다. 그래서 편집기가 아예 안 받습니다.
+
+> 회사 주소록을 자동으로 읽어오지는 않습니다. 그러려면 결국 Graph 권한이 필요해서, 이 경로를 고른 이유 자체가 없어집니다.
+
+파일을 직접 고쳐도 됩니다. `%APPDATA%\Flowdeck\settings.json`:
 
 ```json
 "Contacts": {
@@ -482,13 +488,13 @@ flowdeck/
 │   │   ├── Export/               IcsExporter
 │   │   └── Settings/             AppSettings
 │   └── Flowdeck.Windows/         WPF (net8.0-windows)
-│       ├── Views/                WidgetWindow, QuickAddWindow, SettingsWindow, AgendaWindow
+│       ├── Views/                WidgetWindow, QuickAddWindow, SettingsWindow, AgendaWindow, ContactsWindow
 │       ├── ViewModels/
 │       ├── Integration/          OutlookBridge (COM)
 │       ├── Interop/              HotKeyService, WindowPinService, StartupService
 │       ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
 │       └── Themes/               Dark, Light, Controls
-├── tests/Flowdeck.Core.Tests/    xUnit 245개
+├── tests/Flowdeck.Core.Tests/    xUnit 263개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -504,7 +510,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 245 tests
+dotnet test tests/Flowdeck.Core.Tests    # 263 tests
 dotnet build Flowdeck.sln -c Release
 ```
 

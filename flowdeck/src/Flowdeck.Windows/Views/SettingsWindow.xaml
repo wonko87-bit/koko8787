@@ -341,6 +341,23 @@
             </Grid>
           </StackPanel>
 
+          <!-- ============ teams ============ -->
+          <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="Teams 회의" />
+
+          <Grid Style="{StaticResource Row}">
+            <StackPanel Width="290" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Body}" Text="주소록" />
+              <TextBlock x:Name="ContactsSummary"
+                         Style="{StaticResource Text.Meta}"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <Button HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Click="OnContactsClick"
+                    Content="주소록 편집"
+                    Style="{StaticResource Button.Ghost}" />
+          </Grid>
+
           <!-- ============ system ============ -->
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="시스템" />
 

@@ -52,11 +52,14 @@ internal static class TemporalScanner
     // An address is taken as written, with or without the @ that introduces it. A bare
     // "@이름" is only a handle until the address book says otherwise, so it is matched
     // separately and may yet be handed back to the title.
+    //
+    // Both shapes come from ContactBook, which the address-book editor validates against.
+    // Sharing the definition is what stops the editor accepting a name this never finds.
     private static readonly Regex AttendeeAddress =
-        new(@"(?<![\w.@])@?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?![\w@])", Opts);
+        new(@"(?<![\w.@])@?(" + ContactBook.AddressPattern + @")(?![\w@])", Opts);
 
     private static readonly Regex AttendeeHandle =
-        new(@"(?<![\w@])@([가-힣A-Za-z][가-힣A-Za-z0-9._-]*)(?![\w@.])", Opts);
+        new(@"(?<![\w@])@(" + ContactBook.NamePattern + @")(?![\w@.])", Opts);
     private static readonly Regex RangeMark = new(@"[~～∼]|(?<=\d)\s*-\s*(?=\d{1,2}\s*(?:시|:))", Opts);
 
     /// <summary>Particles that trail a date or time and belong to it, not to the title.</summary>
