@@ -33,17 +33,20 @@
     </Grid>
 
     <!-- ============ weekday headings ============ -->
+    <!-- A seventh of the width each, in both rows. Fixed-width cells in a wrapping layout
+         fit only six per row on a narrow screen, which slides every date one column over. -->
     <FlexLayout Grid.Row="1"
                 BindableLayout.ItemsSource="{Binding WeekdayHeaders}"
                 Direction="Row"
-                JustifyContent="SpaceBetween">
+                JustifyContent="Start"
+                Wrap="NoWrap">
       <BindableLayout.ItemTemplate>
         <DataTemplate x:DataType="vm:WeekdayHeader">
           <Label FontSize="11"
                  HorizontalTextAlignment="Center"
                  Text="{Binding Label}"
-                 TextColor="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}"
-                 WidthRequest="44">
+                 FlexLayout.Basis="14.2857%"
+                 TextColor="{AppThemeBinding Light={StaticResource Light.TextTertiary}, Dark={StaticResource Dark.TextTertiary}}">
             <Label.Triggers>
               <DataTrigger Binding="{Binding IsSaturday}" TargetType="Label" Value="True">
                 <Setter Property="TextColor" Value="#5B8DEF" />
@@ -61,17 +64,17 @@
     <FlexLayout Grid.Row="2"
                 BindableLayout.ItemsSource="{Binding Days}"
                 Direction="Row"
-                JustifyContent="SpaceBetween"
+                JustifyContent="Start"
                 Wrap="Wrap">
       <BindableLayout.ItemTemplate>
         <DataTemplate x:DataType="vm:CalendarDay">
           <Border Margin="0,0,0,2"
                   BackgroundColor="Transparent"
-                  HeightRequest="44"
+                  FlexLayout.Basis="14.2857%"
+                  HeightRequest="46"
                   Stroke="Transparent"
                   StrokeShape="RoundRectangle 8"
-                  StrokeThickness="1"
-                  WidthRequest="44">
+                  StrokeThickness="1">
             <Grid RowDefinitions="*,Auto" RowSpacing="0">
               <Label FontSize="14"
                      HorizontalTextAlignment="Center"

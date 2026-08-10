@@ -117,6 +117,67 @@ public class TransferFileTests
         Assert.Empty(archive.Events);
     }
 
+    /// <summary>
+    /// A corporate messenger carries a .txt and refuses a .json, and a file that cannot be
+    /// sent is no use however well-formed it is.
+    /// </summary>
+    [Fact]
+    public void TheFileIsCarriedAsPlainText() => Assert.Equal(".txt", TransferFile.Extension);
+
+    /// <summary>
+    /// The top of the file is for whoever previews it in a chat window. It has to say what
+    /// is inside without them opening anything.
+    /// </summary>
+    [Fact]
+    public void TheFileReadsAsTextBeforeItReadsAsData()
+    {
+        var text = TransferFile.Write(new[] { Todo("주간 회고") }, Array.Empty<CalendarEvent>(), Exported);
+        var firstLine = text.Split('\n')[0];
+
+        Assert.StartsWith("Flowdeck 내보내기", firstLine);
+        Assert.Contains("1건", firstLine);
+        Assert.Contains("- [할일] 주간 회고", text);
+        Assert.Contains("#아이디어", text);
+
+        // ...and it still round-trips.
+        Assert.Single(TransferFile.Read(text).Todos);
+    }
+
+    [Fact]
+    public void TheHumanHalfNamesBothKinds()
+    {
+        var text = TransferFile.Write(
+            new[] { Todo("보고서") },
+            new[] { new CalendarEvent { Title = "워크샵", Start = new DateTime(2026, 8, 12), IsAllDay = true } },
+            Exported);
+
+        Assert.Contains("- [할일] 보고서", text);
+        Assert.Contains("- [일정] 워크샵", text);
+    }
+
+    /// <summary>Files exported before the readable header existed are plain JSON.</summary>
+    [Fact]
+    public void AFileWithNoReadableHeaderStillReads()
+    {
+        var archive = TransferFile.Read(
+            "{ \"Format\": \"flowdeck.transfer\", \"Version\": 1, \"Todos\": [], \"Events\": [] }");
+
+        Assert.Equal(0, archive.Count);
+    }
+
+    /// <summary>
+    /// Someone will edit the note at the top before forwarding it. That must not break the
+    /// half the app reads.
+    /// </summary>
+    [Fact]
+    public void EditingTheReadableHalfDoesNotBreakTheFile()
+    {
+        var text = TransferFile.Write(new[] { Todo("주간 회고") }, Array.Empty<CalendarEvent>(), Exported);
+        var meddled = "여기 몇 개 보냅니다\n확인 부탁해요\n\n" + text[text.IndexOf("---", StringComparison.Ordinal)..];
+
+        Assert.Single(TransferFile.Read(meddled).Todos);
+    }
+
     [Fact]
     public void AnEmptyExportIsStillAValidFile()
     {

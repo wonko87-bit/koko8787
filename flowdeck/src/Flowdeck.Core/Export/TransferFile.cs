@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Flowdeck.Core.Models;
@@ -39,11 +41,22 @@ public sealed class TransferArchive
 public static class TransferFile
 {
     /// <summary>
-    /// The extension to save under. Deliberately the ordinary one: a file crossing between
-    /// two networks meets whatever gateway sits in between, and an invented extension is
-    /// the kind of thing such a gateway refuses without explaining itself.
+    /// The extension to save under.
+    ///
+    /// Plain .txt because that is what gets through. A corporate messenger will carry a
+    /// text file and refuse a .json or a .csv without explaining itself, and a file that
+    /// cannot be sent is no use however well-formed it is. The contents are still JSON —
+    /// only the name had to give way.
     /// </summary>
-    public const string Extension = ".json";
+    public const string Extension = ".txt";
+
+    /// <summary>
+    /// Separates the part written for a person from the part written for the app. Anyone
+    /// previewing the file in a chat window sees what is in it; the reader skips past.
+    /// </summary>
+    private const string Marker = "--- 여기서부터는 앱이 읽는 부분입니다. 지우지 마세요 ---";
+
+    private static readonly CultureInfo Korean = CultureInfo.GetCultureInfo("ko-KR");
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -67,7 +80,36 @@ public static class TransferFile
             Events = events.Select(Strip).ToList(),
         };
 
-        return JsonSerializer.Serialize(archive, Options);
+        var text = new StringBuilder();
+        text.Append("Flowdeck 내보내기 · ")
+            .Append(exportedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))
+            .Append(" · ")
+            .Append(archive.Count)
+            .AppendLine("건")
+            .AppendLine();
+
+        foreach (var todo in archive.Todos) text.Append("- [할일] ").AppendLine(Summarise(todo.Title, todo.DueAt, todo.HasTime, todo.Tags));
+        foreach (var e in archive.Events) text.Append("- [일정] ").AppendLine(Summarise(e.Title, e.Start, !e.IsAllDay, e.Tags));
+
+        text.AppendLine().AppendLine(Marker);
+        text.Append(JsonSerializer.Serialize(archive, Options));
+
+        return text.ToString();
+    }
+
+    /// <summary>One entry as a person would read it, for the human half of the file.</summary>
+    private static string Summarise(string title, DateTime? at, bool hasTime, List<string> tags)
+    {
+        var line = new StringBuilder(title);
+
+        if (at.HasValue)
+        {
+            line.Append(" · ").Append(at.Value.ToString(hasTime ? "M월 d일 HH:mm" : "M월 d일", Korean));
+        }
+
+        if (tags.Count > 0) line.Append(' ').Append(string.Join(" ", tags.Select(t => "#" + t)));
+
+        return line.ToString();
     }
 
     /// <summary>
@@ -75,9 +117,14 @@ public static class TransferFile
     /// mode ends up in front of a person who chose a file, so each says which file problem
     /// it was rather than surfacing a parser message.
     /// </summary>
-    public static TransferArchive Read(string json)
+    public static TransferArchive Read(string contents)
     {
         TransferArchive? archive;
+
+        // Everything before the marker is for the reader's eyes, not the parser's. A file
+        // written before the marker existed has none, and is JSON from its first character.
+        var marker = contents?.IndexOf(Marker, StringComparison.Ordinal) ?? -1;
+        var json = marker >= 0 ? contents!.Substring(marker + Marker.Length) : contents ?? string.Empty;
 
         try
         {

@@ -484,17 +484,21 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 `.ics` 가 아니라 **Flowdeck 자체 형식(JSON)** 입니다. `.ics` 는 일정은 잘 담지만 할일은 부실해서, 태그·우선순위·반복·원본 입력 문장이 다 날아갑니다.
 
-확장자는 평범한 `.json` 입니다. 망 사이를 건너는 파일은 중간의 반입 게이트웨이를 만나는데, 낯선 확장자는 이유도 없이 막히는 일이 있어서요.
+확장자는 **`.txt`** 입니다. 사내 메신저가 `.json` 이나 `.csv` 는 이유도 없이 막고 텍스트 파일은 통과시키기 때문입니다. 아무리 잘 만든 파일도 보낼 수 없으면 소용이 없죠.
 
-```json
-{
-  "Format": "flowdeck.transfer",
-  "Version": 1,
-  "ExportedAt": "2026-08-10T21:00:00+09:00",
-  "Todos": [ ... ],
-  "Events": [ ... ]
-}
+그래서 파일 위쪽은 **사람이 읽는 부분**입니다. 메신저에서 미리보기만 해도 뭐가 들어있는지 보입니다.
+
 ```
+Flowdeck 내보내기 · 2026-08-10 21:00 · 3건
+
+- [할일] 보고서 제출 · 8월 12일 15:00 #업무
+- [일정] 팀 회의 · 8월 11일 15:00
+
+--- 여기서부터는 앱이 읽는 부분입니다. 지우지 마세요 ---
+{ "Format": "flowdeck.transfer", "Version": 1, ... }
+```
+
+위쪽 설명은 마음대로 고쳐도 됩니다 — 앱은 구분선 아래만 읽습니다. 예전에 `.json` 으로 내보낸 파일도 그대로 가져와집니다.
 
 Flowdeck 파일이 아니거나 더 새로운 버전이면 **한 줄로 이유를 알려주고 아무것도 하지 않습니다.**
 
@@ -545,7 +549,7 @@ flowdeck/
 │       ├── Interop/              HotKeyService, WindowPinService, StartupService
 │       ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
 │       └── Themes/               Dark, Light, Controls
-├── tests/Flowdeck.Core.Tests/    xUnit 281개
+├── tests/Flowdeck.Core.Tests/    xUnit 300개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -561,7 +565,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 281 tests
+dotnet test tests/Flowdeck.Core.Tests    # 300 tests
 dotnet build Flowdeck.sln -c Release
 ```
 

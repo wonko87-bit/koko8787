@@ -144,7 +144,7 @@ public partial class AgendaWindow : Window
         {
             FileName = $"flowdeck-{ViewModel.Title}-{DateTime.Now:yyyyMMdd}{TransferFile.Extension}",
             DefaultExt = TransferFile.Extension,
-            Filter = $"Flowdeck 내보내기 (*{TransferFile.Extension})|*{TransferFile.Extension}",
+            Filter = $"Flowdeck 내보내기 (*{TransferFile.Extension})|*{TransferFile.Extension}|모든 파일 (*.*)|*.*",
         };
 
         if (dialog.ShowDialog(this) != true) return;

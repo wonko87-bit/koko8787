@@ -330,7 +330,7 @@ public partial class SettingsWindow : Window
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
             DefaultExt = TransferFile.Extension,
-            Filter = $"Flowdeck 내보내기 (*{TransferFile.Extension})|*{TransferFile.Extension}|모든 파일 (*.*)|*.*",
+            Filter = "Flowdeck 내보내기 (*.txt;*.json)|*.txt;*.json|모든 파일 (*.*)|*.*",
         };
 
         if (dialog.ShowDialog(this) != true) return;
