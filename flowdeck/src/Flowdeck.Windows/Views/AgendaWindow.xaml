@@ -325,6 +325,13 @@
                      Style="{StaticResource Text.Meta}"
                      Text="완료 포함"
                      Visibility="{Binding IsTodoMode, Converter={StaticResource BoolToVisibility}}" />
+          <Button Margin="0,0,4,0"
+                  Click="OnExportClick"
+                  Content="&#xEDE1;"
+                  FontFamily="{StaticResource Font.Icon}"
+                  FontSize="12"
+                  Style="{StaticResource Button.Icon}"
+                  ToolTip="지금 보이는 목록을 파일로 내보내기" />
           <Button Click="OnCloseClick"
                   Content="&#xE711;"
                   FontFamily="{StaticResource Font.Icon}"

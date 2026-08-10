@@ -451,7 +451,58 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 ---
 
-## 9. 데이터
+## 9. 두 PC 사이로 항목 옮기기
+
+망이 갈린 환경을 위한 **단방향 반입 통로**입니다. 밖에서 떠오른 아이디어를 파일로 내보내서 업무 PC에 들여놓는 용도예요.
+
+```
+개인 노트북 ──(파일 하나)──▶ 업무 PC
+```
+
+### 내보내기 — 목록 창에서
+
+`Ctrl+Alt+C` (일정) 또는 `Ctrl+Alt+T` (할일) 로 목록 창을 열고, 오른쪽 위 **내보내기 버튼**을 누릅니다.
+
+**지금 화면에 보이는 것이 그대로 파일이 됩니다.** 태그 칩으로 목록을 좁혀두면 좁혀진 만큼만 나갑니다 — 별도의 "항목 선택" 화면이 없는 게 의도입니다. 보고 있는 것과 내보내는 것이 어긋날 여지를 안 만들려고요.
+
+일정과 할일은 창이 따로라 파일도 따로 나옵니다. 둘 다 필요하면 두 번 내보내면 되고, 가져오기는 어느 쪽이든 받습니다.
+
+### 가져오기 — 설정에서
+
+**설정 → 자료 주고받기 → 파일에서 가져오기**
+
+### 규칙
+
+| | |
+|---|---|
+| **더하기만 합니다** | 이미 있는 항목을 고치거나 지우지 않습니다. 잘못된 파일을 넣어도 최악이 "필요 없는 항목이 늘어남" 입니다 |
+| **같은 파일을 두 번 넣어도 안전** | 항목 ID로 구분해서 이미 있으면 건너뜁니다. "3건 가져왔습니다. 2건은 이미 있어 건너뛰었습니다" 처럼 알려줍니다 |
+| **업무 PC에서 고친 내용이 안 덮입니다** | 들여온 뒤 제목을 다듬었는데 같은 파일을 또 넣어도 다듬은 게 유지됩니다 |
+| **Outlook 연결 정보는 안 따라갑니다** | 저쪽 Outlook의 항목 ID라 여기선 의미가 없습니다. 그대로 왔으면 "이미 보냈다"고 표시돼서 **영영 안 보내지는** 항목이 됩니다 |
+
+### 형식
+
+`.ics` 가 아니라 **Flowdeck 자체 형식(JSON)** 입니다. `.ics` 는 일정은 잘 담지만 할일은 부실해서, 태그·우선순위·반복·원본 입력 문장이 다 날아갑니다.
+
+확장자는 평범한 `.json` 입니다. 망 사이를 건너는 파일은 중간의 반입 게이트웨이를 만나는데, 낯선 확장자는 이유도 없이 막히는 일이 있어서요.
+
+```json
+{
+  "Format": "flowdeck.transfer",
+  "Version": 1,
+  "ExportedAt": "2026-08-10T21:00:00+09:00",
+  "Todos": [ ... ],
+  "Events": [ ... ]
+}
+```
+
+Flowdeck 파일이 아니거나 더 새로운 버전이면 **한 줄로 이유를 알려주고 아무것도 하지 않습니다.**
+
+> **반출입 규정은 확인하세요.** 들이는 방향이라 보통 통제가 덜하지만, 사내 규정은 환경마다 다릅니다.
+
+---
+
+## 10. 데이터
 
 전부 로컬에 평문 JSON으로 저장됩니다. 계정도 서버도 없습니다.
 
@@ -473,7 +524,7 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 ---
 
-## 10. 프로젝트 구조
+## 11. 프로젝트 구조
 
 ```
 flowdeck/
@@ -485,7 +536,7 @@ flowdeck/
 │   │   ├── Integration/          IExternalStore, TeamsDeepLink
 │   │   ├── Services/             EntryComposer, RecurrenceExpander, WorkspaceRepository
 │   │   ├── Storage/              JsonWorkspaceStore
-│   │   ├── Export/               IcsExporter
+│   │   ├── Export/               IcsExporter, TransferFile
 │   │   └── Settings/             AppSettings
 │   └── Flowdeck.Windows/         WPF (net8.0-windows)
 │       ├── Views/                WidgetWindow, QuickAddWindow, SettingsWindow, AgendaWindow, ContactsWindow
@@ -494,7 +545,7 @@ flowdeck/
 │       ├── Interop/              HotKeyService, WindowPinService, StartupService
 │       ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
 │       └── Themes/               Dark, Light, Controls
-├── tests/Flowdeck.Core.Tests/    xUnit 263개
+├── tests/Flowdeck.Core.Tests/    xUnit 281개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -506,11 +557,11 @@ flowdeck/
 
 ---
 
-## 11. 개발
+## 12. 개발
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 263 tests
+dotnet test tests/Flowdeck.Core.Tests    # 281 tests
 dotnet build Flowdeck.sln -c Release
 ```
 
@@ -518,7 +569,7 @@ dotnet build Flowdeck.sln -c Release
 
 ---
 
-## 12. 안드로이드 / 아이폰으로 확장하기
+## 13. 안드로이드 / 아이폰으로 확장하기
 
 `Flowdeck.Core` 는 이미 이걸 염두에 두고 짜여 있습니다. 플랫폼 API를 하나도 쓰지 않고, 시각도 `DateTime.Now` 를 직접 부르는 대신 전부 인자로 받습니다.
 
@@ -526,5 +577,8 @@ dotnet build Flowdeck.sln -c Release
 2. 화면만 MAUI XAML로 새로 그립니다. `WidgetViewModel` / `QuickAddViewModel` 은 WPF 타입을 안 쓰므로 `ICommand` 정도만 바꾸면 대부분 재사용됩니다.
 3. 저장 위치는 `IWorkspaceStore` 구현만 갈아끼우면 됩니다. 기기 간 동기화가 필요하면 이 인터페이스 뒤에서 처리하면 되고, 나머지 코드는 건드릴 필요가 없습니다.
 4. 안드로이드 홈 화면 위젯과 iOS 위젯 익스텐션은 각 플랫폼 고유 작업이지만, 표시할 데이터는 같은 `WorkspaceRepository` 에서 가져옵니다.
+5. **Teams 회의(`!TM`)는 모바일에서 뺄 수 있습니다.** 표기 목록이 설정값이라 `Routing.TeamsMarkers` 를 비우면 그대로 없는 기능이 됩니다. `TeamsDeepLink` 자체는 URL 문자열만 만들고 여는 건 셸이 하므로, 안 열면 그만입니다 — 코드를 갈래로 나눌 필요가 없습니다.
+
+동기화가 필요하면 [9. 두 PC 사이로 항목 옮기기](#9-두-pc-사이로-항목-옮기기)의 파일 형식(`TransferFile`)이 그대로 쓰입니다. 단방향·추가 전용이라 병합·삭제 전파·시계 문제를 전부 비껴가고, 클라우드에 올릴 때도 같은 파일 하나면 됩니다.
 
 이 저장소의 `android/` 폴더에는 같은 아이디어를 Todoist·구글 캘린더와 연동해 구현한 별개의 안드로이드 앱(TaskBridge)이 이미 있습니다. 참고용으로 쓸 수 있습니다.

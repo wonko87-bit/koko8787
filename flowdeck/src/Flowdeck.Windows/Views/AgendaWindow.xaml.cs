@@ -1,6 +1,8 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using Flowdeck.Core.Export;
 using Flowdeck.Core.Settings;
 using Flowdeck.Windows.ViewModels;
 
@@ -123,6 +125,45 @@ public partial class AgendaWindow : Window
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Dismiss();
+
+    /// <summary>
+    /// Writes out exactly what the window is showing. The tag chips are the picker: whatever
+    /// they have narrowed the list to is what lands in the file, so there is no second idea
+    /// of "selected" that could disagree with what is on screen.
+    /// </summary>
+    private void OnExportClick(object sender, RoutedEventArgs e)
+    {
+        var (todos, events) = ViewModel.VisibleEntries();
+        if (todos.Count + events.Count == 0)
+        {
+            MessageBox.Show(this, "내보낼 항목이 없습니다.", "Flowdeck", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = $"flowdeck-{ViewModel.Title}-{DateTime.Now:yyyyMMdd}{TransferFile.Extension}",
+            DefaultExt = TransferFile.Extension,
+            Filter = $"Flowdeck 내보내기 (*{TransferFile.Extension})|*{TransferFile.Extension}",
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            File.WriteAllText(dialog.FileName, TransferFile.Write(todos, events, DateTimeOffset.Now));
+            MessageBox.Show(
+                this,
+                $"{todos.Count + events.Count}건을 내보냈습니다.",
+                "Flowdeck",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "파일을 저장하지 못했습니다.\n\n" + ex.Message, "Flowdeck", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     private void OnMatchModeClick(object sender, RoutedEventArgs e)
     {

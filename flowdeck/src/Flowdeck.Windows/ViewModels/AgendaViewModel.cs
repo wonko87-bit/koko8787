@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Flowdeck.Core.Models;
 using Flowdeck.Core.Services;
 using Flowdeck.Windows.Infrastructure;
 
@@ -247,6 +248,32 @@ public sealed class AgendaViewModel : ObservableObject
     }
 
     public string TotalLabel => $"{Groups.Sum(g => g.Items.Count) + Recurring.Count}건";
+
+    /// <summary>
+    /// The entries behind what is on screen right now, repeating ones included.
+    ///
+    /// This is what makes the tag chips double as the picker for an export: narrowing the
+    /// list narrows the file, with no second selection UI to learn and nothing that can
+    /// disagree with what the user is looking at.
+    /// </summary>
+    public (IReadOnlyList<TodoItem> Todos, IReadOnlyList<CalendarEvent> Events) VisibleEntries()
+    {
+        if (Mode == AgendaMode.Events)
+        {
+            var events = _repository.OneOffOccurrences().Select(o => o.Source)
+                .Concat(_repository.RepeatingEvents())
+                .Where(e => MatchesTagFilter(e.Tags))
+                .ToList();
+
+            return (Array.Empty<TodoItem>(), events);
+        }
+
+        var todos = _repository.AllTodos(_showCompleted)
+            .Where(t => MatchesTagFilter(t.Tags))
+            .ToList();
+
+        return (todos, Array.Empty<CalendarEvent>());
+    }
 
     private void LoadEvents(DateTime now)
     {

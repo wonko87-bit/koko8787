@@ -320,6 +320,37 @@ public partial class SettingsWindow : Window
             : $"{count}명 등록됨. 입력할 때 @이름 으로 부를 수 있습니다";
     }
 
+    /// <summary>
+    /// Folds a file exported elsewhere into this workspace. Additive: nothing already here
+    /// is replaced or removed, so the worst a wrong file can do is add entries the user can
+    /// then delete.
+    /// </summary>
+    private async void OnImportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            DefaultExt = TransferFile.Extension,
+            Filter = $"Flowdeck 내보내기 (*{TransferFile.Extension})|*{TransferFile.Extension}|모든 파일 (*.*)|*.*",
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            var archive = TransferFile.Read(File.ReadAllText(dialog.FileName));
+            var result = await _shell.Repository.ImportAsync(archive);
+            Status(result.Describe());
+        }
+        catch (FormatException ex)
+        {
+            Status(ex.Message);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status("파일을 열지 못했습니다: " + ex.Message);
+        }
+    }
+
     private void OnExportClick(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.SaveFileDialog

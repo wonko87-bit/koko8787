@@ -1,3 +1,4 @@
+using Flowdeck.Core.Export;
 using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
 using Flowdeck.Core.Parsing;
@@ -7,6 +8,18 @@ namespace Flowdeck.Core.Services;
 
 /// <summary>A tag and how many entries carry it.</summary>
 public sealed record TagCount(string Tag, int Count);
+
+/// <summary>What an import did. <paramref name="Skipped"/> counts entries already present.</summary>
+public sealed record ImportResult(int TodosAdded, int EventsAdded, int Skipped)
+{
+    public int Added => TodosAdded + EventsAdded;
+
+    public string Describe() => Added == 0 && Skipped == 0
+        ? "파일에 항목이 없습니다"
+        : Skipped == 0
+            ? $"{Added}건을 가져왔습니다"
+            : $"{Added}건을 가져왔습니다. {Skipped}건은 이미 있어 건너뛰었습니다";
+}
 
 /// <summary>One occurrence of an event, with the repeat rule already applied.</summary>
 public sealed class EventOccurrence
@@ -346,6 +359,74 @@ public sealed class WorkspaceRepository
             .OrderBy(t => t.IsDone)
             .ThenBy(t => t.DueAt)
             .ToList();
+
+    /// <summary>
+    /// Folds a transfer file into this workspace.
+    ///
+    /// Adds and never replaces. The file travels one way, from the machine ideas are jotted
+    /// on to the machine work is done on, and an entry already here has probably been
+    /// worked on since it arrived — re-importing the source file must not undo that. An id
+    /// already present is therefore counted and skipped, which also makes importing the
+    /// same file twice harmless.
+    /// </summary>
+    public async Task<ImportResult> ImportAsync(TransferArchive archive)
+    {
+        var todoIds = _workspace.Todos.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var eventIds = _workspace.Events.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
+
+        var skipped = 0;
+        var todosAdded = 0;
+        var eventsAdded = 0;
+
+        foreach (var todo in archive.Todos)
+        {
+            if (string.IsNullOrEmpty(todo.Id) || !todoIds.Add(todo.Id)) { skipped++; continue; }
+
+            // Whatever it was linked to over there is not what it would point at here.
+            todo.ExternalLink = null;
+            _workspace.Todos.Add(todo);
+            todosAdded++;
+        }
+
+        foreach (var calendarEvent in archive.Events)
+        {
+            if (string.IsNullOrEmpty(calendarEvent.Id) || !eventIds.Add(calendarEvent.Id)) { skipped++; continue; }
+
+            calendarEvent.ExternalLink = null;
+            _workspace.Events.Add(calendarEvent);
+            eventsAdded++;
+        }
+
+        if (todosAdded + eventsAdded > 0)
+        {
+            RepairCrossLinks();
+            await SaveAsync();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        return new ImportResult(todosAdded, eventsAdded, skipped);
+    }
+
+    /// <summary>
+    /// Clears links pointing at entries that are not here. Exporting one half of a
+    /// todo-and-event pair is ordinary — the list window shows one kind at a time — and the
+    /// surviving half would otherwise arrive holding the id of something that never came.
+    /// </summary>
+    private void RepairCrossLinks()
+    {
+        var todoIds = _workspace.Todos.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+        var eventIds = _workspace.Events.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var todo in _workspace.Todos.Where(t => t.LinkedEventId is not null))
+        {
+            if (!eventIds.Contains(todo.LinkedEventId!)) todo.LinkedEventId = null;
+        }
+
+        foreach (var calendarEvent in _workspace.Events.Where(e => e.LinkedTodoId is not null))
+        {
+            if (!todoIds.Contains(calendarEvent.LinkedTodoId!)) calendarEvent.LinkedTodoId = null;
+        }
+    }
 
     /// <summary>Replaces the whole workspace, e.g. after an import.</summary>
     public async Task ReplaceAsync(Workspace workspace)
