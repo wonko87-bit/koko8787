@@ -1,6 +1,11 @@
 using Android.Graphics;
 using Flowdeck.Mobile.Services;
 
+// MAUI puts its own drawing types in the implicit usings, and several of them share a name
+// with the Android ones. Spelled out here so the file cannot mean the wrong one.
+using Color = Android.Graphics.Color;
+using Paint = Android.Graphics.Paint;
+
 namespace Flowdeck.Mobile.Widgets;
 
 /// <summary>

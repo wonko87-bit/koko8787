@@ -11,6 +11,10 @@ using Flowdeck.Core.Parsing;
 using Flowdeck.Mobile.Services;
 using Flowdeck.Mobile.Widgets;
 
+// This is a plain Android screen, not a MAUI one, and MAUI has a Button of its own in the
+// implicit usings. Named outright so the ambiguity cannot come back.
+using Button = Android.Widget.Button;
+
 namespace Flowdeck.Mobile;
 
 /// <summary>

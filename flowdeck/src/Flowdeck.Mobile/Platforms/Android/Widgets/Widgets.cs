@@ -45,8 +45,10 @@ public static class FlowdeckWidgets
 [MetaData("android.appwidget.provider", Resource = "@xml/calendar_widget_info")]
 public sealed class CalendarWidget : AppWidgetProvider
 {
-    public override void OnUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
+    public override void OnUpdate(Context? context, AppWidgetManager? appWidgetManager, int[]? appWidgetIds)
     {
+        if (context is null || appWidgetManager is null || appWidgetIds is null) return;
+
         var pending = GoAsync();
 
         Task.Run(async () =>
@@ -102,8 +104,10 @@ public sealed class CalendarWidget : AppWidgetProvider
 [MetaData("android.appwidget.provider", Resource = "@xml/input_widget_info")]
 public sealed class InputWidget : AppWidgetProvider
 {
-    public override void OnUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds)
+    public override void OnUpdate(Context? context, AppWidgetManager? appWidgetManager, int[]? appWidgetIds)
     {
+        if (context is null || appWidgetManager is null || appWidgetIds is null) return;
+
         var views = new RemoteViews(context.PackageName, Resource.Layout.input_widget);
 
         var capture = new Intent(context, typeof(QuickCaptureActivity))
