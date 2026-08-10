@@ -94,6 +94,13 @@ public sealed class AppSettings
     public bool AssumeAfternoonForBareHours { get; set; } = true;
 
     /// <summary>
+    /// Master switch for the Outlook integration. Turning it off makes Flowdeck purely
+    /// local, as it was before the integration existed. Only ever consulted on a machine
+    /// that has Outlook: where it is absent the integration is invisible regardless.
+    /// </summary>
+    public bool EnableOutlook { get; set; } = true;
+
+    /// <summary>
     /// Copy every captured entry to Outlook without typing <c>!OL</c>. A line carrying
     /// <c>!NOL</c> still stays local. Off by default: sending work to another application
     /// should be something the user turns on knowingly.

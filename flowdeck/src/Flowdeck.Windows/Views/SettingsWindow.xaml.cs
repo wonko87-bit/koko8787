@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using Flowdeck.Core.Export;
+using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Settings;
 using Flowdeck.Windows.Interop;
 
@@ -50,13 +51,17 @@ public partial class SettingsWindow : Window
         AgendaEventsHotkey.Text = Settings.AgendaEventsHotkey;
         AgendaTodosHotkey.Text = Settings.AgendaTodosHotkey;
 
-        KeywordHints.IsChecked = Settings.Routing.UseKeywordHints;
-        PushToOutlook.IsChecked = Settings.PushToOutlookByDefault;
+        LoadDefaultTarget();
 
-        var outlook = _shell.Repository.External;
-        OutlookStatus.Text = outlook is null
-            ? "Outlook을 찾지 못했습니다. 켜 두어도 저장되지 않습니다."
-            : "끄더라도 !OL 을 붙이면 그 항목만 보냅니다. 켠 뒤 !NOL 은 그 항목만 제외합니다.";
+        // The section stays hidden where Outlook is absent: a switch that could never do
+        // anything is worse than no switch at all.
+        OutlookSection.Visibility = _shell.Repository.ExternalDetected
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        UseOutlook.IsChecked = Settings.EnableOutlook;
+        PushToOutlook.IsChecked = Settings.PushToOutlookByDefault;
+        PushToOutlook.IsEnabled = Settings.EnableOutlook;
+
         AfternoonBias.IsChecked = Settings.AssumeAfternoonForBareHours;
 
         LaunchAtStartup.IsChecked = StartupService.IsEnabled();
@@ -64,11 +69,10 @@ public partial class SettingsWindow : Window
 
         _loading = false;
 
-        // These two have no Checked handler of their own; they commit on close.
-        KeywordHints.Checked += OnParserOptionChanged;
-        KeywordHints.Unchecked += OnParserOptionChanged;
         AfternoonBias.Checked += OnParserOptionChanged;
         AfternoonBias.Unchecked += OnParserOptionChanged;
+        UseOutlook.Checked += OnOutlookChanged;
+        UseOutlook.Unchecked += OnOutlookChanged;
         PushToOutlook.Checked += OnOutlookChanged;
         PushToOutlook.Unchecked += OnOutlookChanged;
         ColorWeekends.Checked += OnWeekStartChanged;
@@ -131,11 +135,64 @@ public partial class SettingsWindow : Window
         _shell.SaveSettings();
     }
 
+    /// <summary>
+    /// Shows the stored choice. A settings file written before this option existed carries
+    /// only the keyword switch, and "off" meant "always both" — which is now one of the
+    /// four choices, so it maps straight across with nothing to migrate.
+    /// </summary>
+    private void LoadDefaultTarget()
+    {
+        var rules = Settings.Routing;
+        var choice = rules.DefaultTarget != TargetDefault.Auto ? rules.DefaultTarget
+            : rules.UseKeywordHints ? TargetDefault.Auto
+            : TargetDefault.Both;
+
+        DefaultAuto.IsChecked = choice == TargetDefault.Auto;
+        DefaultTodo.IsChecked = choice == TargetDefault.Todo;
+        DefaultCalendar.IsChecked = choice == TargetDefault.Calendar;
+        DefaultBoth.IsChecked = choice == TargetDefault.Both;
+        DescribeDefaultTarget(choice);
+    }
+
+    private void OnDefaultTargetChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        var choice = DefaultTodo.IsChecked == true ? TargetDefault.Todo
+            : DefaultCalendar.IsChecked == true ? TargetDefault.Calendar
+            : DefaultBoth.IsChecked == true ? TargetDefault.Both
+            : TargetDefault.Auto;
+
+        Settings.Routing.DefaultTarget = choice;
+
+        // Kept in step so the two never contradict each other in the file: the keyword
+        // sweep is exactly the Auto choice, under its old name.
+        Settings.Routing.UseKeywordHints = choice == TargetDefault.Auto;
+
+        DescribeDefaultTarget(choice);
+        _shell.ApplyParserSettings();
+        _shell.SaveSettings();
+    }
+
+    private void DescribeDefaultTarget(TargetDefault choice) =>
+        DefaultTargetHint.Text = choice switch
+        {
+            TargetDefault.Todo => "!TD 를 매번 붙이지 않아도 됩니다. 예외는 !CD 또는 Ctrl+2",
+            TargetDefault.Calendar => "!CD 를 매번 붙이지 않아도 됩니다. 예외는 !TD 또는 Ctrl+1",
+            TargetDefault.Both => "표기가 없으면 항상 일정과 할일 양쪽에 등록합니다",
+            _ => "'회의'는 일정, '제출'은 할일로. 판단이 서지 않으면 양쪽 모두",
+        };
+
     private void OnOutlookChanged(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
 
+        Settings.EnableOutlook = UseOutlook.IsChecked == true;
         Settings.PushToOutlookByDefault = PushToOutlook.IsChecked == true;
+
+        _shell.Repository.ExternalEnabled = Settings.EnableOutlook;
+        PushToOutlook.IsEnabled = Settings.EnableOutlook;
+
         _shell.ApplyParserSettings();
         _shell.SaveSettings();
     }
@@ -144,7 +201,6 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
 
-        Settings.Routing.UseKeywordHints = KeywordHints.IsChecked == true;
         Settings.AssumeAfternoonForBareHours = AfternoonBias.IsChecked == true;
         _shell.ApplyParserSettings();
         _shell.SaveSettings();

@@ -93,7 +93,7 @@ public partial class App : Application, IAppShell
         // Push-only: Flowdeck writes into Outlook and never reads back, so there is
         // nothing to reconcile. Reading is a later addition behind the same interface.
         _outlook = new OutlookBridge();
-        _repository = new WorkspaceRepository(store, _outlook);
+        _repository = new WorkspaceRepository(store, _outlook) { ExternalEnabled = _settings.EnableOutlook };
         await _repository.LoadAsync();
 
         _parser = new NaturalLanguageParser(_settings.Routing);

@@ -125,7 +125,7 @@
       <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
         <TextBlock FontSize="11"
                    Foreground="{DynamicResource Brush.TextTertiary}"
-                   Text="Enter 저장 · Esc 닫기 · Ctrl+1 할일 · Ctrl+2 일정 · Ctrl+3 둘 다" />
+                   Text="Enter 저장 · Esc 닫기 · Ctrl+1 할일 · Ctrl+2 일정 · Ctrl+3 둘 다 · Ctrl+O Outlook" />
       </StackPanel>
     </StackPanel>
   </Border>

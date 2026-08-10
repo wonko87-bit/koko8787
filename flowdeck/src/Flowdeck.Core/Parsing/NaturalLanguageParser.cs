@@ -80,7 +80,7 @@ public sealed class NaturalLanguageParser
         if (entry.Title.Length == 0) entry.Title = ParsedEntry.UntitledPlaceholder;
 
         entry.TargetWasExplicit = explicitTarget.HasValue;
-        entry.Target = explicitTarget ?? _rules.ClassifyByKeyword(body);
+        entry.Target = explicitTarget ?? _rules.Classify(body);
 
         return entry;
     }

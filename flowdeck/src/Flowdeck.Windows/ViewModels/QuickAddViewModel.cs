@@ -18,6 +18,7 @@ public sealed class QuickAddViewModel : ObservableObject
     private string _input = string.Empty;
     private ParsedEntry _preview = new();
     private EntryTarget? _forcedTarget;
+    private bool? _forcedExternal;
 
     public QuickAddViewModel(
         WorkspaceRepository repository,
@@ -83,25 +84,41 @@ public sealed class QuickAddViewModel : ObservableObject
 
     public bool HasReminder => Effective().ReminderMinutesBefore.HasValue;
 
-    /// <summary>True when this entry will also be written into Outlook.</summary>
-    public bool PushesToOutlook => Effective().PushExternal;
+    /// <summary>
+    /// True when this entry will also be written into Outlook. Reports what will actually
+    /// happen, not what was asked for: with no Outlook on the machine, or the integration
+    /// switched off, <c>!OL</c> is going nowhere and the preview should not claim otherwise.
+    /// </summary>
+    public bool PushesToOutlook => Effective().PushExternal && _repository.External is not null;
 
-    /// <summary>True when the target came from a marker rather than from a keyword guess.</summary>
-    public bool TargetIsPinned => _forcedTarget.HasValue || _preview.TargetWasExplicit;
+    /// <summary>True when the target is settled rather than guessed from the words.</summary>
+    public bool TargetIsPinned =>
+        _forcedTarget.HasValue
+        || _preview.TargetWasExplicit
+        || _parser.Rules.DefaultTarget != TargetDefault.Auto;
 
     /// <summary>
-    /// Overrides the routing for this one entry, for when the keyword sweep guessed wrong.
-    /// Passing null hands the decision back to the parser.
+    /// Overrides the routing for this one entry, for when the standing default is not what
+    /// was wanted. Choosing the target that is already forced releases the override and
+    /// hands the decision back to the parser.
     /// </summary>
-    public void ForceTarget(EntryTarget? target)
+    public void ForceTarget(EntryTarget target)
     {
-        _forcedTarget = target;
+        _forcedTarget = _forcedTarget == target ? null : target;
+        RaisePreviewProperties();
+    }
+
+    /// <summary>Flips the Outlook flag for this one entry: the keyboard twin of !OL / !NOL.</summary>
+    public void ToggleExternal()
+    {
+        _forcedExternal = !(_forcedExternal ?? _preview.PushExternal);
         RaisePreviewProperties();
     }
 
     public void Reset()
     {
         _forcedTarget = null;
+        _forcedExternal = null;
         Input = string.Empty;
     }
 
@@ -124,17 +141,18 @@ public sealed class QuickAddViewModel : ObservableObject
         RaisePreviewProperties();
     }
 
-    /// <summary>The parse with any manual target override folded in.</summary>
+    /// <summary>The parse with any manual override folded in.</summary>
     private ParsedEntry Effective()
     {
-        if (_forcedTarget is null || _preview.IsEmpty) return _preview;
+        if (_preview.IsEmpty) return _preview;
+        if (_forcedTarget is null && _forcedExternal is null) return _preview;
 
         return new ParsedEntry
         {
             RawInput = _preview.RawInput,
             Title = _preview.Title,
-            Target = _forcedTarget.Value,
-            TargetWasExplicit = true,
+            Target = _forcedTarget ?? _preview.Target,
+            TargetWasExplicit = _forcedTarget.HasValue || _preview.TargetWasExplicit,
             Start = _preview.Start,
             End = _preview.End,
             HasTime = _preview.HasTime,
@@ -142,7 +160,7 @@ public sealed class QuickAddViewModel : ObservableObject
             Tags = _preview.Tags,
             Recurrence = _preview.Recurrence,
             ReminderMinutesBefore = _preview.ReminderMinutesBefore,
-            PushExternal = _preview.PushExternal,
+            PushExternal = _forcedExternal ?? _preview.PushExternal,
         };
     }
 

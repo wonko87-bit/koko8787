@@ -261,16 +261,39 @@
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="입력 해석" />
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center" Width="330" HorizontalAlignment="Left">
-              <TextBlock Style="{StaticResource Text.Body}" Text="단어로 할일/일정 자동 분류" />
-              <TextBlock Style="{StaticResource Text.Meta}"
-                         Text="'회의'는 일정, '제출'은 할일로. 끄면 표기가 없을 때 항상 양쪽 모두"
+            <StackPanel VerticalAlignment="Center" Width="250" HorizontalAlignment="Left">
+              <TextBlock Style="{StaticResource Text.Body}" Text="표기가 없을 때 기본 분류" />
+              <TextBlock x:Name="DefaultTargetHint"
+                         Style="{StaticResource Text.Meta}"
                          TextWrapping="Wrap" />
             </StackPanel>
-            <CheckBox x:Name="KeywordHints"
-                      HorizontalAlignment="Right"
-                      VerticalAlignment="Center"
-                      Style="{StaticResource CheckBox.Setting}" />
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.SurfaceAlt}"
+                    CornerRadius="{StaticResource Corner.Small}">
+              <StackPanel Orientation="Horizontal">
+                <RadioButton x:Name="DefaultAuto"
+                             Checked="OnDefaultTargetChanged"
+                             Content="자동"
+                             GroupName="DefaultTarget"
+                             Style="{StaticResource RadioButton.Segment}" />
+                <RadioButton x:Name="DefaultTodo"
+                             Checked="OnDefaultTargetChanged"
+                             Content="할일"
+                             GroupName="DefaultTarget"
+                             Style="{StaticResource RadioButton.Segment}" />
+                <RadioButton x:Name="DefaultCalendar"
+                             Checked="OnDefaultTargetChanged"
+                             Content="일정"
+                             GroupName="DefaultTarget"
+                             Style="{StaticResource RadioButton.Segment}" />
+                <RadioButton x:Name="DefaultBoth"
+                             Checked="OnDefaultTargetChanged"
+                             Content="둘 다"
+                             GroupName="DefaultTarget"
+                             Style="{StaticResource RadioButton.Segment}" />
+              </StackPanel>
+            </Border>
           </Grid>
 
           <Grid Style="{StaticResource Row}">
@@ -287,20 +310,36 @@
           </Grid>
 
           <!-- ============ outlook ============ -->
-          <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="Outlook 연동" />
+          <!-- Hidden outright on a machine with no Outlook: nothing here would do anything. -->
+          <StackPanel x:Name="OutlookSection" Visibility="Collapsed">
+            <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="Outlook 연동" />
 
-          <Grid Style="{StaticResource Row}">
-            <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="새 항목을 Outlook에도 저장" />
-              <TextBlock x:Name="OutlookStatus"
-                         Style="{StaticResource Text.Meta}"
-                         TextWrapping="Wrap" />
-            </StackPanel>
-            <CheckBox x:Name="PushToOutlook"
-                      HorizontalAlignment="Right"
-                      VerticalAlignment="Center"
-                      Style="{StaticResource CheckBox.Setting}" />
-          </Grid>
+            <Grid Style="{StaticResource Row}">
+              <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource Text.Body}" Text="Outlook 연동 사용" />
+                <TextBlock Style="{StaticResource Text.Meta}"
+                           Text="끄면 !OL 을 포함해 Outlook으로 나가는 동작이 모두 멈춥니다"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <CheckBox x:Name="UseOutlook"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource CheckBox.Setting}" />
+            </Grid>
+
+            <Grid Style="{StaticResource Row}">
+              <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource Text.Body}" Text="새 항목을 Outlook에도 저장" />
+                <TextBlock Style="{StaticResource Text.Meta}"
+                           Text="끄더라도 !OL 을 붙이면 그 항목만 보냅니다. 켠 뒤 !NOL 은 그 항목만 제외합니다."
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <CheckBox x:Name="PushToOutlook"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource CheckBox.Setting}" />
+            </Grid>
+          </StackPanel>
 
           <!-- ============ system ============ -->
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="시스템" />

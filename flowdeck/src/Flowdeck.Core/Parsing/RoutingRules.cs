@@ -2,21 +2,35 @@ using Flowdeck.Core.Models;
 
 namespace Flowdeck.Core.Parsing;
 
+/// <summary>Where a line goes when it says nothing about where it belongs.</summary>
+public enum TargetDefault
+{
+    /// <summary>Work it out from the words, falling back to both. The original behaviour.</summary>
+    Auto = 0,
+
+    Todo = 1,
+
+    Calendar = 2,
+
+    Both = 3,
+}
+
 /// <summary>
 /// Decides whether a line of input belongs on the calendar, on the todo list, or on both.
 ///
-/// Three mechanisms, in strict order of precedence:
+/// Four mechanisms, in strict order of precedence:
 ///
 ///   1. A marker at the head or the tail of the line. Symbols (<c>!TD</c>, <c>!CD</c>) and
 ///      plain words ("할일", "일정") work the same way and always win outright. A marker only
 ///      counts when it stands alone, so "일정관리 앱 알아보기" is left untouched.
 ///   2. A <c>#할일</c> / <c>#일정</c> hashtag, which may sit anywhere in the line.
-///   3. Failing both, a keyword sweep over the text. Words like "회의" pull towards the
+///   3. <see cref="DefaultTarget"/>, when the user has named one.
+///   4. Failing all three, a keyword sweep over the text. Words like "회의" pull towards the
 ///      calendar, words like "제출" pull towards the todo list. Switched off with
 ///      <see cref="UseKeywordHints"/>.
 ///
 /// When nothing fires — or when both keyword lists match — the entry goes to both places,
-/// which is the documented default.
+/// which is the shipped default.
 /// </summary>
 public sealed class RoutingRules
 {
@@ -39,8 +53,16 @@ public sealed class RoutingRules
     };
 
     /// <summary>
+    /// Where an unmarked line goes. Someone who lives in one half of the app can set it
+    /// there and stop typing the marker for the common case, leaving <c>!TD</c> / <c>!CD</c>
+    /// — or Ctrl+1/2/3 in the capture window — for the exception.
+    /// </summary>
+    public TargetDefault DefaultTarget { get; set; } = TargetDefault.Auto;
+
+    /// <summary>
     /// When false, only explicit markers route an entry and everything else goes to both places.
-    /// Turn this off to get strictly predictable behaviour.
+    /// Turn this off to get strictly predictable behaviour. Ignored once
+    /// <see cref="DefaultTarget"/> names somewhere, which is a stronger statement of the same wish.
     /// </summary>
     public bool UseKeywordHints { get; set; } = true;
 
@@ -131,11 +153,22 @@ public sealed class RoutingRules
     }
 
     /// <summary>
-    /// Classifies by keyword. Used only when no explicit marker was given.
-    /// A tie — no keywords, or keywords from both lists — means both.
+    /// Decides where a line goes when it carried no marker of its own.
+    ///
+    /// A named <see cref="DefaultTarget"/> is taken at its word and the keyword sweep is
+    /// skipped: having said "everything is a todo unless I say otherwise", the user should
+    /// not then find "회의" quietly filed as an event. Only Auto reaches the keywords, where
+    /// a tie — no keywords, or keywords from both lists — means both.
     /// </summary>
-    public EntryTarget ClassifyByKeyword(string text)
+    public EntryTarget Classify(string text)
     {
+        switch (DefaultTarget)
+        {
+            case TargetDefault.Todo: return EntryTarget.Todo;
+            case TargetDefault.Calendar: return EntryTarget.Calendar;
+            case TargetDefault.Both: return EntryTarget.Both;
+        }
+
         if (!UseKeywordHints) return EntryTarget.Both;
 
         var calendarHit = CalendarKeywords.Any(k => Contains(text, k));

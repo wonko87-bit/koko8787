@@ -40,8 +40,21 @@ public sealed class WorkspaceRepository
         _external = external;
     }
 
-    /// <summary>The external store entries are copied to, if one is configured and present.</summary>
-    public IExternalStore? External => _external?.IsAvailable == true ? _external : null;
+    /// <summary>
+    /// True when an external store is configured and this machine actually has it. Drives
+    /// whether the integration is worth mentioning in the UI at all: on a laptop with no
+    /// Outlook there is nothing to configure, so nothing should be shown.
+    /// </summary>
+    public bool ExternalDetected => _external?.IsAvailable == true;
+
+    /// <summary>
+    /// The user's switch, for a machine that has Outlook but should be left out of it.
+    /// Off makes Flowdeck purely local, exactly as it was before the integration existed.
+    /// </summary>
+    public bool ExternalEnabled { get; set; } = true;
+
+    /// <summary>The external store entries are copied to, if there is one to copy to.</summary>
+    public IExternalStore? External => ExternalEnabled && ExternalDetected ? _external : null;
 
     /// <summary>Raised after any mutation, on the thread that performed it.</summary>
     public event EventHandler? Changed;
@@ -87,20 +100,36 @@ public sealed class WorkspaceRepository
     /// Runs after the local save and never undoes it: Outlook being shut, busy or
     /// unhappy is not a reason to lose what the user just typed. A failure is reported
     /// back on the result so the caller can say so, and the entry simply carries no link.
+    ///
+    /// A record that already carries a link is left alone. Nothing produces one today —
+    /// capture is the only caller and its records are new — but reading Outlook back would,
+    /// and a mirrored item that got pushed again would arrive in Outlook as a copy of
+    /// itself, once per read. The link is the only thing that tells the two apart.
     /// </summary>
     private async Task PushAsync(CaptureResult result)
     {
         var external = External;
         if (external is null)
         {
-            result.ExternalError = "Outlook을 찾을 수 없습니다";
+            // Two different situations, and telling them apart saves the user hunting for
+            // a problem that is only a switch.
+            result.ExternalError = ExternalDetected
+                ? "Outlook 연동이 꺼져 있습니다"
+                : "Outlook을 찾을 수 없습니다";
             return;
         }
 
         try
         {
-            if (result.Event is not null) result.Event.ExternalLink = await external.PushAsync(result.Event);
-            if (result.Todo is not null) result.Todo.ExternalLink = await external.PushAsync(result.Todo);
+            if (result.Event is { ExternalLink: null } newEvent)
+            {
+                newEvent.ExternalLink = await external.PushAsync(newEvent);
+            }
+
+            if (result.Todo is { ExternalLink: null } newTodo)
+            {
+                newTodo.ExternalLink = await external.PushAsync(newTodo);
+            }
         }
         catch (Exception e)
         {
