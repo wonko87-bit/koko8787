@@ -36,6 +36,42 @@ internal sealed class FakeExternalStore : IExternalStore
         PushedTodos.Add(todo.Title);
         return Task.FromResult(new ExternalLink { Provider = "fake", EntryId = "t" + PushedTodos.Count });
     }
+
+    /// <summary>Entry ids the copy is no longer reachable at — moved or deleted over there.</summary>
+    public HashSet<string> Missing { get; } = new();
+
+    public List<string> UpdatedEvents { get; } = new();
+
+    public List<string> UpdatedTodos { get; } = new();
+
+    public List<string> Deleted { get; } = new();
+
+    public Task<bool> UpdateAsync(CalendarEvent calendarEvent, CancellationToken cancellationToken = default)
+    {
+        if (ShouldFail) throw new InvalidOperationException("Outlook이 응답하지 않습니다");
+        if (Missing.Contains(calendarEvent.ExternalLink?.EntryId ?? string.Empty)) return Task.FromResult(false);
+
+        UpdatedEvents.Add(calendarEvent.Title);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> UpdateAsync(TodoItem todo, CancellationToken cancellationToken = default)
+    {
+        if (ShouldFail) throw new InvalidOperationException("Outlook이 응답하지 않습니다");
+        if (Missing.Contains(todo.ExternalLink?.EntryId ?? string.Empty)) return Task.FromResult(false);
+
+        UpdatedTodos.Add(todo.Title);
+        return Task.FromResult(true);
+    }
+
+    public Task<bool> DeleteAsync(ExternalLink link, CancellationToken cancellationToken = default)
+    {
+        if (ShouldFail) throw new InvalidOperationException("Outlook이 응답하지 않습니다");
+        if (Missing.Contains(link.EntryId)) return Task.FromResult(false);
+
+        Deleted.Add(link.EntryId);
+        return Task.FromResult(true);
+    }
 }
 
 public class ExternalMarkerTests
@@ -190,5 +226,175 @@ public class ExternalPushTests
         Assert.Single(repo.Todos);
         Assert.NotNull(result.ExternalError);
         Assert.Null(repo.External);
+    }
+}
+
+/// <summary>
+/// Flowdeck is the master and keeps its Outlook copies in step: an entry edited or deleted
+/// here is edited or deleted there. Never the other way, and never at the cost of the local
+/// change, which is the user's and is already made.
+/// </summary>
+public class ExternalMirrorTests
+{
+    private static readonly DateTime Now = new(2026, 8, 7, 10, 0, 0);
+    private static readonly DateTime Later = new(2026, 8, 8, 10, 0, 0);
+
+    private static async Task<(WorkspaceRepository Repository, FakeExternalStore Store)> Capture(string line)
+    {
+        var store = new FakeExternalStore();
+        var repository = new WorkspaceRepository(new InMemoryStore(), store);
+        await repository.CaptureAsync(new NaturalLanguageParser().Parse(line, Now), Now);
+        return (repository, store);
+    }
+
+    [Fact]
+    public async Task EditingATodoRewritesTheCopy()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+
+        var result = await repository.UpdateTodoAsync(
+            repository.Todos[0].Id, new EntryEdit { Title = "분기 보고서 제출" }, Later);
+
+        Assert.Equal(ExternalSync.Updated, result.External);
+        Assert.Equal(new[] { "분기 보고서 제출" }, store.UpdatedTodos);
+    }
+
+    [Fact]
+    public async Task EditingAnEventRewritesTheCopy()
+    {
+        var (repository, store) = await Capture("!OL !CD 내일 오후 3시 기획 회의");
+
+        var result = await repository.UpdateEventAsync(
+            repository.Events[0].Id,
+            new EntryEdit { Title = "기획 리뷰", When = new DateTime(2026, 8, 12, 15, 0, 0), HasTime = true },
+            Later);
+
+        Assert.Equal(ExternalSync.Updated, result.External);
+        Assert.Equal(new[] { "기획 리뷰" }, store.UpdatedEvents);
+    }
+
+    /// <summary>An entry that was never sent has nothing to keep in step.</summary>
+    [Fact]
+    public async Task AnEntryWithNoCopyIsLeftAlone()
+    {
+        var (repository, store) = await Capture("!NOL !TD 내일 오후 3시 보고서 제출");
+
+        var result = await repository.UpdateTodoAsync(
+            repository.Todos[0].Id, new EntryEdit { Title = "고침" }, Later);
+
+        Assert.Equal(ExternalSync.None, result.External);
+        Assert.Empty(store.UpdatedTodos);
+    }
+
+    /// <summary>
+    /// Moved between folders in Outlook, or deleted there. Either way the identifier no
+    /// longer resolves, and holding the link would make every later edit fail the same way.
+    /// </summary>
+    [Fact]
+    public async Task ACopyThatHasGoneDropsTheLink()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        store.Missing.Add(repository.Todos[0].ExternalLink!.EntryId);
+
+        var result = await repository.UpdateTodoAsync(
+            repository.Todos[0].Id, new EntryEdit { Title = "고침" }, Later);
+
+        Assert.Equal(ExternalSync.Lost, result.External);
+        Assert.Null(repository.Todos[0].ExternalLink);
+
+        // The local edit still happened. It is the user's, and Outlook does not get a vote.
+        Assert.Equal("고침", repository.Todos[0].Title);
+    }
+
+    /// <summary>An unreachable mailbox is reported, and changes nothing locally.</summary>
+    [Fact]
+    public async Task AMailboxThatRefusesDoesNotLoseTheEdit()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        store.ShouldFail = true;
+
+        var result = await repository.UpdateTodoAsync(
+            repository.Todos[0].Id, new EntryEdit { Title = "고침" }, Later);
+
+        Assert.Equal(ExternalSync.Failed, result.External);
+        Assert.Equal("고침", repository.Todos[0].Title);
+
+        // Still linked: the copy is presumably fine, it just could not be reached.
+        Assert.NotNull(repository.Todos[0].ExternalLink);
+    }
+
+    /// <summary>The integration being switched off is not the same as an entry having no copy.</summary>
+    [Fact]
+    public async Task SwitchingTheIntegrationOffStopsTheMirroring()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        repository.ExternalEnabled = false;
+
+        var result = await repository.UpdateTodoAsync(
+            repository.Todos[0].Id, new EntryEdit { Title = "고침" }, Later);
+
+        Assert.Equal(ExternalSync.None, result.External);
+        Assert.Empty(store.UpdatedTodos);
+        Assert.NotNull(repository.Todos[0].ExternalLink);
+    }
+
+    [Fact]
+    public async Task DeletingTakesTheCopyWithIt()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        var entryId = repository.Todos[0].ExternalLink!.EntryId;
+
+        await repository.DeleteTodoAsync(repository.Todos[0].Id);
+
+        Assert.Equal(new[] { entryId }, store.Deleted);
+        Assert.Empty(repository.Todos);
+    }
+
+    [Fact]
+    public async Task DeletingAnEventTakesTheCopyWithIt()
+    {
+        var (repository, store) = await Capture("!OL !CD 내일 오후 3시 기획 회의");
+        var entryId = repository.Events[0].ExternalLink!.EntryId;
+
+        await repository.DeleteEventAsync(repository.Events[0].Id);
+
+        Assert.Equal(new[] { entryId }, store.Deleted);
+        Assert.Empty(repository.Events);
+    }
+
+    /// <summary>
+    /// The local delete is what the user asked for. A mailbox that will not answer gets a
+    /// warning, not a veto — the alternative is an entry that cannot be got rid of.
+    /// </summary>
+    [Fact]
+    public async Task AFailedRemoteDeleteStillDeletesLocallyAndWarns()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        store.ShouldFail = true;
+
+        var warnings = new List<string>();
+        repository.ExternalWarning += (_, message) => warnings.Add(message);
+
+        await repository.DeleteTodoAsync(repository.Todos[0].Id);
+
+        Assert.Empty(repository.Todos);
+        Assert.Single(warnings);
+        Assert.Contains("보고서 제출", warnings[0]);
+    }
+
+    /// <summary>Already gone over there is the outcome that was wanted, not a problem.</summary>
+    [Fact]
+    public async Task DeletingACopyThatIsAlreadyGoneIsQuiet()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        store.Missing.Add(repository.Todos[0].ExternalLink!.EntryId);
+
+        var warnings = new List<string>();
+        repository.ExternalWarning += (_, message) => warnings.Add(message);
+
+        await repository.DeleteTodoAsync(repository.Todos[0].Id);
+
+        Assert.Empty(repository.Todos);
+        Assert.Empty(warnings);
     }
 }

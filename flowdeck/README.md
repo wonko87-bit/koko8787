@@ -353,7 +353,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 - `Esc` 로 취소, `Ctrl`+`Enter` 로 저장. 메모칸에서도 `Ctrl`+`Enter` 는 저장입니다.
 - 편집 창의 **삭제**는 목록에서 지우는 것과 같습니다.
 
-> 편집한 내용은 **Outlook으로 다시 보내지지 않습니다.** `!OL` 로 보낸 항목을 여기서 고쳐도 Outlook 쪽 원본은 그대로입니다. 지금 연동은 한 번 보내는 단방향입니다.
+> `!OL` 로 보낸 항목은 **저장을 누르는 순간 Outlook 사본도 같이 고쳐집니다.** 삭제도 마찬가지입니다. 자세한 건 [8. Outlook 연동](#8-outlook-연동).
 
 ---
 
@@ -361,7 +361,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 
 로컬에 설치된 **Outlook에 항목을 복사**합니다. 자연어로 한 줄 치면 회사 캘린더/작업에 그대로 들어가고, Outlook이 서버로 올려주니 **휴대폰 Outlook에도 따라옵니다.**
 
-**지금은 보내기 전용(push)입니다.** Flowdeck이 Outlook에 쓰기만 하고 읽어오지는 않습니다. 그래서 충돌이 생길 여지가 없습니다.
+**쓰기 전용, 한 방향입니다.** Flowdeck이 Outlook에 쓰기만 하고 읽어오지는 않습니다. 그래서 충돌이 생길 여지가 없습니다. 다만 **한 번 보낸 사본은 계속 따라옵니다** — 여기서 고치면 거기서도 고쳐지고, 여기서 지우면 거기서도 지워집니다.
 
 ### Outlook을 안 쓴다면 — 아무것도 안 해도 됩니다
 
@@ -403,6 +403,20 @@ Office 인터롭 어셈블리에 링크하지 않고 **런타임 바인딩**으�
 
 빠른 입력창에서 **`→ Outlook` 칩**이 뜨면 이번 항목이 전송된다는 뜻입니다.
 
+### 고치고 지우면 Outlook도 따라옵니다
+
+`!OL` 로 보낸 항목은 `ExternalLink` (Outlook의 EntryID + StoreID)를 들고 있습니다. 이걸로 그 항목을 다시 열어서 고치거나 지웁니다.
+
+| Flowdeck에서 한 일 | Outlook 사본 |
+|---|---|
+| 편집창에서 **저장** | 같이 고쳐집니다. 지운 필드도 같이 지워집니다 (알림 끄기, 반복 없애기, 날짜 비우기) |
+| **삭제** | 같이 지워집니다. **묻지 않습니다.** 지운 편지함으로 가므로 복구는 됩니다 |
+| 편집·삭제 전에 **연동을 꺼둠** | 아무것도 안 합니다. 로컬만 바뀝니다 |
+
+**사본을 못 찾으면** — Outlook에서 이미 지웠거나, **다른 폴더로 옮겼을 때** (Outlook은 항목을 옮기면 EntryID를 새로 발급합니다. 그래서 "옮겨짐"과 "지워짐"을 여기서는 구분할 수 없습니다) — 연결을 끊고 그 항목은 로컬 전용이 됩니다. 편집창이 그렇게 알려줍니다.
+
+**Outlook이 응답을 안 하면** 로컬 변경은 그대로 두고 알려만 줍니다. 편집은 사용자의 것이고, 사서함이 대답 안 한다고 잃을 이유가 없습니다. 삭제 중이었다면 트레이 알림으로 "직접 지워 주세요" 라고 뜹니다.
+
 ### 넘어가는 것
 
 | Flowdeck | Outlook |
@@ -422,7 +436,7 @@ Outlook 작업은 **시각 없이 날짜만** 가집니다(Outlook 자체 제약
 - **저장은 항상 로컬이 먼저입니다.** Outlook이 꺼져 있거나 오류가 나도 **입력한 항목은 절대 사라지지 않고**, 트레이 알림으로 "Outlook 저장 실패 (항목은 저장되었습니다)" 라고 알려줍니다.
 - Outlook이 실행 중이 아니면 첫 전송 때 Outlook이 뜨면서 몇 초 걸릴 수 있습니다. 이 작업은 **별도 스레드에서 처리해서 위젯이 멈추지 않습니다.**
 - **알림이 두 번 올 수 있습니다.** Outlook 미리 알림과 Flowdeck 트레이 알림이 각각 뜨므로, 한쪽은 쓰지 않는 편이 낫습니다.
-- 전송은 **새로 입력할 때 한 번**입니다. 나중에 Flowdeck에서 고쳐도 Outlook 쪽은 따라 바뀌지 않습니다.
+- **Outlook 쪽에서 직접 고친 내용은 덮어씁니다.** 읽어오지 않으니까요. 회의를 Outlook에서 30분 미룬 뒤 Flowdeck에서 제목만 고쳐도 시각이 원래대로 돌아갑니다. Outlook에서 고칠 일이 있는 항목이면 `!NOL` 로 보내지 않는 편이 낫습니다.
 
 ### 나중에 읽기까지 하려면
 
@@ -438,7 +452,7 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 | "항상 저장" vs 읽기 = 무한 증식 | **막아둠** | 이미 `ExternalLink` 가 붙은 항목은 다시 보내지 않습니다. 이 방어가 없으면 읽어온 항목을 되쏘고, 그게 또 읽히면서 읽을 때마다 복제됩니다. |
 | `!NOL` 항목 | **충돌 없음** | 링크가 없으니 읽기 쪽에서 건드릴 대상이 아닙니다. 계속 로컬로 남습니다. |
 | 기본 분류 `둘 다` + 읽기 | **주의** | 한 줄이 일정 1 + 할일 1로 갈라져 Outlook에도 둘로 들어갑니다. 이후 Outlook에서 약속만 고치면 **할일 쪽은 따라오지 않습니다.** 둘로 나뉜 순간부터 서로 남남입니다. |
-| 로컬에서 삭제 | **현재 한계** | Outlook 쪽은 남습니다. "항상 저장"을 켜두면 이 차이가 눈에 띄게 쌓이니, 읽기를 붙일 때 삭제 동기화도 같이 정해야 합니다. |
+| 로컬에서 삭제 | **해결됨** | Outlook 사본도 같이 지웁니다. 읽기를 붙일 때는 반대 방향(Outlook에서 지운 것)만 정하면 됩니다. |
 
 ---
 
@@ -601,7 +615,7 @@ flowdeck/
 │       ├── Views/                CapturePage, CalendarPage, ListPage, EditPage, SettingsPage
 │       ├── ViewModels/
 │       └── Platforms/Android/    위젯, 알림, 빠른 입력 액티비티
-├── tests/Flowdeck.Core.Tests/    xUnit 324개
+├── tests/Flowdeck.Core.Tests/    xUnit 334개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -617,7 +631,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 324 tests
+dotnet test tests/Flowdeck.Core.Tests    # 334 tests
 dotnet build Flowdeck.sln -c Release
 ```
 

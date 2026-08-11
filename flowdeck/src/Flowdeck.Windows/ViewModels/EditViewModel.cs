@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows.Input;
+using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
 using Flowdeck.Core.Services;
 using Flowdeck.Windows.Infrastructure;
@@ -230,10 +231,25 @@ public sealed class EditViewModel : ObservableObject
             ? await _repository.UpdateTodoAsync(_todo!.Id, edit, _clock())
             : await _repository.UpdateEventAsync(_event!.Id, edit, _clock());
 
-        if (!saved)
+        if (!saved.Found)
         {
             Status = "이미 삭제된 항목입니다";
             return;
+        }
+
+        // The edit is saved either way. What is left to say is whether the Outlook copy
+        // came along, and that is only worth a word when it did not — so the window stays
+        // open with the reason on it rather than closing on a change half made.
+        var name = _repository.External?.DisplayName ?? "Outlook";
+        switch (saved.External)
+        {
+            case ExternalSync.Lost:
+                Status = $"{name} 쪽 항목을 찾지 못해 연결을 끊었습니다. 이 항목은 이제 로컬에만 있습니다.";
+                return;
+
+            case ExternalSync.Failed:
+                Status = $"저장했지만 {name} 에는 반영하지 못했습니다.";
+                return;
         }
 
         Finished?.Invoke(this, EventArgs.Empty);

@@ -134,6 +134,10 @@ public partial class App : Application, IAppShell
         _hotKeys = new HotKeyService();
         var hotKeyProblem = ReapplyHotKeys();
 
+        // A swipe-delete has no window to report into, so the repository says it here.
+        _repository.ExternalWarning += (_, message) => Dispatcher.Invoke(
+            () => _tray?.Notify(_repository.External?.DisplayName ?? "Outlook", message));
+
         _reminders = new ReminderService(_repository, (title, message) => _tray?.Notify(title, message));
         _reminders.Start();
 

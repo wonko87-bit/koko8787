@@ -178,7 +178,7 @@ public class EntryEditTests
         var repository = await Capture("!TD 오늘 오후 3시 보고서 제출");
         var todo = repository.Todos[0];
 
-        var ok = await repository.UpdateTodoAsync(todo.Id, new EntryEdit
+        var result = await repository.UpdateTodoAsync(todo.Id, new EntryEdit
         {
             Title = "분기 보고서 제출",
             Notes = "3장부터\n다시",
@@ -189,7 +189,7 @@ public class EntryEditTests
             ReminderMinutesBefore = 60,
         }, Later);
 
-        Assert.True(ok);
+        Assert.True(result.Found);
         Assert.Equal("분기 보고서 제출", todo.Title);
         Assert.Equal("3장부터\n다시", todo.Notes);
         Assert.Equal(new DateTime(2026, 8, 14, 17, 0, 0), todo.DueAt);
@@ -282,7 +282,7 @@ public class EntryEditTests
         var id = repository.Todos[0].Id;
         await repository.DeleteTodoAsync(id);
 
-        Assert.False(await repository.UpdateTodoAsync(id, new EntryEdit { Title = "고침" }, Later));
-        Assert.False(await repository.UpdateEventAsync(id, new EntryEdit { Title = "고침" }, Later));
+        Assert.False((await repository.UpdateTodoAsync(id, new EntryEdit { Title = "고침" }, Later)).Found);
+        Assert.False((await repository.UpdateEventAsync(id, new EntryEdit { Title = "고침" }, Later)).Found);
     }
 }

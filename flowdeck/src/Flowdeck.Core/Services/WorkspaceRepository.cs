@@ -13,6 +13,13 @@ public sealed record TagCount(string Tag, int Count);
 /// The fields an edit screen may change. Everything else about an entry — its id, when it
 /// was created, where it was sent — belongs to the app rather than to the user.
 /// </summary>
+/// <summary>What an edit did, here and outside.</summary>
+public sealed record EntryEditResult(bool Found, ExternalSync External)
+{
+    /// <summary>The entry was deleted from elsewhere while the edit screen was open.</summary>
+    public static readonly EntryEditResult Gone = new(false, ExternalSync.None);
+}
+
 public sealed class EntryEdit
 {
     public string Title { get; set; } = string.Empty;
@@ -93,6 +100,12 @@ public sealed class WorkspaceRepository
 
     /// <summary>Raised after any mutation, on the thread that performed it.</summary>
     public event EventHandler? Changed;
+
+    /// <summary>
+    /// Raised when the copy outside Flowdeck could not be kept in step and there is no
+    /// screen to say so on — a swipe-delete, mostly. The app surfaces it.
+    /// </summary>
+    public event EventHandler<string>? ExternalWarning;
 
     public IReadOnlyList<TodoItem> Todos => _workspace.Todos;
 
@@ -207,13 +220,14 @@ public sealed class WorkspaceRepository
     }
 
     /// <summary>
-    /// Applies an edit to a todo. Returns false when the id is gone, which happens if the
-    /// entry was deleted from somewhere else while the edit screen was open.
+    /// Applies an edit to a todo. <see cref="EntryEditResult.Found"/> is false when the id
+    /// is gone, which happens if the entry was deleted from somewhere else while the edit
+    /// screen was open.
     /// </summary>
-    public async Task<bool> UpdateTodoAsync(string id, EntryEdit edit, DateTime now)
+    public async Task<EntryEditResult> UpdateTodoAsync(string id, EntryEdit edit, DateTime now)
     {
         var todo = _workspace.Todos.FirstOrDefault(t => t.Id == id);
-        if (todo is null) return false;
+        if (todo is null) return EntryEditResult.Gone;
 
         todo.Title = Named(edit.Title);
         todo.Notes = edit.Notes ?? string.Empty;
@@ -224,19 +238,21 @@ public sealed class WorkspaceRepository
         todo.ReminderMinutesBefore = edit.When.HasValue ? edit.ReminderMinutesBefore : null;
         todo.UpdatedAt = now;
 
+        var sync = await MirrorAsync(todo.ExternalLink, () => External!.UpdateAsync(todo), () => todo.ExternalLink = null);
+
         await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
-        return true;
+        return new EntryEditResult(true, sync);
     }
 
     /// <summary>
     /// Applies an edit to an event. Moving the start carries the end with it: an hour-long
     /// meeting dragged to the afternoon is still an hour long.
     /// </summary>
-    public async Task<bool> UpdateEventAsync(string id, EntryEdit edit, DateTime now)
+    public async Task<EntryEditResult> UpdateEventAsync(string id, EntryEdit edit, DateTime now)
     {
         var source = _workspace.Events.FirstOrDefault(e => e.Id == id);
-        if (source is null) return false;
+        if (source is null) return EntryEditResult.Gone;
 
         var span = source.End - source.Start;
         if (span < TimeSpan.Zero) span = TimeSpan.Zero;
@@ -255,9 +271,60 @@ public sealed class WorkspaceRepository
         source.ReminderMinutesBefore = edit.ReminderMinutesBefore;
         source.UpdatedAt = now;
 
+        var sync = await MirrorAsync(source.ExternalLink, () => External!.UpdateAsync(source), () => source.ExternalLink = null);
+
         await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
-        return true;
+        return new EntryEditResult(true, sync);
+    }
+
+    /// <summary>
+    /// Keeps the copy outside Flowdeck in step with a change just made here.
+    ///
+    /// Never throws and never blocks the local save. The edit is the user's, it is already
+    /// applied, and a mailbox that will not answer is not a reason to lose it.
+    /// </summary>
+    private async Task<ExternalSync> MirrorAsync(ExternalLink? link, Func<Task<bool>> work, Action onLost)
+    {
+        if (link is null || External is null) return ExternalSync.None;
+
+        try
+        {
+            if (await work()) return ExternalSync.Updated;
+        }
+        catch (Exception)
+        {
+            return ExternalSync.Failed;
+        }
+
+        // Not there any more. Keeping a link that resolves to nothing would make every
+        // later edit fail the same way, so it goes and the entry carries on as a local one.
+        onLost();
+        return ExternalSync.Lost;
+    }
+
+    /// <summary>
+    /// Takes the copy outside Flowdeck down with the entry.
+    ///
+    /// A delete that has already happened over there is not a failure — the copy is absent
+    /// either way, which was the point. Only a mailbox that refused is worth mentioning,
+    /// and there is no screen open to mention it on, hence the event.
+    /// </summary>
+    private async Task RemoveCopyAsync(ExternalLink? link, string title)
+    {
+        var external = External;
+        if (link is null || external is null) return;
+
+        try
+        {
+            await external.DeleteAsync(link);
+        }
+        catch (Exception e)
+        {
+            ExternalWarning?.Invoke(
+                this,
+                $"'{title}' 을(를) {external.DisplayName}에서 지우지 못했습니다. 직접 지워 주세요. ({e.Message})");
+        }
     }
 
     /// <summary>An entry with its title erased still has to be findable in a list.</summary>
@@ -269,6 +336,7 @@ public sealed class WorkspaceRepository
         var todo = _workspace.Todos.FirstOrDefault(t => t.Id == id);
         if (todo is null) return;
 
+        await RemoveCopyAsync(todo.ExternalLink, todo.Title);
         _workspace.Todos.Remove(todo);
         foreach (var linked in _workspace.Events.Where(e => e.LinkedTodoId == id))
         {
@@ -284,6 +352,7 @@ public sealed class WorkspaceRepository
         var calendarEvent = _workspace.Events.FirstOrDefault(e => e.Id == id);
         if (calendarEvent is null) return;
 
+        await RemoveCopyAsync(calendarEvent.ExternalLink, calendarEvent.Title);
         _workspace.Events.Remove(calendarEvent);
         foreach (var linked in _workspace.Todos.Where(t => t.LinkedEventId == id))
         {

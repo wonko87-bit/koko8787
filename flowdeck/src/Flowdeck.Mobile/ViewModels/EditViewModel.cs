@@ -203,7 +203,7 @@ public sealed class EditViewModel : ObservableObject
             ? await Workspace.Repository.UpdateTodoAsync(_todo!.Id, edit, _clock())
             : await Workspace.Repository.UpdateEventAsync(_event!.Id, edit, _clock());
 
-        if (!saved)
+        if (!saved.Found)
         {
             Status = "이미 삭제된 항목입니다";
             return;

@@ -30,6 +30,9 @@ public sealed class OutlookBridge : IExternalStore
     private const int OlRecursMonthly = 2;
     private const int OlRecursYearly = 5;
 
+    /// <summary>Outlook's stand-in for a task with no date. It has no null.</summary>
+    private static readonly DateTime NoDate = new(4501, 1, 1);
+
     private const int OlImportanceLow = 0;
     private const int OlImportanceNormal = 1;
     private const int OlImportanceHigh = 2;
@@ -50,6 +53,67 @@ public sealed class OutlookBridge : IExternalStore
     public Task<ExternalLink> PushAsync(TodoItem todo, CancellationToken cancellationToken = default) =>
         RunOnStaAsync(() => CreateTask(todo), cancellationToken);
 
+    public Task<bool> UpdateAsync(CalendarEvent calendarEvent, CancellationToken cancellationToken = default) =>
+        RunOnStaAsync(() => Rewrite(calendarEvent.ExternalLink, item => Fill(item, calendarEvent)), cancellationToken);
+
+    public Task<bool> UpdateAsync(TodoItem todo, CancellationToken cancellationToken = default) =>
+        RunOnStaAsync(() => Rewrite(todo.ExternalLink, item => Fill(item, todo)), cancellationToken);
+
+    public Task<bool> DeleteAsync(ExternalLink link, CancellationToken cancellationToken = default) =>
+        RunOnStaAsync(() => Rewrite(link, item => { item.Delete(); }, save: false), cancellationToken);
+
+    // ---- changing what is already there ------------------------------------
+
+    /// <summary>
+    /// Reopens the item the link points at and does something to it.
+    ///
+    /// False means the item is not there any more — deleted in Outlook, or moved to another
+    /// folder, which hands it a new EntryID and makes it unreachable through the old one.
+    /// Those two are indistinguishable from here and are treated the same: the link is
+    /// stale, and the caller drops it. Anything else — Outlook missing, refusing, or
+    /// throwing — is a real failure and comes back as an exception.
+    /// </summary>
+    private static bool Rewrite(ExternalLink? link, Action<dynamic> work, bool save = true)
+    {
+        if (link is null || string.IsNullOrEmpty(link.EntryId)) return false;
+
+        dynamic? application = null;
+        dynamic? session = null;
+        dynamic? item = null;
+
+        try
+        {
+            application = CreateApplication();
+            session = application.Session;
+
+            try
+            {
+                // The store id narrows the search when several mailboxes are connected.
+                // Outlook accepts the call without one, so an older link still resolves.
+                item = string.IsNullOrEmpty(link.StoreId)
+                    ? session.GetItemFromID(link.EntryId)
+                    : session.GetItemFromID(link.EntryId, link.StoreId);
+            }
+            catch (COMException)
+            {
+                // The documented way Outlook says "no such item".
+                return false;
+            }
+
+            if (item is null) return false;
+
+            work(item);
+            if (save) item.Save();
+            return true;
+        }
+        finally
+        {
+            Release(item);
+            Release(session);
+            Release(application);
+        }
+    }
+
     // ---- appointments ------------------------------------------------------
 
     private ExternalLink CreateAppointment(CalendarEvent source)
@@ -62,38 +126,7 @@ public sealed class OutlookBridge : IExternalStore
             application = CreateApplication();
             item = application.CreateItem(OlAppointmentItem);
 
-            item.Subject = source.Title;
-            if (!string.IsNullOrWhiteSpace(source.Location)) item.Location = source.Location;
-            item.Body = BuildBody(source.Notes, source.SourceText);
-
-            if (source.IsAllDay)
-            {
-                // Set the flag first: Outlook snaps the times to whole days as it is applied,
-                // and its end is exclusive, unlike ours which runs to the last second.
-                item.AllDayEvent = true;
-                item.Start = source.Start.Date;
-                item.End = source.End.Date.AddDays(1);
-            }
-            else
-            {
-                item.Start = source.Start;
-                item.End = source.End > source.Start ? source.End : source.Start.AddHours(1);
-            }
-
-            if (source.Tags.Count > 0) item.Categories = string.Join(", ", source.Tags);
-
-            if (source.ReminderMinutesBefore is > 0)
-            {
-                item.ReminderSet = true;
-                item.ReminderMinutesBeforeStart = source.ReminderMinutesBefore.Value;
-            }
-            else
-            {
-                item.ReminderSet = false;
-            }
-
-            ApplyRecurrence(item, source.Recurrence, source.Start);
-
+            Fill(item, source);
             item.Save();
             return LinkFrom(item);
         }
@@ -102,6 +135,46 @@ public sealed class OutlookBridge : IExternalStore
             Release(item);
             Release(application);
         }
+    }
+
+    /// <summary>
+    /// Writes the whole event onto an Outlook appointment, new or existing. Every field is
+    /// set on every pass, including the ones being cleared — a reminder switched off here
+    /// has to be switched off there too, and leaving a field alone would keep the old value.
+    /// </summary>
+    private static void Fill(dynamic item, CalendarEvent source)
+    {
+        item.Subject = source.Title;
+        item.Location = source.Location ?? string.Empty;
+        item.Body = BuildBody(source.Notes, source.SourceText);
+
+        if (source.IsAllDay)
+        {
+            // Set the flag first: Outlook snaps the times to whole days as it is applied,
+            // and its end is exclusive, unlike ours which runs to the last second.
+            item.AllDayEvent = true;
+            item.Start = source.Start.Date;
+            item.End = source.End.Date.AddDays(1);
+        }
+        else
+        {
+            item.Start = source.Start;
+            item.End = source.End > source.Start ? source.End : source.Start.AddHours(1);
+        }
+
+        item.Categories = string.Join(", ", source.Tags);
+
+        if (source.ReminderMinutesBefore is > 0)
+        {
+            item.ReminderSet = true;
+            item.ReminderMinutesBeforeStart = source.ReminderMinutesBefore.Value;
+        }
+        else
+        {
+            item.ReminderSet = false;
+        }
+
+        ApplyRecurrence(item, source.Recurrence, source.Start);
     }
 
     // ---- tasks -------------------------------------------------------------
@@ -116,34 +189,7 @@ public sealed class OutlookBridge : IExternalStore
             application = CreateApplication();
             item = application.CreateItem(OlTaskItem);
 
-            item.Subject = source.Title;
-            item.Body = BuildBody(source.Notes, source.SourceText);
-
-            if (source.DueAt.HasValue)
-            {
-                // Outlook tasks are due on a day, not at an hour; the time of day only
-                // survives on the reminder.
-                item.DueDate = source.DueAt.Value.Date;
-                item.StartDate = source.DueAt.Value.Date;
-            }
-
-            item.Importance = source.Priority switch
-            {
-                Priority.Urgent or Priority.High => OlImportanceHigh,
-                Priority.Low => OlImportanceLow,
-                _ => OlImportanceNormal,
-            };
-
-            if (source.Tags.Count > 0) item.Categories = string.Join(", ", source.Tags);
-
-            if (source.DueAt.HasValue && source.ReminderMinutesBefore is > 0)
-            {
-                item.ReminderSet = true;
-                item.ReminderTime = source.DueAt.Value.AddMinutes(-source.ReminderMinutesBefore.Value);
-            }
-
-            if (source.DueAt.HasValue) ApplyRecurrence(item, source.Recurrence, source.DueAt.Value);
-
+            Fill(item, source);
             item.Save();
             return LinkFrom(item);
         }
@@ -152,6 +198,49 @@ public sealed class OutlookBridge : IExternalStore
             Release(item);
             Release(application);
         }
+    }
+
+    /// <summary>Writes the whole todo onto an Outlook task, new or existing.</summary>
+    private static void Fill(dynamic item, TodoItem source)
+    {
+        item.Subject = source.Title;
+        item.Body = BuildBody(source.Notes, source.SourceText);
+
+        if (source.DueAt.HasValue)
+        {
+            // Outlook tasks are due on a day, not at an hour; the time of day only
+            // survives on the reminder.
+            item.DueDate = source.DueAt.Value.Date;
+            item.StartDate = source.DueAt.Value.Date;
+        }
+        else
+        {
+            // Outlook has no null date. This particular day is its stand-in for "none",
+            // and assigning anything else would give a someday todo a due date of its own.
+            item.DueDate = NoDate;
+            item.StartDate = NoDate;
+        }
+
+        item.Importance = source.Priority switch
+        {
+            Priority.Urgent or Priority.High => OlImportanceHigh,
+            Priority.Low => OlImportanceLow,
+            _ => OlImportanceNormal,
+        };
+
+        item.Categories = string.Join(", ", source.Tags);
+
+        if (source.DueAt.HasValue && source.ReminderMinutesBefore is > 0)
+        {
+            item.ReminderSet = true;
+            item.ReminderTime = source.DueAt.Value.AddMinutes(-source.ReminderMinutesBefore.Value);
+        }
+        else
+        {
+            item.ReminderSet = false;
+        }
+
+        if (source.DueAt.HasValue) ApplyRecurrence(item, source.Recurrence, source.DueAt.Value);
     }
 
     // ---- shared ------------------------------------------------------------
@@ -171,7 +260,13 @@ public sealed class OutlookBridge : IExternalStore
     /// </summary>
     private static void ApplyRecurrence(dynamic item, Recurrence recurrence, DateTime start)
     {
-        if (!recurrence.IsRepeating) return;
+        if (!recurrence.IsRepeating)
+        {
+            // An entry that has stopped repeating has to stop repeating there too. Harmless
+            // on an item that never did.
+            item.ClearRecurrencePattern();
+            return;
+        }
 
         dynamic? pattern = null;
         try
