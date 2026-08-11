@@ -207,6 +207,9 @@ public sealed class WorkspaceRepository
                 todo.UpdatedAt = now;
                 await SaveAsync();
                 Changed?.Invoke(this, EventArgs.Empty);
+
+                // Not finished, moved on — so the copy gets the new date rather than a tick.
+                await MirrorToggleAsync(todo);
                 return;
             }
         }
@@ -217,6 +220,42 @@ public sealed class WorkspaceRepository
 
         await SaveAsync();
         Changed?.Invoke(this, EventArgs.Empty);
+
+        await MirrorToggleAsync(todo);
+    }
+
+    /// <summary>
+    /// Carries a tick through to the copy outside Flowdeck, so a todo finished here does not
+    /// sit unfinished in Outlook — and in To Do and Teams, which are the same folder seen
+    /// from elsewhere.
+    ///
+    /// Deliberately after the local save and the change notification: the box is ticked and
+    /// the list has redrawn before Outlook is asked anything, so attaching to it — which
+    /// takes seconds when it is not already running — is never felt as a stuck checkbox.
+    /// </summary>
+    private async Task MirrorToggleAsync(TodoItem todo)
+    {
+        var external = External;
+        if (todo.ExternalLink is null || external is null) return;
+
+        var sync = await MirrorAsync(todo.ExternalLink, () => external.UpdateAsync(todo), () => todo.ExternalLink = null);
+
+        switch (sync)
+        {
+            case ExternalSync.Lost:
+                // The dropped link has to survive a restart, hence the second write.
+                await SaveAsync();
+                ExternalWarning?.Invoke(
+                    this,
+                    $"'{todo.Title}' 을(를) {external.DisplayName}에서 찾지 못해 연결을 끊었습니다. 이제 로컬에만 있습니다.");
+                break;
+
+            case ExternalSync.Failed:
+                ExternalWarning?.Invoke(
+                    this,
+                    $"'{todo.Title}' 의 완료 표시를 {external.DisplayName}에 반영하지 못했습니다.");
+                break;
+        }
     }
 
     /// <summary>

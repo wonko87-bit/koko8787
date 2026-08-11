@@ -221,6 +221,12 @@ public sealed class OutlookBridge : IExternalStore
             item.StartDate = NoDate;
         }
 
+        // Outlook derives its status and percentage from this one flag, and stamps today
+        // as the completion date. Ours is stamped after, so a todo ticked off yesterday
+        // does not read as finished today.
+        item.Complete = source.IsDone;
+        if (source.IsDone && source.CompletedAt.HasValue) item.DateCompleted = source.CompletedAt.Value.Date;
+
         item.Importance = source.Priority switch
         {
             Priority.Urgent or Priority.High => OlImportanceHigh,

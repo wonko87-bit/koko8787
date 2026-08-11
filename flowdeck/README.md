@@ -410,6 +410,7 @@ Office 인터롭 어셈블리에 링크하지 않고 **런타임 바인딩**으�
 | Flowdeck에서 한 일 | Outlook 사본 |
 |---|---|
 | 편집창에서 **저장** | 같이 고쳐집니다. 지운 필드도 같이 지워집니다 (알림 끄기, 반복 없애기, 날짜 비우기) |
+| 할일 **체크 / 체크 해제** | 같이 완료됩니다. 반복 할일은 완료가 아니라 **다음 차례 날짜**가 넘어갑니다 |
 | **삭제** | 같이 지워집니다. **묻지 않습니다.** 지운 편지함으로 가므로 복구는 됩니다 |
 | 편집·삭제 전에 **연동을 꺼둠** | 아무것도 안 합니다. 로컬만 바뀝니다 |
 
@@ -427,6 +428,7 @@ Office 인터롭 어셈블리에 링크하지 않고 **런타임 바인딩**으�
 | 알림 (N분 전) | 미리 알림 |
 | 태그 | 범주(Categories) |
 | 우선순위 | 작업 중요도 |
+| 완료 여부 | 작업 완료 표시 + 완료일 |
 | 원본 입력 문장 | 본문에 `[Flowdeck] ...` 로 기록 |
 
 Outlook 작업은 **시각 없이 날짜만** 가집니다(Outlook 자체 제약). 시각은 미리 알림에 남습니다.
@@ -615,7 +617,7 @@ flowdeck/
 │       ├── Views/                CapturePage, CalendarPage, ListPage, EditPage, SettingsPage
 │       ├── ViewModels/
 │       └── Platforms/Android/    위젯, 알림, 빠른 입력 액티비티
-├── tests/Flowdeck.Core.Tests/    xUnit 334개
+├── tests/Flowdeck.Core.Tests/    xUnit 340개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -631,7 +633,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 334 tests
+dotnet test tests/Flowdeck.Core.Tests    # 340 tests
 dotnet build Flowdeck.sln -c Release
 ```
 

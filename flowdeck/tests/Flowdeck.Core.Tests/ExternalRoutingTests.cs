@@ -398,3 +398,108 @@ public class ExternalMirrorTests
         Assert.Empty(warnings);
     }
 }
+
+/// <summary>
+/// Ticking a todo off here has to tick it off there. The Outlook task folder is what MS To
+/// Do and Teams Tasks both show, so one left unfinished shows up unfinished in three places.
+/// </summary>
+public class ExternalCompletionTests
+{
+    private static readonly DateTime Now = new(2026, 8, 7, 10, 0, 0);
+    private static readonly DateTime Later = new(2026, 8, 8, 10, 0, 0);
+
+    private static async Task<(WorkspaceRepository Repository, FakeExternalStore Store)> Capture(string line)
+    {
+        var store = new FakeExternalStore();
+        var repository = new WorkspaceRepository(new InMemoryStore(), store);
+        await repository.CaptureAsync(new NaturalLanguageParser().Parse(line, Now), Now);
+        return (repository, store);
+    }
+
+    [Fact]
+    public async Task TickingOffPushesTheCompletion()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+
+        await repository.ToggleTodoAsync(repository.Todos[0].Id, Later);
+
+        Assert.True(repository.Todos[0].IsDone);
+        Assert.Equal(new[] { "보고서 제출" }, store.UpdatedTodos);
+    }
+
+    /// <summary>Unticking is the same trip, the other way.</summary>
+    [Fact]
+    public async Task UntickingPushesToo()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        var id = repository.Todos[0].Id;
+
+        await repository.ToggleTodoAsync(id, Later);
+        await repository.ToggleTodoAsync(id, Later);
+
+        Assert.False(repository.Todos[0].IsDone);
+        Assert.Equal(2, store.UpdatedTodos.Count);
+    }
+
+    /// <summary>
+    /// A repeating todo is not finished when it is ticked — it moves to its next turn. What
+    /// the copy needs is the new date, not a tick, and pushing the whole record gives it
+    /// exactly that.
+    /// </summary>
+    [Fact]
+    public async Task ARepeatingTodoPushesItsNextTurnRatherThanACompletion()
+    {
+        var (repository, store) = await Capture("!OL !TD 매일 오전 7시 스트레칭");
+        var before = repository.Todos[0].DueAt;
+
+        await repository.ToggleTodoAsync(repository.Todos[0].Id, Later);
+
+        Assert.False(repository.Todos[0].IsDone);
+        Assert.NotEqual(before, repository.Todos[0].DueAt);
+        Assert.Single(store.UpdatedTodos);
+    }
+
+    [Fact]
+    public async Task ATodoWithNoCopyIsTickedOffQuietly()
+    {
+        var (repository, store) = await Capture("!NOL !TD 내일 오후 3시 보고서 제출");
+
+        await repository.ToggleTodoAsync(repository.Todos[0].Id, Later);
+
+        Assert.True(repository.Todos[0].IsDone);
+        Assert.Empty(store.UpdatedTodos);
+    }
+
+    /// <summary>The tick is the user's. Outlook not answering does not undo it.</summary>
+    [Fact]
+    public async Task AFailedPushLeavesTheTickInPlaceAndWarns()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        store.ShouldFail = true;
+
+        var warnings = new List<string>();
+        repository.ExternalWarning += (_, message) => warnings.Add(message);
+
+        await repository.ToggleTodoAsync(repository.Todos[0].Id, Later);
+
+        Assert.True(repository.Todos[0].IsDone);
+        Assert.NotNull(repository.Todos[0].ExternalLink);
+        Assert.Single(warnings);
+    }
+
+    [Fact]
+    public async Task ACopyThatHasGoneDropsTheLinkAndSaysSo()
+    {
+        var (repository, store) = await Capture("!OL !TD 내일 오후 3시 보고서 제출");
+        store.Missing.Add(repository.Todos[0].ExternalLink!.EntryId);
+
+        var warnings = new List<string>();
+        repository.ExternalWarning += (_, message) => warnings.Add(message);
+
+        await repository.ToggleTodoAsync(repository.Todos[0].Id, Later);
+
+        Assert.True(repository.Todos[0].IsDone);
+        Assert.Null(repository.Todos[0].ExternalLink);
+        Assert.Single(warnings);
+    }
+}
