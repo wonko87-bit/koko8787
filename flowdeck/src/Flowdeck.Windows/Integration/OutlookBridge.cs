@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Flowdeck.Core.Integration;
@@ -18,12 +19,21 @@ namespace Flowdeck.Windows.Integration;
 /// whichever Outlook version is present, and lets a machine without Outlook simply report
 /// itself unavailable instead of failing to load.
 /// </summary>
-public sealed class OutlookBridge : IExternalStore
+public sealed class OutlookBridge : IExternalStore, IExternalCalendarReader
 {
     // Outlook object model constants. Named here rather than referenced from an interop
     // assembly, which is the whole point of binding late.
     private const int OlAppointmentItem = 1;
     private const int OlTaskItem = 3;
+
+    private const int OlFolderCalendar = 9;
+
+    /// <summary>
+    /// A ceiling on how many items one read will walk. Reached only by a diary with
+    /// thousands of meetings in the window, or by a repeat with no end that the date filter
+    /// somehow did not bound — and an overlay is not worth hanging the app over either way.
+    /// </summary>
+    private const int ReadCeiling = 2000;
 
     private const int OlRecursDaily = 0;
     private const int OlRecursWeekly = 1;
@@ -61,6 +71,119 @@ public sealed class OutlookBridge : IExternalStore
 
     public Task<bool> DeleteAsync(ExternalLink link, CancellationToken cancellationToken = default) =>
         RunOnStaAsync(() => Rewrite(link, item => { item.Delete(); }, save: false), cancellationToken);
+
+    // ---- reading the calendar ----------------------------------------------
+
+    public Task<IReadOnlyList<ExternalOccurrence>> ReadCalendarAsync(
+        DateTime from,
+        DateTime to,
+        CancellationToken cancellationToken = default) =>
+        RunOnStaAsync(() => ReadCalendar(from, to), cancellationToken);
+
+    /// <summary>
+    /// Walks the default calendar folder over a window, with repeats expanded.
+    ///
+    /// The three-step preparation below is not stylistic — Outlook requires it in exactly
+    /// this order, and silently returns only the repeat's first occurrence otherwise. Sort
+    /// by start, then ask for recurrences, then filter. Any other order loses the expansion.
+    /// </summary>
+    private static IReadOnlyList<ExternalOccurrence> ReadCalendar(DateTime from, DateTime to)
+    {
+        dynamic? application = null;
+        dynamic? session = null;
+        dynamic? folder = null;
+        dynamic? items = null;
+        dynamic? window = null;
+
+        var found = new List<ExternalOccurrence>();
+
+        try
+        {
+            application = CreateApplication();
+            session = application.Session;
+            folder = session.GetDefaultFolder(OlFolderCalendar);
+            items = folder.Items;
+
+            items.Sort("[Start]");
+            items.IncludeRecurrences = true;
+
+            window = Restrict(items, from, to);
+
+            // Expanded recurrences cannot be indexed, only walked. GetFirst/GetNext is the
+            // only traversal Outlook supports once IncludeRecurrences is on.
+            dynamic? item = window.GetFirst();
+            var seen = 0;
+
+            while (item is not null && seen++ < ReadCeiling)
+            {
+                try
+                {
+                    var start = (DateTime)item.Start;
+
+                    // A never-ending repeat runs past the window when the filter did not
+                    // take. Sorted by start, the first one past the end is the last one.
+                    if (start > to) break;
+
+                    var isAllDay = (bool)item.AllDayEvent;
+                    var end = (DateTime)item.End;
+
+                    if (end > from)
+                    {
+                        found.Add(new ExternalOccurrence(
+                            EntryId: (string)item.EntryID,
+                            Title: item.Subject as string ?? string.Empty,
+                            Start: start,
+                            // Outlook's all-day end is exclusive — midnight the next
+                            // morning — and ours runs to the last second of the last day.
+                            End: isAllDay ? end.AddTicks(-1) : end,
+                            IsAllDay: isAllDay,
+                            Location: item.Location as string ?? string.Empty));
+                    }
+                }
+                finally
+                {
+                    var previous = item;
+                    item = window.GetNext();
+                    Release(previous);
+                }
+            }
+        }
+        finally
+        {
+            Release(window);
+            Release(items);
+            Release(folder);
+            Release(session);
+            Release(application);
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Narrows the walk to the window.
+    ///
+    /// Outlook parses the dates in this filter using Windows' own regional settings, which
+    /// is what the current culture reflects — so the machine's format is the correct one to
+    /// write, not an invariant one. If it refuses anyway, the unfiltered collection is
+    /// handed back: it is sorted by start and the caller stops at the window's end, so the
+    /// answer is the same and only the walk is longer.
+    /// </summary>
+    private static dynamic Restrict(dynamic items, DateTime from, DateTime to)
+    {
+        try
+        {
+            var filter =
+                $"[End] >= '{from.ToString("g", CultureInfo.CurrentCulture)}' " +
+                $"AND [Start] <= '{to.ToString("g", CultureInfo.CurrentCulture)}'";
+
+            return items.Restrict(filter);
+        }
+        catch (Exception e) when (e is COMException or Microsoft.CSharp.RuntimeBinder.RuntimeBinderException)
+        {
+            return items;
+        }
+    }
 
     // ---- changing what is already there ------------------------------------
 

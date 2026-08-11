@@ -19,6 +19,7 @@ public sealed class WidgetViewModel : ObservableObject
     private readonly NaturalLanguageParser _parser;
     private readonly Func<DateTime> _clock;
     private readonly Dispatcher? _dispatcher;
+    private readonly ExternalCalendarFeed? _calendar;
 
     private DateTime _visibleMonth;
     private DateTime _selectedDate;
@@ -35,11 +36,13 @@ public sealed class WidgetViewModel : ObservableObject
     public WidgetViewModel(
         WorkspaceRepository repository,
         NaturalLanguageParser parser,
-        Func<DateTime>? clock = null)
+        Func<DateTime>? clock = null,
+        ExternalCalendarFeed? calendar = null)
     {
         _repository = repository;
         _parser = parser;
         _clock = clock ?? (() => DateTime.Now);
+        _calendar = calendar;
 
         var today = _clock().Date;
         _visibleMonth = new DateTime(today.Year, today.Month, 1);
@@ -55,6 +58,7 @@ public sealed class WidgetViewModel : ObservableObject
         // else still has to land here, because these collections are bound to the widget.
         _dispatcher = Dispatcher.FromThread(Thread.CurrentThread);
         _repository.Changed += (_, _) => OnRepositoryChanged();
+        if (_calendar is not null) _calendar.Changed += (_, _) => OnRepositoryChanged();
 
         BuildWeekdayHeaders();
         Refresh();
@@ -68,6 +72,16 @@ public sealed class WidgetViewModel : ObservableObject
     public ObservableCollection<EventRow> Events { get; } = new();
 
     public ObservableCollection<TodoRow> Todos { get; } = new();
+
+    /// <summary>
+    /// The selected day's meetings from Outlook that are not the user's own. Kept in a
+    /// collection of its own rather than mixed into <see cref="Events"/>: one list is
+    /// editable and the other is a window onto somewhere else, and a row that silently
+    /// refuses to be deleted is worse than a row that is visibly not yours.
+    /// </summary>
+    public ObservableCollection<ExternalRow> ExternalEvents { get; } = new();
+
+    public bool HasExternalEvents => ExternalEvents.Count > 0;
 
     /// <summary>Column headers, starting on whichever day the user chose.</summary>
     public ObservableCollection<WeekdayHeader> WeekdayHeaders { get; } = new();
@@ -261,6 +275,13 @@ public sealed class WidgetViewModel : ObservableObject
         var gridEnd = gridStart.AddDays(41);
 
         var eventDays = _repository.DaysWithEvents(gridStart, gridEnd);
+
+        // A day holding nothing but other people's meetings still has something on it, so
+        // the dot has to account for them or the month reads as free when it is not.
+        if (_calendar is not null)
+        {
+            foreach (var day in _calendar.DaysWith(_repository.LinkedEntryIds)) eventDays.Add(day);
+        }
         var todoDays = _repository.OpenTodos()
             .Where(t => t.DueAt.HasValue)
             .Select(t => t.DueAt!.Value.Date)
@@ -299,8 +320,18 @@ public sealed class WidgetViewModel : ObservableObject
             Todos.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
         }
 
+        ExternalEvents.Clear();
+        if (_calendar is not null)
+        {
+            foreach (var occurrence in _calendar.On(_selectedDate, _repository.LinkedEntryIds))
+            {
+                ExternalEvents.Add(new ExternalRow(occurrence));
+            }
+        }
+
         Raise(nameof(HasEvents));
         Raise(nameof(HasTodos));
+        Raise(nameof(HasExternalEvents));
     }
 
     private void UpdatePreview()

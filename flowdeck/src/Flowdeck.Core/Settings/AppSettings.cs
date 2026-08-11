@@ -107,6 +107,23 @@ public sealed class AppSettings
     /// </summary>
     public bool PushToOutlookByDefault { get; set; }
 
+    /// <summary>
+    /// Draw the Outlook calendar under the user's own entries — meetings other people
+    /// booked, rooms, everything Flowdeck did not put there. Read-only and never written
+    /// back. Off by default: reading somebody's whole work diary is not a thing to assume.
+    /// </summary>
+    public bool ShowOutlookCalendar { get; set; }
+
+    /// <summary>
+    /// How often to re-read it, in minutes. Each read attaches to Outlook, so a short
+    /// interval on a machine where Outlook is closed means waking it that often.
+    /// </summary>
+    public int OutlookCalendarRefreshMinutes { get; set; } = 10;
+
+    /// <summary>The interval as it will actually be used, whatever was typed into the box.</summary>
+    [JsonIgnore]
+    public int EffectiveOutlookRefreshMinutes => Math.Clamp(OutlookCalendarRefreshMinutes, 1, 1440);
+
     /// <summary>Editable so the routing vocabulary can be tuned without a rebuild.</summary>
     public RoutingRules Routing { get; set; } = new();
 

@@ -339,6 +339,79 @@
                         VerticalAlignment="Center"
                         Style="{StaticResource CheckBox.Setting}" />
             </Grid>
+
+            <Grid Style="{StaticResource Row}">
+              <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource Text.Body}" Text="Outlook 일정 같이 보기" />
+                <TextBlock Style="{StaticResource Text.Meta}"
+                           Text="위젯에 회사 캘린더를 흐리게 겹쳐 보여줍니다. 읽기만 하고 고치지 않습니다."
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <CheckBox x:Name="ShowOutlookCalendar"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Checked="OnCalendarOverlayChanged"
+                        Unchecked="OnCalendarOverlayChanged"
+                        Style="{StaticResource CheckBox.Setting}" />
+            </Grid>
+
+            <Grid x:Name="RefreshRow" Style="{StaticResource Row}">
+              <StackPanel Width="200" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource Text.Body}" Text="다시 읽는 주기" />
+                <TextBlock x:Name="RefreshHint"
+                           Style="{StaticResource Text.Meta}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="{StaticResource Corner.Small}">
+                  <StackPanel Orientation="Horizontal">
+                    <RadioButton x:Name="Refresh5"
+                                 Checked="OnRefreshPresetChanged"
+                                 Content="5분"
+                                 GroupName="Refresh"
+                                 Style="{StaticResource RadioButton.Segment}" />
+                    <RadioButton x:Name="Refresh10"
+                                 Checked="OnRefreshPresetChanged"
+                                 Content="10분"
+                                 GroupName="Refresh"
+                                 Style="{StaticResource RadioButton.Segment}" />
+                    <RadioButton x:Name="Refresh30"
+                                 Checked="OnRefreshPresetChanged"
+                                 Content="30분"
+                                 GroupName="Refresh"
+                                 Style="{StaticResource RadioButton.Segment}" />
+                    <RadioButton x:Name="Refresh60"
+                                 Checked="OnRefreshPresetChanged"
+                                 Content="1시간"
+                                 GroupName="Refresh"
+                                 Style="{StaticResource RadioButton.Segment}" />
+                    <RadioButton x:Name="RefreshCustom"
+                                 Checked="OnRefreshPresetChanged"
+                                 Content="직접"
+                                 GroupName="Refresh"
+                                 Style="{StaticResource RadioButton.Segment}" />
+                  </StackPanel>
+                </Border>
+                <Border Width="64"
+                        Margin="8,0,0,0"
+                        Padding="8,5"
+                        Background="{DynamicResource Brush.Surface}"
+                        BorderBrush="{DynamicResource Brush.Border}"
+                        BorderThickness="1"
+                        CornerRadius="{StaticResource Corner.Small}">
+                  <Grid>
+                    <TextBox x:Name="RefreshMinutes"
+                             LostFocus="OnRefreshMinutesChanged"
+                             Style="{StaticResource TextBox.Flat}"
+                             ToolTip="분 단위" />
+                  </Grid>
+                </Border>
+                <TextBlock Margin="5,0,0,0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource Text.Meta}"
+                           Text="분" />
+              </StackPanel>
+            </Grid>
           </StackPanel>
 
           <!-- ============ teams ============ -->

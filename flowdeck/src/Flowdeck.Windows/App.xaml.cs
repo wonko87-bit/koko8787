@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Windows.Threading;
 using System.Windows;
 using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Services;
@@ -30,6 +31,8 @@ public partial class App : Application, IAppShell
 
     private WorkspaceRepository? _repository;
     private NaturalLanguageParser? _parser;
+    private ExternalCalendarFeed? _calendar;
+    private DispatcherTimer? _calendarTimer;
     private AppSettings _settings = new();
 
     private WidgetWindow? _widget;
@@ -100,7 +103,9 @@ public partial class App : Application, IAppShell
         _parser = new NaturalLanguageParser(_settings.Routing);
         ApplyParserSettings();
 
-        var widgetViewModel = new WidgetViewModel(_repository, _parser);
+        _calendar = new ExternalCalendarFeed(_outlook) { IsEnabled = _settings.EnableOutlook && _settings.ShowOutlookCalendar };
+
+        var widgetViewModel = new WidgetViewModel(_repository, _parser, clock: null, calendar: _calendar);
         widgetViewModel.Captured += OnCaptured;
 
         _widget = new WidgetWindow(widgetViewModel, _settings);
@@ -140,6 +145,8 @@ public partial class App : Application, IAppShell
 
         _reminders = new ReminderService(_repository, (title, message) => _tray?.Notify(title, message));
         _reminders.Start();
+
+        ApplyCalendarOverlay();
 
         if (_settings.ShowWidgetOnStart) ShowWidget();
         _tray.SetWidgetVisible(_widget.IsVisible);
@@ -183,6 +190,48 @@ public partial class App : Application, IAppShell
     public void ApplyTheme(AppTheme theme) => ThemeManager.Apply(theme);
 
     public void ApplyWidgetSettings() => _widget?.ApplySettings();
+
+    /// <summary>
+    /// Turns the read-only Outlook overlay on or off and puts its timer on the interval the
+    /// user chose. Reading a mailbox is not something to be doing quietly in the background
+    /// when nobody asked, so switching it off stops the timer and drops what was read.
+    /// </summary>
+    public void ApplyCalendarOverlay()
+    {
+        if (_calendar is null) return;
+
+        _calendarTimer?.Stop();
+        _calendar.IsEnabled = _settings.EnableOutlook && _settings.ShowOutlookCalendar;
+
+        if (!_calendar.IsEnabled || !_calendar.IsAvailable)
+        {
+            _calendar.Clear();
+            return;
+        }
+
+        _calendarTimer ??= new DispatcherTimer();
+        _calendarTimer.Interval = TimeSpan.FromMinutes(_settings.EffectiveOutlookRefreshMinutes);
+        _calendarTimer.Tick -= OnCalendarTick;
+        _calendarTimer.Tick += OnCalendarTick;
+        _calendarTimer.Start();
+
+        OnCalendarTick(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Re-reads a window around today. Wide enough that paging a month either way still has
+    /// something to show, and bounded so a diary full of never-ending repeats cannot turn
+    /// one read into an unbounded walk.
+    /// </summary>
+    private void OnCalendarTick(object? sender, EventArgs e)
+    {
+        if (_calendar is null || !_calendar.IsEnabled) return;
+
+        var today = DateTime.Now.Date;
+        CrashReporter.Observe(
+            _calendar.RefreshAsync(today.AddDays(-45), today.AddDays(120)),
+            "ExternalCalendarFeed.Refresh");
+    }
 
     public void ApplyParserSettings()
     {
@@ -292,6 +341,7 @@ public partial class App : Application, IAppShell
         // The widget records its position as it moves; make sure the last one sticks.
         if (_widget is not null) SaveSettings();
 
+        _calendarTimer?.Stop();
         _reminders?.Dispose();
         _hotKeys?.Dispose();
         _tray?.Dispose();

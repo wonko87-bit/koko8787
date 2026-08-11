@@ -62,6 +62,9 @@ public partial class SettingsWindow : Window
         UseOutlook.IsChecked = Settings.EnableOutlook;
         PushToOutlook.IsChecked = Settings.PushToOutlookByDefault;
         PushToOutlook.IsEnabled = Settings.EnableOutlook;
+        ShowOutlookCalendar.IsChecked = Settings.ShowOutlookCalendar;
+        ShowOutlookCalendar.IsEnabled = Settings.EnableOutlook;
+        LoadRefreshInterval();
 
         AfternoonBias.IsChecked = Settings.AssumeAfternoonForBareHours;
 
@@ -195,8 +198,108 @@ public partial class SettingsWindow : Window
 
         _shell.Repository.ExternalEnabled = Settings.EnableOutlook;
         PushToOutlook.IsEnabled = Settings.EnableOutlook;
+        ShowOutlookCalendar.IsEnabled = Settings.EnableOutlook;
 
         _shell.ApplyParserSettings();
+        _shell.ApplyCalendarOverlay();
+        _shell.SaveSettings();
+    }
+
+    // ---- the calendar overlay ----------------------------------------------
+
+    /// <summary>
+    /// Lights the preset matching the stored interval, or falls back to the custom box when
+    /// it is a number nobody offered — which is exactly what the box is for.
+    /// </summary>
+    private void LoadRefreshInterval()
+    {
+        var minutes = Settings.EffectiveOutlookRefreshMinutes;
+
+        Refresh5.IsChecked = minutes == 5;
+        Refresh10.IsChecked = minutes == 10;
+        Refresh30.IsChecked = minutes == 30;
+        Refresh60.IsChecked = minutes == 60;
+        RefreshCustom.IsChecked = minutes is not (5 or 10 or 30 or 60);
+
+        RefreshMinutes.Text = minutes.ToString(Ko.Culture);
+        DescribeRefresh();
+    }
+
+    private void DescribeRefresh()
+    {
+        var minutes = Settings.EffectiveOutlookRefreshMinutes;
+
+        RefreshRow.IsEnabled = ShowOutlookCalendar.IsChecked == true && Settings.EnableOutlook;
+        RefreshHint.Text = minutes < 5
+            ? $"{minutes}분마다. 짧으면 Outlook을 그만큼 자주 깨웁니다"
+            : $"{minutes}분마다 다시 읽습니다";
+    }
+
+    private void OnCalendarOverlayChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        Settings.ShowOutlookCalendar = ShowOutlookCalendar.IsChecked == true;
+        DescribeRefresh();
+
+        _shell.ApplyCalendarOverlay();
+        _shell.SaveSettings();
+    }
+
+    private void OnRefreshPresetChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        // The custom button chooses nothing by itself; it hands the decision to the box.
+        if (RefreshCustom.IsChecked == true)
+        {
+            RefreshMinutes.Focus();
+            RefreshMinutes.SelectAll();
+            return;
+        }
+
+        Settings.OutlookCalendarRefreshMinutes =
+            Refresh5.IsChecked == true ? 5
+            : Refresh30.IsChecked == true ? 30
+            : Refresh60.IsChecked == true ? 60
+            : 10;
+
+        RefreshMinutes.Text = Settings.OutlookCalendarRefreshMinutes.ToString(Ko.Culture);
+        DescribeRefresh();
+
+        _shell.ApplyCalendarOverlay();
+        _shell.SaveSettings();
+    }
+
+    /// <summary>
+    /// Takes whatever was typed, and puts back what will actually be used. Anything that is
+    /// not a number, or is outside a minute to a day, is replaced rather than argued with —
+    /// there is nothing here worth stopping the user over.
+    /// </summary>
+    private void OnRefreshMinutesChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        if (int.TryParse(RefreshMinutes.Text, out var typed) && typed > 0)
+        {
+            Settings.OutlookCalendarRefreshMinutes = typed;
+        }
+
+        var minutes = Settings.EffectiveOutlookRefreshMinutes;
+        Settings.OutlookCalendarRefreshMinutes = minutes;
+        RefreshMinutes.Text = minutes.ToString(Ko.Culture);
+
+        _loading = true;
+        Refresh5.IsChecked = minutes == 5;
+        Refresh10.IsChecked = minutes == 10;
+        Refresh30.IsChecked = minutes == 30;
+        Refresh60.IsChecked = minutes == 60;
+        RefreshCustom.IsChecked = minutes is not (5 or 10 or 30 or 60);
+        _loading = false;
+
+        DescribeRefresh();
+
+        _shell.ApplyCalendarOverlay();
         _shell.SaveSettings();
     }
 

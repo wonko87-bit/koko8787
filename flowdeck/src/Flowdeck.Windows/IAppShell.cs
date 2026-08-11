@@ -25,6 +25,12 @@ public interface IAppShell
     void ApplyParserSettings();
 
     /// <summary>
+    /// Re-reads the Outlook calendar overlay and restarts its timer on the current interval.
+    /// Called when the overlay is switched on or off, or the interval changes.
+    /// </summary>
+    void ApplyCalendarOverlay();
+
+    /// <summary>
     /// Re-claims the configured hot keys. Returns a message describing any that could
     /// not be taken, or an empty string when all of them registered.
     /// </summary>

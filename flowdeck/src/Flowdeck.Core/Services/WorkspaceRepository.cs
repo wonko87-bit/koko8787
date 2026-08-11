@@ -109,6 +109,20 @@ public sealed class WorkspaceRepository
 
     public IReadOnlyList<TodoItem> Todos => _workspace.Todos;
 
+    /// <summary>
+    /// Everywhere outside Flowdeck that an entry of ours currently lives.
+    ///
+    /// The read-only calendar overlay subtracts these: without it, every entry sent with
+    /// <c>!OL</c> would be read straight back and drawn twice — once as the user's row, and
+    /// once as a meeting apparently booked by somebody else.
+    /// </summary>
+    public IReadOnlySet<string> LinkedEntryIds =>
+        _workspace.Events.Select(e => e.ExternalLink?.EntryId)
+            .Concat(_workspace.Todos.Select(t => t.ExternalLink?.EntryId))
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => id!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     public IReadOnlyList<CalendarEvent> Events => _workspace.Events;
 
     /// <summary>

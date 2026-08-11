@@ -253,6 +253,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 - 달력의 날짜 아래 점은 그날 **일정(진한 점)** 과 **할일(연한 점)** 이 있다는 표시입니다.
 - **오늘을 선택하면 지난 할일도 같이 나옵니다.** 미완료 할일이 날짜가 지났다고 사라지면 그대로 잊히기 때문입니다. 이런 항목은 날짜가 굵게, 그리고 원래 날짜까지 함께 표시되어 오늘 것과 구분됩니다. 다른 날짜를 선택하면 그날 항목만 나옵니다.
 - 아래쪽 입력칸은 빠른 입력창과 똑같은 문법을 씁니다.
+- 설정에서 켜면 **회사 Outlook 캘린더가 흐리게 같이** 보입니다. [8. Outlook 연동](#8-outlook-연동)
 - **줄을 더블클릭하면 편집 창**이 뜹니다 — 제목 · 메모 · 날짜 · 알림 · 태그 · 우선순위를 고칠 수 있습니다. [7. 항목 편집](#7-항목-편집)
 
 ### 달력 옵션
@@ -417,6 +418,31 @@ Office 인터롭 어셈블리에 링크하지 않고 **런타임 바인딩**으�
 **사본을 못 찾으면** — Outlook에서 이미 지웠거나, **다른 폴더로 옮겼을 때** (Outlook은 항목을 옮기면 EntryID를 새로 발급합니다. 그래서 "옮겨짐"과 "지워짐"을 여기서는 구분할 수 없습니다) — 연결을 끊고 그 항목은 로컬 전용이 됩니다. 편집창이 그렇게 알려줍니다.
 
 **Outlook이 응답을 안 하면** 로컬 변경은 그대로 두고 알려만 줍니다. 편집은 사용자의 것이고, 사서함이 대답 안 한다고 잃을 이유가 없습니다. 삭제 중이었다면 트레이 알림으로 "직접 지워 주세요" 라고 뜹니다.
+
+### 회사 캘린더 같이 보기
+
+**설정 → Outlook 연동 → "Outlook 일정 같이 보기"** 를 켜면, 위젯에 회사 캘린더가 **흐리게 겹쳐서** 나옵니다. 남이 잡은 회의, 예약된 회의실, 휴가 — Flowdeck이 넣지 않은 것까지 전부.
+
+```
+일정                         ← 내가 넣은 것. 더블클릭으로 편집, 삭제 가능
+  오후 3:00  기획 리뷰
+
+Outlook 일정                 ← 읽어온 것. 흐리고, 손댈 수 없음
+  오전 10:00 주간 부서회의
+             3층 회의실
+  종일       김OO 연차
+```
+
+- **읽기만 합니다.** 절대 쓰지 않습니다. 그래서 "양쪽이 다 바뀌면 누가 이기나" 라는 문제가 아예 생기지 않습니다.
+- 저장하지 않고 메모리에만 둡니다. 앱을 껐다 켜면 다시 읽습니다.
+- **`!OL` 로 보낸 내 항목은 여기 안 나옵니다.** 안 걸러내면 같은 일정이 두 줄로 보이니까요 (`ExternalLink` 로 대조합니다).
+- 달력의 **점에도 반영**됩니다. 남이 잡은 회의만 있는 날도 점이 찍힙니다 — 안 그러면 빈 날처럼 보입니다.
+- 반복 회의는 Outlook이 **이미 펼쳐서** 넘겨줍니다. 그래서 우리 반복 표현이 Outlook보다 빈약한 게 문제가 되지 않습니다.
+- Outlook이 응답을 안 하면 **마지막으로 읽은 내용을 그대로 둡니다.** 몇 분 낡은 달력이, 매번 비어버리는 달력보다 낫습니다.
+
+**다시 읽는 주기**는 5분 / 10분 / 30분 / 1시간 중에 고르거나, **직접**을 눌러 분 단위로 입력할 수 있습니다 (1분 ~ 1440분). 읽을 때마다 Outlook에 붙기 때문에, **Outlook을 안 띄워두시면 그 주기마다 Outlook을 깨우게 됩니다.** Outlook을 늘 켜두시면 무시해도 될 비용입니다.
+
+읽는 범위는 오늘 기준 **뒤로 45일, 앞으로 120일** 입니다. 그보다 멀리 달력을 넘기면 그 달은 겹쳐 보이지 않습니다.
 
 ### 넘어가는 것
 
@@ -601,8 +627,8 @@ flowdeck/
 │   ├── Flowdeck.Core/            플랫폼 무관 (net8.0)
 │   │   ├── Models/               TodoItem, CalendarEvent, Recurrence, ExternalLink
 │   │   ├── Parsing/              TemporalScanner, NaturalLanguageParser, RoutingRules, ContactBook
-│   │   ├── Integration/          IExternalStore, TeamsDeepLink
-│   │   ├── Services/             EntryComposer, RecurrenceExpander, WorkspaceRepository
+│   │   ├── Integration/          IExternalStore, IExternalCalendarReader, TeamsDeepLink
+│   │   ├── Services/             EntryComposer, RecurrenceExpander, WorkspaceRepository, ExternalCalendarFeed
 │   │   ├── Storage/              JsonWorkspaceStore
 │   │   ├── Export/               IcsExporter, TransferFile
 │   │   └── Settings/             AppSettings
@@ -617,7 +643,7 @@ flowdeck/
 │       ├── Views/                CapturePage, CalendarPage, ListPage, EditPage, SettingsPage
 │       ├── ViewModels/
 │       └── Platforms/Android/    위젯, 알림, 빠른 입력 액티비티
-├── tests/Flowdeck.Core.Tests/    xUnit 340개
+├── tests/Flowdeck.Core.Tests/    xUnit 352개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -633,7 +659,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 340 tests
+dotnet test tests/Flowdeck.Core.Tests    # 352 tests
 dotnet build Flowdeck.sln -c Release
 ```
 

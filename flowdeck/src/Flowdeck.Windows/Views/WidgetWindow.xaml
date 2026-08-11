@@ -395,6 +395,42 @@
                      Text="등록된 일정이 없습니다"
                      Visibility="{Binding HasEvents, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}" />
 
+          <!-- Read from Outlook, and never written back. Dimmed, and without the delete
+               button the editable rows carry, so it reads as a window onto somewhere else. -->
+          <StackPanel Margin="0,10,0,0" Visibility="{Binding HasExternalEvents, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Margin="0,0,0,4"
+                       Foreground="{DynamicResource Brush.TextTertiary}"
+                       Style="{StaticResource Text.Meta}"
+                       Text="Outlook 일정" />
+            <ItemsControl ItemsSource="{Binding ExternalEvents}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="0,0,0,2" Opacity="0.72">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Margin="0,1,8,0"
+                               VerticalAlignment="Top"
+                               Style="{StaticResource Text.Meta}"
+                               Text="{Binding TimeLabel}" />
+
+                    <StackPanel Grid.Column="1">
+                      <TextBlock Style="{StaticResource Text.Body}"
+                                 Text="{Binding Title}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Style="{StaticResource Text.Meta}"
+                                 Text="{Binding Location}"
+                                 TextTrimming="CharacterEllipsis"
+                                 Visibility="{Binding HasLocation, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+
           <Grid Margin="0,14,0,6">
             <TextBlock Style="{StaticResource Text.Section}" Text="{Binding TodoSectionLabel}" />
             <Button HorizontalAlignment="Right"

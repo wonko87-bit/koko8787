@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows.Input;
+using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
 using Flowdeck.Core.Services;
 using Flowdeck.Windows.Infrastructure;
@@ -93,6 +94,39 @@ public sealed class CalendarDay : ObservableObject
     }
 
     public ICommand SelectCommand { get; }
+}
+
+/// <summary>
+/// A meeting read out of Outlook that Flowdeck did not put there — someone else's booking,
+/// a room, a leave day. Read-only by construction: it carries no commands, because there is
+/// nothing here that may be ticked, edited or deleted.
+/// </summary>
+public sealed class ExternalRow
+{
+    public ExternalRow(ExternalOccurrence occurrence)
+    {
+        Title = string.IsNullOrWhiteSpace(occurrence.Title) ? "(제목 없음)" : occurrence.Title;
+        Location = occurrence.Location;
+        HasLocation = !string.IsNullOrWhiteSpace(occurrence.Location);
+
+        TimeLabel = occurrence.IsAllDay
+            ? "종일"
+            : occurrence.Start.ToString("tt h:mm", Ko.Culture);
+
+        RangeLabel = occurrence.IsAllDay
+            ? string.Empty
+            : $"{occurrence.Start:HH:mm} – {occurrence.End:HH:mm}";
+    }
+
+    public string Title { get; }
+
+    public string TimeLabel { get; }
+
+    public string RangeLabel { get; }
+
+    public string Location { get; }
+
+    public bool HasLocation { get; }
 }
 
 /// <summary>A todo in the widget list.</summary>
