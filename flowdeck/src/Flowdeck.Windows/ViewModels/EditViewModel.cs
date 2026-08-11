@@ -250,11 +250,17 @@ public sealed class EditViewModel : ObservableObject
     /// <summary>
     /// Reads the two text boxes back into one instant. Refuses rather than guesses: a date
     /// that will not parse means saving would silently move the entry somewhere else.
+    ///
+    /// Emptying the box is not a failure to parse — it is the other way of saying "no date",
+    /// alongside the checkbox. A todo takes that and becomes a someday item; an event still
+    /// has to be told what day it is on.
     /// </summary>
     private bool TryBuildWhen(out DateTime? when)
     {
         when = null;
         if (!_hasDate) return true;
+
+        if (string.IsNullOrWhiteSpace(_date)) return IsTodo;
 
         if (!DateTime.TryParse(_date, Ko.Culture, DateTimeStyles.None, out var day)) return false;
 
