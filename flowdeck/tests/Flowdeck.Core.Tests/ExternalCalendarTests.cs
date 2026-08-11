@@ -186,6 +186,53 @@ public class ExternalCalendarFeedTests
         Assert.Empty(feed.On(new DateTime(2026, 8, 11), Nothing));
     }
 
+    /// <summary>
+    /// The reason a one-minute interval is affordable. A read that found the same diary
+    /// announces nothing, so the widget is not rebuilt for a screen that would look the
+    /// same — and on a work calendar that is nearly every read.
+    /// </summary>
+    [Fact]
+    public async Task AnUnchangedReadIsNotAnnounced()
+    {
+        var (feed, reader) = await Load(Meeting("a", new DateTime(2026, 8, 11, 10, 0, 0)));
+
+        var announcements = 0;
+        feed.Changed += (_, _) => announcements++;
+
+        await feed.RefreshAsync(Now.Date.AddDays(-7), Now.Date.AddDays(30));
+        await feed.RefreshAsync(Now.Date.AddDays(-7), Now.Date.AddDays(30));
+        await feed.RefreshAsync(Now.Date.AddDays(-7), Now.Date.AddDays(30));
+
+        Assert.Equal(0, announcements);
+        Assert.Equal(4, reader.Reads);
+
+        // But a real change still gets through.
+        reader.Occurrences.Add(Meeting("b", new DateTime(2026, 8, 12, 14, 0, 0)));
+        await feed.RefreshAsync(Now.Date.AddDays(-7), Now.Date.AddDays(30));
+
+        Assert.Equal(1, announcements);
+        Assert.Single(feed.On(new DateTime(2026, 8, 12), Nothing));
+    }
+
+    /// <summary>A meeting moved by half an hour is a change, not the same diary.</summary>
+    [Fact]
+    public async Task AMovedMeetingCountsAsAChange()
+    {
+        var (feed, reader) = await Load(Meeting("a", new DateTime(2026, 8, 11, 10, 0, 0)));
+
+        var announcements = 0;
+        feed.Changed += (_, _) => announcements++;
+
+        reader.Occurrences.Clear();
+        reader.Occurrences.Add(Meeting("a", new DateTime(2026, 8, 11, 10, 30, 0)));
+        await feed.RefreshAsync(Now.Date.AddDays(-7), Now.Date.AddDays(30));
+
+        Assert.Equal(1, announcements);
+        Assert.Equal(
+            new DateTime(2026, 8, 11, 10, 30, 0),
+            feed.On(new DateTime(2026, 8, 11), Nothing)[0].Start);
+    }
+
     /// <summary>Paging inside the window already read must not send us back to Outlook.</summary>
     [Fact]
     public async Task TheWindowIsKnownSoPagingDoesNotReread()

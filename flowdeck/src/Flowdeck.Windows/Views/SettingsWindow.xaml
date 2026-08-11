@@ -318,7 +318,7 @@
               <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource Text.Body}" Text="Outlook 연동 사용" />
                 <TextBlock Style="{StaticResource Text.Meta}"
-                           Text="끄면 !OL 을 포함해 Outlook으로 나가는 동작이 모두 멈춥니다"
+                           Text="끄면 아래 항목까지 전부 멈춥니다. Outlook이 깔려 있어도 앱은 완전히 로컬로 동작합니다."
                            TextWrapping="Wrap" />
               </StackPanel>
               <CheckBox x:Name="UseOutlook"

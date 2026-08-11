@@ -80,17 +80,32 @@ public sealed class ExternalCalendarFeed
     /// Reads the window again. Never throws: a mailbox that will not answer leaves the last
     /// good read on screen and puts the reason in <see cref="LastError"/>, because a calendar
     /// that empties itself every time Outlook is busy is worse than one that is a bit stale.
+    ///
+    /// A read that found the same diary as last time changes nothing and says nothing. On a
+    /// short interval that is nearly every read, and each announcement costs the widget a
+    /// full rebuild — the month grid, the day's rows, all of it — for a screen that would
+    /// have looked identical. Most days a work calendar sits still for hours at a time.
     /// </summary>
     public async Task RefreshAsync(DateTime from, DateTime to, CancellationToken cancellationToken = default)
     {
         if (_reader is null || !IsEnabled) return;
 
+        bool changed;
+
         try
         {
             var read = await _reader.ReadCalendarAsync(from.Date, to.Date.AddDays(1).AddTicks(-1), cancellationToken);
 
-            _occurrences = read;
-            _byDay = Group(read);
+            // Occurrences are records read in start order, so comparing them in sequence is
+            // both cheap and exact — a moved meeting or a changed room fails it.
+            changed = !read.SequenceEqual(_occurrences);
+
+            if (changed)
+            {
+                _occurrences = read;
+                _byDay = Group(read);
+            }
+
             _from = from.Date;
             _to = to.Date;
             LastError = null;
@@ -102,7 +117,7 @@ public sealed class ExternalCalendarFeed
             return;
         }
 
-        Changed?.Invoke(this, EventArgs.Empty);
+        if (changed) Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Drops everything, for when the user switches the overlay off.</summary>

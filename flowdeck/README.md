@@ -368,7 +368,13 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 
 **Outlook이 깔려 있지 않은 PC에서는 이 기능이 아예 보이지 않습니다.** 설정 창의 "Outlook 연동" 항목 자체가 뜨지 않고, 앱은 설치 직후부터 완전히 로컬 전용으로 동작합니다. 별도 버전을 받을 필요도, 뭘 끌 필요도 없습니다.
 
-Outlook은 깔려 있지만 Flowdeck이 건드리지 않았으면 할 때는 **설정 → Outlook 연동 → "Outlook 연동 사용"** 을 끄면 됩니다. `!OL` 을 포함해 밖으로 나가는 동작이 전부 멈춥니다.
+**Outlook은 깔려 있지만 안 쓰는 경우** — Office는 설치돼 있는데 Outlook은 안 쓰는 개인 노트북 — 는 **설정 → Outlook 연동 → "Outlook 연동 사용"** 을 끄면 됩니다. 이 스위치 하나로 전부 멈춥니다:
+
+- `!OL` 을 붙여도 아무 데도 안 갑니다
+- 편집·삭제·완료 체크가 Outlook으로 안 나갑니다
+- 회사 캘린더 겹쳐 보기도 꺼집니다
+
+> **켜 두기만 해서는 Outlook이 실행되지 않습니다.** 설치 여부는 레지스트리만 확인하고, Outlook을 띄워보지 않습니다. 실제로 Outlook을 깨우는 건 `!OL` 을 보내거나 캘린더 겹쳐 보기를 켰을 때뿐입니다. 기본값은 `!OL` 자동 전송 꺼짐, 겹쳐 보기 꺼짐이라 **아무것도 안 하면 Outlook은 한 번도 실행되지 않습니다.**
 
 > 회사 PC와 개인 노트북에서 같은 실행 파일을 그대로 쓰면 됩니다. 설정은 PC마다 따로 저장되고, Outlook 유무는 **실행할 때 알아서 판단**합니다.
 
@@ -643,7 +649,7 @@ flowdeck/
 │       ├── Views/                CapturePage, CalendarPage, ListPage, EditPage, SettingsPage
 │       ├── ViewModels/
 │       └── Platforms/Android/    위젯, 알림, 빠른 입력 액티비티
-├── tests/Flowdeck.Core.Tests/    xUnit 352개
+├── tests/Flowdeck.Core.Tests/    xUnit 354개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
 
@@ -659,7 +665,7 @@ flowdeck/
 
 ```powershell
 cd flowdeck
-dotnet test tests/Flowdeck.Core.Tests    # 352 tests
+dotnet test tests/Flowdeck.Core.Tests    # 354 tests
 dotnet build Flowdeck.sln -c Release
 ```
 
