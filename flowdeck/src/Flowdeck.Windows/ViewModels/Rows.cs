@@ -101,12 +101,18 @@ public sealed class TodoRow : ObservableObject
     private readonly TodoItem _item;
     private readonly Func<TodoRow, Task> _toggle;
 
-    public TodoRow(TodoItem item, DateTime now, Func<TodoRow, Task> toggle, Func<TodoRow, Task> delete)
+    public TodoRow(
+        TodoItem item,
+        DateTime now,
+        Func<TodoRow, Task> toggle,
+        Func<TodoRow, Task> delete,
+        Action<TodoRow>? edit = null)
     {
         _item = item;
         _toggle = toggle;
         IsOverdue = item.IsOverdue(now);
         DeleteCommand = new AsyncRelayCommand(() => delete(this));
+        EditCommand = new RelayCommand(() => edit?.Invoke(this));
     }
 
     public string Id => _item.Id;
@@ -189,6 +195,9 @@ public sealed class TodoRow : ObservableObject
     }
 
     public ICommand DeleteCommand { get; }
+
+    /// <summary>Opens the detail window. Bound to a double-click, the desktop way to open a row.</summary>
+    public ICommand EditCommand { get; }
 }
 
 /// <summary>
@@ -278,8 +287,9 @@ public sealed class RecurringRow : ObservableObject
 /// <summary>One occurrence of an event in the day list.</summary>
 public sealed class EventRow : ObservableObject
 {
-    public EventRow(EventOccurrence occurrence, Func<EventRow, Task> delete)
+    public EventRow(EventOccurrence occurrence, Func<EventRow, Task> delete, Action<EventRow>? edit = null)
     {
+        EditCommand = new RelayCommand(() => edit?.Invoke(this));
         Id = occurrence.Source.Id;
         Notes = occurrence.Source.Notes;
         NotePreview = TodoRow.FirstLine(occurrence.Source.Notes);
@@ -327,4 +337,7 @@ public sealed class EventRow : ObservableObject
     public bool HasNote { get; }
 
     public ICommand DeleteCommand { get; }
+
+    /// <summary>Opens the detail window. Bound to a double-click, the desktop way to open a row.</summary>
+    public ICommand EditCommand { get; }
 }

@@ -132,6 +132,9 @@
 
     <DataTemplate x:Key="EventTemplate">
       <Grid x:Name="Row" Margin="0,0,0,2" Background="Transparent">
+        <Grid.InputBindings>
+          <MouseBinding Command="{Binding EditCommand}" Gesture="LeftDoubleClick" />
+        </Grid.InputBindings>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="46" />
           <ColumnDefinition Width="*" />
@@ -181,6 +184,9 @@
 
     <DataTemplate x:Key="TodoTemplate">
       <Grid x:Name="Row" Margin="0,0,0,3" Background="Transparent">
+        <Grid.InputBindings>
+          <MouseBinding Command="{Binding EditCommand}" Gesture="LeftDoubleClick" />
+        </Grid.InputBindings>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />

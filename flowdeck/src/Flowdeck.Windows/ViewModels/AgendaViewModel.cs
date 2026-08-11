@@ -284,7 +284,7 @@ public sealed class AgendaViewModel : ObservableObject
             var group = CreateGroup(byDay.Key, now);
             foreach (var occurrence in byDay.OrderBy(o => o.IsAllDay ? 0 : 1).ThenBy(o => o.Start))
             {
-                group.Items.Add(new EventRow(occurrence, DeleteEventAsync));
+                group.Items.Add(new EventRow(occurrence, DeleteEventAsync, RequestEdit));
             }
 
             Groups.Add(group);
@@ -312,7 +312,7 @@ public sealed class AgendaViewModel : ObservableObject
             var group = CreateGroup(byDay.Key, now);
             foreach (var todo in byDay.OrderBy(t => t.IsDone).ThenBy(t => t.DueAt))
             {
-                group.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+                group.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
             }
 
             Groups.Add(group);
@@ -324,7 +324,7 @@ public sealed class AgendaViewModel : ObservableObject
             var tail = new AgendaGroup("날짜 없음", isToday: false, isPast: false, isUndated: true);
             foreach (var todo in undated)
             {
-                tail.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+                tail.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
             }
 
             Groups.Add(tail);
@@ -365,6 +365,27 @@ public sealed class AgendaViewModel : ObservableObject
         }
 
         _dispatcher.Invoke(Reload);
+    }
+
+
+    /// <summary>
+    /// Asks the view to put the detail window on screen. The editor is built here, where
+    /// the repository and the clock are; the view only knows how to show a window.
+    /// </summary>
+    public event EventHandler<EditViewModel>? EditRequested;
+
+    private void RequestEdit(TodoRow row) => RequestEdit(row.Id, isTodo: true);
+
+    private void RequestEdit(EventRow row) => RequestEdit(row.Id, isTodo: false);
+
+    /// <summary>
+    /// Silent when the entry has already gone. Two list windows and the widget share one
+    /// repository, so a row can be deleted elsewhere between the click and this call.
+    /// </summary>
+    private void RequestEdit(string id, bool isTodo)
+    {
+        var editor = EditViewModel.For(_repository, id, isTodo, _clock);
+        if (editor is not null) EditRequested?.Invoke(this, editor);
     }
 
     private Task ToggleTodoAsync(TodoRow row) => _repository.ToggleTodoAsync(row.Id, _clock());

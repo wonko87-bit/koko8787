@@ -32,11 +32,23 @@ public partial class AgendaWindow : Window
         if (viewModel.Mode == AgendaMode.Todos) viewModel.ShowCompleted = settings.AgendaShowCompleted;
         viewModel.MatchAllTags = settings.AgendaMatchAllTags;
 
+        viewModel.EditRequested += OnEditRequested;
+
         Title = "Flowdeck · " + viewModel.Title;
         ApplyPlacement();
     }
 
     public AgendaViewModel ViewModel { get; }
+
+    /// <summary>
+    /// Puts the detail window up over this one. Modal, because an entry being edited in two
+    /// places at once would have one of the two edits quietly win.
+    /// </summary>
+    private void OnEditRequested(object? sender, EditViewModel editor)
+    {
+        var window = new EditWindow(editor) { Owner = this };
+        window.ShowDialog();
+    }
 
     /// <summary>Raised when the window is dismissed, so the tray menu can stay in step.</summary>
     public event EventHandler? Dismissed;

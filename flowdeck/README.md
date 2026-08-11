@@ -77,7 +77,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 내일 오후 3시 스터디 할일       → 할일에만  (맨 뒤 표기)
 ```
 
-> **`!OL` 과 `!TM` 은 이 표와 다른 축입니다.** 할일이냐 일정이냐를 정하는 게 아니라 각각 **Outlook에도 보낼지**, **Teams 회의 폼을 열지**를 정합니다. 그래서 위 표기와 같이 씁니다 — 자세한 건 [7. Outlook 연동](#7-outlook-연동)과 [8. Teams 회의 잡기](#8-teams-회의-잡기).
+> **`!OL` 과 `!TM` 은 이 표와 다른 축입니다.** 할일이냐 일정이냐를 정하는 게 아니라 각각 **Outlook에도 보낼지**, **Teams 회의 폼을 열지**를 정합니다. 그래서 위 표기와 같이 씁니다 — 자세한 건 [8. Outlook 연동](#8-outlook-연동)과 [9. Teams 회의 잡기](#9-teams-회의-잡기).
 
 **② 해시태그 — 문장 아무 데나**
 
@@ -253,6 +253,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 - 달력의 날짜 아래 점은 그날 **일정(진한 점)** 과 **할일(연한 점)** 이 있다는 표시입니다.
 - **오늘을 선택하면 지난 할일도 같이 나옵니다.** 미완료 할일이 날짜가 지났다고 사라지면 그대로 잊히기 때문입니다. 이런 항목은 날짜가 굵게, 그리고 원래 날짜까지 함께 표시되어 오늘 것과 구분됩니다. 다른 날짜를 선택하면 그날 항목만 나옵니다.
 - 아래쪽 입력칸은 빠른 입력창과 똑같은 문법을 씁니다.
+- **줄을 더블클릭하면 편집 창**이 뜹니다 — 제목 · 메모 · 날짜 · 알림 · 태그 · 우선순위를 고칠 수 있습니다. [7. 항목 편집](#7-항목-편집)
 
 ### 달력 옵션
 
@@ -286,6 +287,7 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 
 - **지난 날짜 그룹은 흐리게** 표시되어 오늘과 앞으로의 일에 눈이 먼저 갑니다.
 - 목록 안에서도 **체크 · 삭제가 그대로** 됩니다. 위젯과 같은 데이터를 보고 있어서 한쪽에서 바꾸면 다른 쪽에 즉시 반영됩니다.
+- 줄을 **더블클릭하면 편집 창**이 뜹니다. 위젯에서와 같습니다.
 - 할일 창 상단의 **"완료 포함"** 을 켜면 이미 끝낸 항목도 같이 보입니다. 이 선택은 저장됩니다.
 - 창 위치와 크기는 각각 따로 기억합니다.
 - 날짜 없이 입력한 할일은 맨 아래 **"날짜 없음"** 그룹으로 모입니다.
@@ -331,7 +333,30 @@ dotnet publish src/Flowdeck.Windows -c Release -r win-x64 --self-contained false
 
 ---
 
-## 7. Outlook 연동
+## 7. 항목 편집
+
+이미 저장한 항목은 **줄을 더블클릭하면** 편집 창이 뜹니다. 위젯에서도, 누적 목록 창에서도 같습니다.
+
+| 고칠 수 있는 것 | |
+|---|---|
+| **제목** | 창이 열리면 여기에 커서가 있고 전체가 선택되어 있습니다 |
+| **메모** | 여러 줄 그대로. 여기서는 `\n` 대신 그냥 Enter 로 줄을 바꿉니다 |
+| **날짜 · 시각** | `2026-08-12` / `14:30` 형식. 각각 체크로 끄고 켭니다 |
+| **태그** | `#업무 #보고` — `#` 없이 띄어 써도 같습니다 |
+| **알림** | 몇 분 전에 띄울지. 비우면 알림 없음 |
+| **우선순위** | 할일에만 있습니다 |
+
+- **일정은 날짜를 지울 수 없습니다.** 달력에 그릴 자리가 없어지기 때문입니다. 할일은 날짜를 끄면 "날짜 없음" 으로 내려갑니다 — 이때 알림도 같이 지워집니다. 없어진 날짜를 기준으로 잡힌 알림은 울릴 수가 없기 때문입니다.
+- **일정의 길이는 유지됩니다.** 2시간짜리 회의를 다른 시각으로 옮겨도 2시간짜리 그대로입니다.
+- 날짜 칸에 해석할 수 없는 걸 쓰면 **저장을 거부하고 알려줍니다.** 조용히 엉뚱한 날로 옮기지 않기 위해서입니다.
+- `Esc` 로 취소, `Ctrl`+`Enter` 로 저장. 메모칸에서도 `Ctrl`+`Enter` 는 저장입니다.
+- 편집 창의 **삭제**는 목록에서 지우는 것과 같습니다.
+
+> 편집한 내용은 **Outlook으로 다시 보내지지 않습니다.** `!OL` 로 보낸 항목을 여기서 고쳐도 Outlook 쪽 원본은 그대로입니다. 지금 연동은 한 번 보내는 단방향입니다.
+
+---
+
+## 8. Outlook 연동
 
 로컬에 설치된 **Outlook에 항목을 복사**합니다. 자연어로 한 줄 치면 회사 캘린더/작업에 그대로 들어가고, Outlook이 서버로 올려주니 **휴대폰 Outlook에도 따라옵니다.**
 
@@ -416,7 +441,7 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 ---
 
-## 8. Teams 회의 잡기
+## 9. Teams 회의 잡기
 
 한 줄로 회의를 **잡되, 보내지는 않습니다.** `!TM` 을 붙이면 Teams의 새 회의 창이 제목·시간·참석자까지 채워진 채로 열리고, **최종 저장 버튼은 사용자가 누릅니다.**
 
@@ -473,7 +498,7 @@ Graph API로 가더라도 같은 인터페이스에 구현체 하나만 더 만�
 
 ---
 
-## 9. 두 PC 사이로 항목 옮기기
+## 10. 두 PC 사이로 항목 옮기기
 
 망이 갈린 환경을 위한 **단방향 반입 통로**입니다. 밖에서 떠오른 아이디어를 파일로 내보내서 업무 PC에 들여놓는 용도예요.
 
@@ -528,7 +553,7 @@ Flowdeck 파일이 아니거나 더 새로운 버전이면 **한 줄로 이유�
 
 ---
 
-## 10. 데이터
+## 11. 데이터
 
 전부 로컬에 평문 JSON으로 저장됩니다. 계정도 서버도 없습니다.
 
@@ -550,7 +575,7 @@ Flowdeck 파일이 아니거나 더 새로운 버전이면 **한 줄로 이유�
 
 ---
 
-## 11. 프로젝트 구조
+## 12. 프로젝트 구조
 
 ```
 flowdeck/
@@ -564,13 +589,17 @@ flowdeck/
 │   │   ├── Storage/              JsonWorkspaceStore
 │   │   ├── Export/               IcsExporter, TransferFile
 │   │   └── Settings/             AppSettings
-│   └── Flowdeck.Windows/         WPF (net8.0-windows)
-│       ├── Views/                WidgetWindow, QuickAddWindow, SettingsWindow, AgendaWindow, ContactsWindow
+│   ├── Flowdeck.Windows/         WPF (net8.0-windows)
+│   │   ├── Views/                WidgetWindow, QuickAddWindow, AgendaWindow, EditWindow, SettingsWindow, ContactsWindow
+│   │   ├── ViewModels/
+│   │   ├── Integration/          OutlookBridge (COM)
+│   │   ├── Interop/              HotKeyService, WindowPinService, StartupService
+│   │   ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
+│   │   └── Themes/               Dark, Light, Controls
+│   └── Flowdeck.Mobile/          MAUI (net10.0-android)
+│       ├── Views/                CapturePage, CalendarPage, ListPage, EditPage, SettingsPage
 │       ├── ViewModels/
-│       ├── Integration/          OutlookBridge (COM)
-│       ├── Interop/              HotKeyService, WindowPinService, StartupService
-│       ├── Services/             TrayIconController, ThemeManager, ReminderService, CrashReporter
-│       └── Themes/               Dark, Light, Controls
+│       └── Platforms/Android/    위젯, 알림, 빠른 입력 액티비티
 ├── tests/Flowdeck.Core.Tests/    xUnit 324개
 └── tools/make_icon.py            앱 아이콘 생성기
 ```
@@ -583,7 +612,7 @@ flowdeck/
 
 ---
 
-## 12. 개발
+## 13. 개발
 
 ```powershell
 cd flowdeck
@@ -595,7 +624,7 @@ dotnet build Flowdeck.sln -c Release
 
 ---
 
-## 13. 안드로이드 / 아이폰으로 확장하기
+## 14. 안드로이드 / 아이폰으로 확장하기
 
 `Flowdeck.Core` 는 이미 이걸 염두에 두고 짜여 있습니다. 플랫폼 API를 하나도 쓰지 않고, 시각도 `DateTime.Now` 를 직접 부르는 대신 전부 인자로 받습니다.
 
@@ -605,6 +634,6 @@ dotnet build Flowdeck.sln -c Release
 4. 안드로이드 홈 화면 위젯과 iOS 위젯 익스텐션은 각 플랫폼 고유 작업이지만, 표시할 데이터는 같은 `WorkspaceRepository` 에서 가져옵니다.
 5. **Teams 회의(`!TM`)는 모바일에서 뺄 수 있습니다.** 표기 목록이 설정값이라 `Routing.TeamsMarkers` 를 비우면 그대로 없는 기능이 됩니다. `TeamsDeepLink` 자체는 URL 문자열만 만들고 여는 건 셸이 하므로, 안 열면 그만입니다 — 코드를 갈래로 나눌 필요가 없습니다.
 
-동기화가 필요하면 [9. 두 PC 사이로 항목 옮기기](#9-두-pc-사이로-항목-옮기기)의 파일 형식(`TransferFile`)이 그대로 쓰입니다. 단방향·추가 전용이라 병합·삭제 전파·시계 문제를 전부 비껴가고, 클라우드에 올릴 때도 같은 파일 하나면 됩니다.
+동기화가 필요하면 [10. 두 PC 사이로 항목 옮기기](#10-두-pc-사이로-항목-옮기기)의 파일 형식(`TransferFile`)이 그대로 쓰입니다. 단방향·추가 전용이라 병합·삭제 전파·시계 문제를 전부 비껴가고, 클라우드에 올릴 때도 같은 파일 하나면 됩니다.
 
 이 저장소의 `android/` 폴더에는 같은 아이디어를 Todoist·구글 캘린더와 연동해 구현한 별개의 안드로이드 앱(TaskBridge)이 이미 있습니다. 참고용으로 쓸 수 있습니다.

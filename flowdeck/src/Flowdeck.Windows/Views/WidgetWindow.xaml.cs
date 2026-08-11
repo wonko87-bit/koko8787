@@ -52,6 +52,8 @@ public partial class WidgetWindow : Window
         DataContext = viewModel;
         ViewModel = viewModel;
 
+        viewModel.EditRequested += OnEditRequested;
+
         _pin = new WindowPinService(this);
 
         ApplyGeometry();
@@ -66,6 +68,18 @@ public partial class WidgetWindow : Window
     }
 
     public WidgetViewModel ViewModel { get; }
+
+    /// <summary>
+    /// Puts the detail window up over the widget. Modal, because an entry being edited in
+    /// two places at once would have one of the two edits quietly win.
+    ///
+    /// Owner is deliberately not set: the widget usually sits pinned behind every other
+    /// window, and a dialog owned by it would be dragged down there with it. The one thing
+    /// it does copy is Topmost — a widget set to stay on top would otherwise cover the
+    /// dialog it just opened.
+    /// </summary>
+    private void OnEditRequested(object? sender, EditViewModel editor) =>
+        new EditWindow(editor) { Topmost = Topmost }.ShowDialog();
 
     /// <summary>Raised when the user dismisses the widget, so the tray menu can stay in step.</summary>
     public event EventHandler? HideRequested;

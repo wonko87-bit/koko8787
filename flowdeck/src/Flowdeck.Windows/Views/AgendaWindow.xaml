@@ -83,6 +83,9 @@
     <!-- The two row types are matched by DataType, so one list can hold either. -->
     <DataTemplate DataType="{x:Type vm:EventRow}">
       <Grid x:Name="Row" Margin="0,0,0,4" Background="Transparent">
+        <Grid.InputBindings>
+          <MouseBinding Command="{Binding EditCommand}" Gesture="LeftDoubleClick" />
+        </Grid.InputBindings>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="58" />
           <ColumnDefinition Width="*" />
@@ -136,6 +139,9 @@
 
     <DataTemplate DataType="{x:Type vm:TodoRow}">
       <Grid x:Name="Row" Margin="0,0,0,4" Background="Transparent">
+        <Grid.InputBindings>
+          <MouseBinding Command="{Binding EditCommand}" Gesture="LeftDoubleClick" />
+        </Grid.InputBindings>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />

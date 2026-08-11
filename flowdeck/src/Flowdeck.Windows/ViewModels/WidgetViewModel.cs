@@ -286,7 +286,7 @@ public sealed class WidgetViewModel : ObservableObject
         Events.Clear();
         foreach (var occurrence in _repository.OccurrencesOn(_selectedDate))
         {
-            Events.Add(new EventRow(occurrence, DeleteEventAsync));
+            Events.Add(new EventRow(occurrence, DeleteEventAsync, RequestEdit));
         }
 
         var todos = SelectedIsToday
@@ -296,7 +296,7 @@ public sealed class WidgetViewModel : ObservableObject
         Todos.Clear();
         foreach (var todo in todos)
         {
-            Todos.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync));
+            Todos.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
         }
 
         Raise(nameof(HasEvents));
@@ -335,6 +335,27 @@ public sealed class WidgetViewModel : ObservableObject
 
         // Follow the entry so the user sees where it landed.
         if (parsed.Start.HasValue) SelectDay(parsed.Start.Value.Date);
+    }
+
+
+    /// <summary>
+    /// Asks the view to put the detail window on screen. The editor is built here, where
+    /// the repository and the clock are; the view only knows how to show a window.
+    /// </summary>
+    public event EventHandler<EditViewModel>? EditRequested;
+
+    private void RequestEdit(TodoRow row) => RequestEdit(row.Id, isTodo: true);
+
+    private void RequestEdit(EventRow row) => RequestEdit(row.Id, isTodo: false);
+
+    /// <summary>
+    /// Silent when the entry has already gone. Two list windows and the widget share one
+    /// repository, so a row can be deleted elsewhere between the click and this call.
+    /// </summary>
+    private void RequestEdit(string id, bool isTodo)
+    {
+        var editor = EditViewModel.For(_repository, id, isTodo, _clock);
+        if (editor is not null) EditRequested?.Invoke(this, editor);
     }
 
     private Task ToggleTodoAsync(TodoRow row) => _repository.ToggleTodoAsync(row.Id, _clock());
