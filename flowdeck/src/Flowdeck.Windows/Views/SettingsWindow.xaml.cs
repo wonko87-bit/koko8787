@@ -70,7 +70,8 @@ public partial class SettingsWindow : Window
 
         DescribeContacts();
 
-        LaunchAtStartup.IsChecked = StartupService.IsEnabled();
+        LaunchAtStartup.IsChecked = StartupService.Current() != StartupState.Off;
+        DescribeStartup();
         ShowWidgetOnStart.IsChecked = Settings.ShowWidgetOnStart;
 
         _loading = false;
@@ -312,6 +313,26 @@ public partial class SettingsWindow : Window
         _shell.SaveSettings();
     }
 
+    /// <summary>
+    /// Says what will actually happen at the next sign-in, which is not always what the
+    /// checkbox says. An entry can be registered and still never run — pointing at a build
+    /// that has moved, or switched off in Task Manager, where Windows quietly wins.
+    /// </summary>
+    private void DescribeStartup()
+    {
+        StartupHint.Text = StartupService.Current() switch
+        {
+            StartupState.BlockedByWindows =>
+                "Windows에서 이 항목이 꺼져 있습니다. 체크를 껐다 켜면 다시 켜집니다.",
+
+            StartupState.StalePath =>
+                "예전 위치의 실행 파일을 가리키고 있습니다. 체크를 껐다 켜면 지금 위치로 등록됩니다.",
+
+            StartupState.On => "로그인하면 트레이에 뜹니다",
+            _ => "로그인할 때 자동으로 실행합니다",
+        };
+    }
+
     private void OnStartupChanged(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
@@ -321,6 +342,7 @@ public partial class SettingsWindow : Window
         {
             Settings.LaunchAtStartup = wanted;
             _shell.SaveSettings();
+            DescribeStartup();
             Status(wanted ? "시작 프로그램에 등록했습니다" : "시작 프로그램에서 제거했습니다");
             return;
         }

@@ -146,6 +146,10 @@ public partial class App : Application, IAppShell
         _reminders = new ReminderService(_repository, (title, message) => _tray?.Notify(title, message));
         _reminders.Start();
 
+        // A new build in a new folder leaves the old registration pointing at nothing, and
+        // the app would silently stop starting with Windows. Put it back where it belongs.
+        if (_settings.LaunchAtStartup) StartupService.RepairIfStale();
+
         ApplyCalendarOverlay();
 
         if (_settings.ShowWidgetOnStart) ShowWidget();

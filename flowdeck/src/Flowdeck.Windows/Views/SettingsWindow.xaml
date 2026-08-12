@@ -435,7 +435,10 @@
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="시스템" />
 
           <Grid Style="{StaticResource Row}">
-            <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Body}" Text="Windows 시작 시 자동 실행" />
+            <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Body}" Text="Windows 시작 시 자동 실행" />
+              <TextBlock x:Name="StartupHint" Style="{StaticResource Text.Meta}" TextWrapping="Wrap" />
+            </StackPanel>
             <CheckBox x:Name="LaunchAtStartup"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Center"
