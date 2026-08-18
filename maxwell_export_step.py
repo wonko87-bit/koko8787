@@ -1,8 +1,11 @@
 """
-Maxwell 3D - Export solid model objects as STEP file(s)
+Maxwell 3D - STEP Export Script Generator
 
-MODE = "all"        -> all solids in one STEP file (stable)
-MODE = "individual" -> one STEP file per solid (may crash on complex models)
+Run this script ONCE in Maxwell to generate individual export scripts
+(one per solid object) in SCRIPTS_DIR.
+
+Then run each generated script one at a time from Maxwell's script runner.
+This avoids the Maxwell STEP exporter crash that occurs on consecutive exports.
 """
 
 import ScriptEnv
@@ -11,15 +14,16 @@ oDesktop.RestoreWindow()
 
 import os
 import re
-import time
 
 # ---------------------------------------------------------
 # Settings
 # ---------------------------------------------------------
 
+# Where the exported .step files will be saved (used in generated scripts)
 OUTPUT_DIR  = r"C:\Maxwell_STEP_Export"
-MODE        = "all"   # "all" or "individual"
-EXPORT_DELAY = 2.0    # seconds between exports (individual mode only)
+
+# Where the generated per-object scripts will be saved
+SCRIPTS_DIR = r"C:\Maxwell_STEP_Export\scripts"
 
 # ---------------------------------------------------------
 # Helpers
@@ -31,18 +35,44 @@ def msg(text):
 def sanitize_filename(name):
     return re.sub(r'[\\/:*?"<>|]', '_', name)
 
-def do_export(selections_str, filepath):
+
+SCRIPT_TEMPLATE = '''
+import ScriptEnv
+ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
+oDesktop.RestoreWindow()
+import os
+
+OBJ_NAME  = {obj_name_repr}
+FILEPATH  = {filepath_repr}
+PROJECT   = {project_repr}
+DESIGN    = {design_repr}
+
+def msg(text):
+    oDesktop.AddMessage("", "", 0, str(text))
+
+oProject = oDesktop.SetActiveProject(PROJECT)
+oDesign  = oProject.SetActiveDesign(DESIGN)
+oEditor  = oDesign.SetActiveEditor("3D Modeler")
+
+if not os.path.exists(os.path.dirname(FILEPATH)):
+    os.makedirs(os.path.dirname(FILEPATH))
+
+try:
     oEditor.Export(
         [
             "NAME:ExportParameters",
             "AllowRegionDependentPartSelectionForPMLCreation:=", True,
             "AllowRegionSelectionForPMLCreation:=",              True,
-            "Selections:=",    selections_str,
-            "File Name:=",     filepath,
+            "Selections:=",    OBJ_NAME,
+            "File Name:=",     FILEPATH,
             "Major Version:=", -1,
             "Minor Version:=", -1,
         ]
     )
+    msg("OK: " + OBJ_NAME + " -> " + FILEPATH)
+except Exception as e:
+    msg("FAIL: " + str(e))
+'''
 
 # ---------------------------------------------------------
 # Main
@@ -60,6 +90,9 @@ if oDesign is None:
 
 oEditor = oDesign.SetActiveEditor("3D Modeler")
 
+project_name = oProject.GetName()
+design_name  = oDesign.GetName()
+
 try:
     solid_objects = list(oEditor.GetObjectsInGroup("Solids"))
 except Exception as e:
@@ -67,45 +100,34 @@ except Exception as e:
     solid_objects = []
 
 msg("Solid objects found: " + str(len(solid_objects)))
-msg("Mode: " + MODE)
 
 if not solid_objects:
     msg("No solid objects found. Exiting.")
 else:
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-        msg("Created: " + OUTPUT_DIR)
+    for d in [OUTPUT_DIR, SCRIPTS_DIR]:
+        if not os.path.exists(d):
+            os.makedirs(d)
 
-    if MODE == "all":
-        # Export all solids in one STEP file
-        selections_str = ",".join(solid_objects)
-        filepath = os.path.join(OUTPUT_DIR, "all_solids.step")
-        try:
-            do_export(selections_str, filepath)
-            msg("OK: all_solids.step  ({} objects)".format(len(solid_objects)))
-        except Exception as e:
-            msg("FAIL: " + str(e))
+    for i, obj_name in enumerate(solid_objects):
+        safe_name  = sanitize_filename(obj_name)
+        step_path  = os.path.join(OUTPUT_DIR, safe_name + ".step")
+        script_path = os.path.join(SCRIPTS_DIR,
+                                   "{:03d}_{}.py".format(i + 1, safe_name))
 
-    else:  # individual
-        success = []
-        failed  = []
-        for i, obj_name in enumerate(solid_objects):
-            safe_name = sanitize_filename(obj_name)
-            filepath  = os.path.join(OUTPUT_DIR, safe_name + ".step")
-            msg("[{}/{}] {}".format(i + 1, len(solid_objects), obj_name))
-            try:
-                do_export(obj_name, filepath)
-                msg("  OK")
-                success.append(obj_name)
-            except Exception as e:
-                msg("  FAIL: " + str(e)[:100])
-                failed.append(obj_name)
-            time.sleep(EXPORT_DELAY)
+        code = SCRIPT_TEMPLATE.format(
+            obj_name_repr = repr(obj_name),
+            filepath_repr = repr(step_path),
+            project_repr  = repr(project_name),
+            design_repr   = repr(design_name),
+        )
 
-        msg("=" * 50)
-        msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
-            len(success), len(failed), len(solid_objects)))
-        if failed:
-            for f in failed:
-                msg("  FAIL: " + f)
-        msg("=" * 50)
+        with open(script_path, "w") as f:
+            f.write(code)
+
+        msg("Generated: " + os.path.basename(script_path))
+
+    msg("=" * 50)
+    msg("Generated {} scripts in:".format(len(solid_objects)))
+    msg("  " + SCRIPTS_DIR)
+    msg("Run each script ONE AT A TIME from Maxwell script runner.")
+    msg("=" * 50)
