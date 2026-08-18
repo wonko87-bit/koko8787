@@ -24,11 +24,9 @@ OUTPUT_DIR = r"C:\Maxwell_STEP_Export"
 # ---------------------------------------------------------
 
 def msg(text):
-    """Show message in Maxwell message window."""
     oDesktop.AddMessage("", "", 0, str(text))
 
 def sanitize_filename(name):
-    """Replace characters that are invalid in Windows filenames."""
     return re.sub(r'[\\/:*?"<>|]', '_', name)
 
 
@@ -51,11 +49,11 @@ msg("Design  : " + oDesign.GetName())
 
 oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-# Get all solid model objects
+# Get all objects using wildcard match (works regardless of group name)
 try:
-    all_objects = list(oEditor.GetObjectsInGroup("Model"))
+    all_objects = list(oEditor.GetMatchedObjectName("*"))
 except Exception as e:
-    msg("ERROR getting objects: " + str(e))
+    msg("GetMatchedObjectName failed: " + str(e))
     all_objects = []
 
 msg("Objects found: " + str(len(all_objects)))
@@ -63,9 +61,8 @@ for o in all_objects:
     msg("  - " + str(o))
 
 if not all_objects:
-    msg("No model objects found. Exiting.")
+    msg("No objects found. Exiting.")
 else:
-    # Create output directory if it does not exist
     try:
         if not os.path.exists(OUTPUT_DIR):
             os.makedirs(OUTPUT_DIR)
