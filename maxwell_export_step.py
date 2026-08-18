@@ -23,6 +23,10 @@ OUTPUT_DIR = r"C:\Maxwell_STEP_Export"
 # Helpers
 # ---------------------------------------------------------
 
+def msg(text):
+    """Show message in Maxwell message window."""
+    oDesktop.AddMessage("", "", 0, str(text))
+
 def sanitize_filename(name):
     """Replace characters that are invalid in Windows filenames."""
     return re.sub(r'[\\/:*?"<>|]', '_', name)
@@ -34,31 +38,43 @@ def sanitize_filename(name):
 
 oProject = oDesktop.GetActiveProject()
 if oProject is None:
+    msg("ERROR: No active project found.")
     raise RuntimeError("No active project found.")
 
 oDesign = oProject.GetActiveDesign()
 if oDesign is None:
+    msg("ERROR: No active design found.")
     raise RuntimeError("No active design found.")
+
+msg("Project : " + oProject.GetName())
+msg("Design  : " + oDesign.GetName())
 
 oEditor = oDesign.SetActiveEditor("3D Modeler")
 
 # Get all solid model objects
-all_objects = list(oEditor.GetObjectsInGroup("Model"))
-print("=" * 60)
-print("Maxwell STEP Exporter")
-print("=" * 60)
-print("Design  : {}".format(oDesign.GetName()))
-print("Objects : {}".format(len(all_objects)))
-print("Output  : {}".format(OUTPUT_DIR))
-print()
+try:
+    all_objects = list(oEditor.GetObjectsInGroup("Model"))
+except Exception as e:
+    msg("ERROR getting objects: " + str(e))
+    all_objects = []
+
+msg("Objects found: " + str(len(all_objects)))
+for o in all_objects:
+    msg("  - " + str(o))
 
 if not all_objects:
-    print("No model objects found. Exiting.")
+    msg("No model objects found. Exiting.")
 else:
     # Create output directory if it does not exist
-    if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-        print("Created output directory: {}".format(OUTPUT_DIR))
+    try:
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+            msg("Created output directory: " + OUTPUT_DIR)
+        else:
+            msg("Output directory exists: " + OUTPUT_DIR)
+    except Exception as e:
+        msg("ERROR creating directory: " + str(e))
+        raise
 
     success = []
     failed  = []
@@ -75,18 +91,17 @@ else:
                     "SelectionList:=", obj_name,
                 ]
             )
-            print("  OK  : {} -> {}".format(obj_name, os.path.basename(filepath)))
+            msg("  OK  : " + obj_name + " -> " + os.path.basename(filepath))
             success.append(obj_name)
         except Exception as e:
-            print("  FAIL: {} | {}".format(obj_name, str(e)))
+            msg("  FAIL: " + obj_name + " | " + str(e))
             failed.append(obj_name)
 
-    print()
-    print("=" * 60)
-    print("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
+    msg("=" * 50)
+    msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
         len(success), len(failed), len(all_objects)))
     if failed:
-        print("Failed objects:")
+        msg("Failed objects:")
         for f in failed:
-            print("  - {}".format(f))
-    print("=" * 60)
+            msg("  - " + f)
+    msg("=" * 50)
