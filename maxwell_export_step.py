@@ -46,22 +46,37 @@ if oDesign is None:
 
 msg("Project : " + oProject.GetName())
 msg("Design  : " + oDesign.GetName())
+msg("DesignType: " + str(oDesign.GetDesignType()))
 
 oEditor = oDesign.SetActiveEditor("3D Modeler")
+msg("Editor  : " + str(oEditor))
 
-# Get all objects using wildcard match (works regardless of group name)
+# Try multiple methods to find objects
+all_objects = []
+
+# Method 1: wildcard
 try:
-    all_objects = list(oEditor.GetMatchedObjectName("*"))
+    r1 = list(oEditor.GetMatchedObjectName("*"))
+    msg("[Method1] GetMatchedObjectName(*): " + str(len(r1)) + " -> " + str(r1[:5]))
+    if r1:
+        all_objects = r1
 except Exception as e:
-    msg("GetMatchedObjectName failed: " + str(e))
-    all_objects = []
+    msg("[Method1] FAIL: " + str(e))
 
-msg("Objects found: " + str(len(all_objects)))
-for o in all_objects:
-    msg("  - " + str(o))
+# Method 2: group names
+for grp in ["Model", "Solids", "Sheets", "Lines", "Unclassified"]:
+    try:
+        r = list(oEditor.GetObjectsInGroup(grp))
+        msg("[Method2] GetObjectsInGroup('{}')  : {}".format(grp, r))
+        if r and not all_objects:
+            all_objects = r
+    except Exception as e:
+        msg("[Method2] GetObjectsInGroup('{}') FAIL: {}".format(grp, str(e)))
+
+msg("Total usable objects: " + str(len(all_objects)))
 
 if not all_objects:
-    msg("No objects found. Exiting.")
+    msg("No objects found. Make sure geometry exists in the 3D Modeler before running this script.")
 else:
     try:
         if not os.path.exists(OUTPUT_DIR):
