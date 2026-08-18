@@ -1,11 +1,16 @@
 """
-Maxwell 3D - STEP Export Script Generator
+Maxwell 3D - STEP Export Automation
 
-Run this script ONCE in Maxwell to generate individual export scripts
-(one per solid object) in SCRIPTS_DIR.
+STEP 1: Run THIS script once inside Maxwell.
+        It generates per-object export scripts + run_all.bat in SCRIPTS_DIR.
 
-Then run each generated script one at a time from Maxwell's script runner.
-This avoids the Maxwell STEP exporter crash that occurs on consecutive exports.
+STEP 2: Close Maxwell (optional but recommended).
+
+STEP 3: Double-click run_all.bat.
+        Maxwell starts fresh for each object, exports it, then exits.
+        No crash from consecutive exports.
+
+Set MAXWELL_EXE to your actual Maxwell installation path if needed.
 """
 
 import ScriptEnv
@@ -19,11 +24,11 @@ import re
 # Settings
 # ---------------------------------------------------------
 
-# Where the exported .step files will be saved (used in generated scripts)
 OUTPUT_DIR  = r"C:\Maxwell_STEP_Export"
-
-# Where the generated per-object scripts will be saved
 SCRIPTS_DIR = r"C:\Maxwell_STEP_Export\scripts"
+
+# Maxwell 2021 R1 default path - adjust if installed elsewhere
+MAXWELL_EXE = r"C:\Program Files\AnsysEM\AnsysEM21.1\Win64\ansysedt.exe"
 
 # ---------------------------------------------------------
 # Helpers
@@ -36,23 +41,25 @@ def sanitize_filename(name):
     return re.sub(r'[\\/:*?"<>|]', '_', name)
 
 
-SCRIPT_TEMPLATE = '''
-import ScriptEnv
+PER_OBJECT_SCRIPT = """import ScriptEnv
 ScriptEnv.Initialize("Ansoft.ElectronicsDesktop")
 oDesktop.RestoreWindow()
 import os
 
-OBJ_NAME  = {obj_name_repr}
-FILEPATH  = {filepath_repr}
-PROJECT   = {project_repr}
-DESIGN    = {design_repr}
+PROJECT_FILE = {project_file_repr}
+DESIGN_NAME  = {design_repr}
+OBJ_NAME     = {obj_name_repr}
+FILEPATH     = {filepath_repr}
 
 def msg(text):
     oDesktop.AddMessage("", "", 0, str(text))
 
-oProject = oDesktop.SetActiveProject(PROJECT)
-oDesign  = oProject.SetActiveDesign(DESIGN)
-oEditor  = oDesign.SetActiveEditor("3D Modeler")
+oProject = oDesktop.OpenProject(PROJECT_FILE)
+if oProject is None:
+    raise RuntimeError("Failed to open project: " + PROJECT_FILE)
+
+oDesign = oProject.SetActiveDesign(DESIGN_NAME)
+oEditor = oDesign.SetActiveEditor("3D Modeler")
 
 if not os.path.exists(os.path.dirname(FILEPATH)):
     os.makedirs(os.path.dirname(FILEPATH))
@@ -69,10 +76,12 @@ try:
             "Minor Version:=", -1,
         ]
     )
-    msg("OK: " + OBJ_NAME + " -> " + FILEPATH)
+    msg("OK: " + OBJ_NAME)
 except Exception as e:
-    msg("FAIL: " + str(e))
-'''
+    msg("FAIL: " + OBJ_NAME + " | " + str(e))
+
+oProject.Close()
+"""
 
 # ---------------------------------------------------------
 # Main
@@ -92,6 +101,10 @@ oEditor = oDesign.SetActiveEditor("3D Modeler")
 
 project_name = oProject.GetName()
 design_name  = oDesign.GetName()
+project_path = oProject.GetPath()
+project_file = os.path.join(project_path, project_name + ".aedt")
+
+msg("Project file: " + project_file)
 
 try:
     solid_objects = list(oEditor.GetObjectsInGroup("Solids"))
@@ -108,26 +121,46 @@ else:
         if not os.path.exists(d):
             os.makedirs(d)
 
-    for i, obj_name in enumerate(solid_objects):
-        safe_name  = sanitize_filename(obj_name)
-        step_path  = os.path.join(OUTPUT_DIR, safe_name + ".step")
-        script_path = os.path.join(SCRIPTS_DIR,
-                                   "{:03d}_{}.py".format(i + 1, safe_name))
+    script_paths = []
 
-        code = SCRIPT_TEMPLATE.format(
-            obj_name_repr = repr(obj_name),
-            filepath_repr = repr(step_path),
-            project_repr  = repr(project_name),
-            design_repr   = repr(design_name),
+    for i, obj_name in enumerate(solid_objects):
+        safe_name   = sanitize_filename(obj_name)
+        step_path   = os.path.join(OUTPUT_DIR, safe_name + ".step")
+        script_name = "{:03d}_{}.py".format(i + 1, safe_name)
+        script_path = os.path.join(SCRIPTS_DIR, script_name)
+
+        code = PER_OBJECT_SCRIPT.format(
+            project_file_repr = repr(project_file),
+            design_repr       = repr(design_name),
+            obj_name_repr     = repr(obj_name),
+            filepath_repr     = repr(step_path),
         )
 
         with open(script_path, "w") as f:
             f.write(code)
 
-        msg("Generated: " + os.path.basename(script_path))
+        script_paths.append(script_path)
+        msg("  Generated: " + script_name)
+
+    # Generate run_all.bat
+    bat_path = os.path.join(SCRIPTS_DIR, "run_all.bat")
+    bat_lines = ["@echo off",
+                 "echo Maxwell STEP Batch Export",
+                 "echo =========================",
+                 "set MAXWELL=\"{}\" ".format(MAXWELL_EXE),
+                 ""]
+    for i, sp in enumerate(script_paths):
+        bat_lines.append("echo [{}/{}] Exporting...".format(i + 1, len(script_paths)))
+        bat_lines.append("%MAXWELL% -RunScriptAndExit \"{}\"".format(sp))
+        bat_lines.append("")
+    bat_lines += ["echo Done.", "pause"]
+
+    with open(bat_path, "w") as f:
+        f.write("\r\n".join(bat_lines))
 
     msg("=" * 50)
-    msg("Generated {} scripts in:".format(len(solid_objects)))
-    msg("  " + SCRIPTS_DIR)
-    msg("Run each script ONE AT A TIME from Maxwell script runner.")
+    msg("Generated {} scripts + run_all.bat".format(len(solid_objects)))
+    msg("Folder: " + SCRIPTS_DIR)
+    msg("-> Double-click run_all.bat to export all objects automatically.")
+    msg("   (Close Maxwell first, or at minimum save the project.)")
     msg("=" * 50)
