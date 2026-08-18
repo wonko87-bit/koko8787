@@ -54,6 +54,15 @@ FILEPATH     = {filepath_repr}
 def msg(text):
     oDesktop.AddMessage("", "", 0, str(text))
 
+# Remove stale lock file left by a previous crash
+for lock in [PROJECT_FILE + ".lock", PROJECT_FILE[:-5] + ".lock"]:
+    if os.path.exists(lock):
+        try:
+            os.remove(lock)
+            msg("Removed lock file: " + lock)
+        except Exception as le:
+            msg("Could not remove lock file: " + str(le))
+
 oProject = oDesktop.OpenProject(PROJECT_FILE)
 if oProject is None:
     raise RuntimeError("Failed to open project: " + PROJECT_FILE)
@@ -144,19 +153,21 @@ else:
 
     # Generate run_all.bat
     bat_path = os.path.join(SCRIPTS_DIR, "run_all.bat")
+    lock_file = project_file + ".lock"
     bat_lines = [
         "@echo off",
         "echo Maxwell STEP Batch Export",
         "echo =========================",
         "set MAXWELL=\"{}\" ".format(MAXWELL_EXE),
+        "set LOCKFILE=\"{}\"".format(lock_file),
         "",
     ]
     for i, sp in enumerate(script_paths):
         bat_lines.append("echo [{}/{}] Exporting...".format(i + 1, len(script_paths)))
         bat_lines.append("%MAXWELL% -RunScriptAndExit \"{}\"".format(sp))
-        # Force-kill any lingering Maxwell process and wait for handles to release
         bat_lines.append("taskkill /F /IM ansysedt.exe /T >nul 2>&1")
         bat_lines.append("timeout /t 3 /nobreak >nul")
+        bat_lines.append("del %LOCKFILE% >nul 2>&1")
         bat_lines.append("")
     bat_lines += ["echo Done.", "pause"]
 
