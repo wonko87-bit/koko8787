@@ -1,7 +1,8 @@
 """
-Maxwell 3D - Export all solid model objects as individual STEP files
+Maxwell 3D - Export solid model objects as STEP file(s)
 
-Output directory is set by OUTPUT_DIR below.
+MODE = "all"        -> all solids in one STEP file (stable)
+MODE = "individual" -> one STEP file per solid (may crash on complex models)
 """
 
 import ScriptEnv
@@ -16,10 +17,9 @@ import time
 # Settings
 # ---------------------------------------------------------
 
-OUTPUT_DIR = r"C:\Maxwell_STEP_Export"
-
-# Delay between each export (seconds) - increase if crashes persist
-EXPORT_DELAY = 1.5
+OUTPUT_DIR  = r"C:\Maxwell_STEP_Export"
+MODE        = "all"   # "all" or "individual"
+EXPORT_DELAY = 2.0    # seconds between exports (individual mode only)
 
 # ---------------------------------------------------------
 # Helpers
@@ -31,6 +31,18 @@ def msg(text):
 def sanitize_filename(name):
     return re.sub(r'[\\/:*?"<>|]', '_', name)
 
+def do_export(selections_str, filepath):
+    oEditor.Export(
+        [
+            "NAME:ExportParameters",
+            "AllowRegionDependentPartSelectionForPMLCreation:=", True,
+            "AllowRegionSelectionForPMLCreation:=",              True,
+            "Selections:=",    selections_str,
+            "File Name:=",     filepath,
+            "Major Version:=", -1,
+            "Minor Version:=", -1,
+        ]
+    )
 
 # ---------------------------------------------------------
 # Main
@@ -55,6 +67,7 @@ except Exception as e:
     solid_objects = []
 
 msg("Solid objects found: " + str(len(solid_objects)))
+msg("Mode: " + MODE)
 
 if not solid_objects:
     msg("No solid objects found. Exiting.")
@@ -63,41 +76,36 @@ else:
         os.makedirs(OUTPUT_DIR)
         msg("Created: " + OUTPUT_DIR)
 
-    success = []
-    failed  = []
-
-    for i, obj_name in enumerate(solid_objects):
-        safe_name = sanitize_filename(obj_name)
-        filepath  = os.path.join(OUTPUT_DIR, safe_name + ".step")
-
-        msg("[{}/{}] Exporting: {}".format(i + 1, len(solid_objects), obj_name))
-
+    if MODE == "all":
+        # Export all solids in one STEP file
+        selections_str = ",".join(solid_objects)
+        filepath = os.path.join(OUTPUT_DIR, "all_solids.step")
         try:
-            oEditor.Export(
-                [
-                    "NAME:ExportParameters",
-                    "AllowRegionDependentPartSelectionForPMLCreation:=", True,
-                    "AllowRegionSelectionForPMLCreation:=",              True,
-                    "Selections:=",    obj_name,
-                    "File Name:=",     filepath,
-                    "Major Version:=", -1,
-                    "Minor Version:=", -1,
-                ]
-            )
-            msg("  OK  : " + obj_name)
-            success.append(obj_name)
+            do_export(selections_str, filepath)
+            msg("OK: all_solids.step  ({} objects)".format(len(solid_objects)))
         except Exception as e:
-            msg("  FAIL: " + obj_name + " | " + str(e)[:100])
-            failed.append(obj_name)
+            msg("FAIL: " + str(e))
 
-        # Give Maxwell time to finish writing the file before the next export
-        time.sleep(EXPORT_DELAY)
+    else:  # individual
+        success = []
+        failed  = []
+        for i, obj_name in enumerate(solid_objects):
+            safe_name = sanitize_filename(obj_name)
+            filepath  = os.path.join(OUTPUT_DIR, safe_name + ".step")
+            msg("[{}/{}] {}".format(i + 1, len(solid_objects), obj_name))
+            try:
+                do_export(obj_name, filepath)
+                msg("  OK")
+                success.append(obj_name)
+            except Exception as e:
+                msg("  FAIL: " + str(e)[:100])
+                failed.append(obj_name)
+            time.sleep(EXPORT_DELAY)
 
-    msg("=" * 50)
-    msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
-        len(success), len(failed), len(solid_objects)))
-    if failed:
-        msg("Failed objects:")
-        for f in failed:
-            msg("  - " + f)
-    msg("=" * 50)
+        msg("=" * 50)
+        msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
+            len(success), len(failed), len(solid_objects)))
+        if failed:
+            for f in failed:
+                msg("  FAIL: " + f)
+        msg("=" * 50)
