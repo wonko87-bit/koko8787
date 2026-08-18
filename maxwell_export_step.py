@@ -10,8 +10,6 @@ oDesktop.RestoreWindow()
 
 import os
 import re
-import System
-from System import Array, Object
 
 # ---------------------------------------------------------
 # Settings
@@ -28,13 +26,6 @@ def msg(text):
 
 def sanitize_filename(name):
     return re.sub(r'[\\/:*?"<>|]', '_', name)
-
-def make_array(*args):
-    """Convert args to a .NET Object array for AEDT COM calls."""
-    a = Array.CreateInstance(Object, len(args))
-    for i, v in enumerate(args):
-        a[i] = v
-    return a
 
 
 # ---------------------------------------------------------
@@ -59,7 +50,7 @@ except Exception as e:
     msg("ERROR getting solids: " + str(e))
     solid_objects = []
 
-msg("Solid objects: " + str(solid_objects))
+msg("Solid objects found: " + str(len(solid_objects)))
 
 if not solid_objects:
     msg("No solid objects found. Exiting.")
@@ -75,43 +66,29 @@ else:
         safe_name = sanitize_filename(obj_name)
         filepath  = os.path.join(OUTPUT_DIR, safe_name + ".step")
 
-        exported = False
-
-        # Attempt 1: .NET Object array
         try:
-            params = make_array(
-                "NAME:ExportParameters",
-                "FileName:=",      filepath,
-                "SelectionList:=", obj_name,
-            )
-            oEditor.Export(params)
-            msg("  OK (NET array): " + obj_name)
-            success.append(obj_name)
-            exported = True
-        except Exception as e:
-            msg("  A fail: " + str(e)[:100])
-
-        # Attempt 2: positional args (no wrapping)
-        if not exported:
-            try:
-                oEditor.Export(
+            oEditor.Export(
+                [
                     "NAME:ExportParameters",
-                    "FileName:=",      filepath,
-                    "SelectionList:=", obj_name,
-                )
-                msg("  OK (positional): " + obj_name)
-                success.append(obj_name)
-                exported = True
-            except Exception as e:
-                msg("  B fail: " + str(e)[:100])
-
-        if not exported:
+                    "AllowRegionDependentPartSelectionForPMLCreation:=", True,
+                    "AllowRegionSelectionForPMLCreation:=",              True,
+                    "Selections:=",   obj_name,
+                    "File Name:=",    filepath,
+                    "Major Version:=", -1,
+                    "Minor Version:=", -1,
+                ]
+            )
+            msg("  OK  : " + obj_name)
+            success.append(obj_name)
+        except Exception as e:
+            msg("  FAIL: " + obj_name + " | " + str(e)[:100])
             failed.append(obj_name)
-            msg("  FAIL: " + obj_name)
 
     msg("=" * 50)
     msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
         len(success), len(failed), len(solid_objects)))
+    if failed:
+        msg("Failed objects:")
+        for f in failed:
+            msg("  - " + f)
     msg("=" * 50)
-    msg("If all failed: use Maxwell script recorder to capture")
-    msg("  Modeler -> Export on a selected object, then share the .py")
