@@ -10,12 +10,16 @@ oDesktop.RestoreWindow()
 
 import os
 import re
+import time
 
 # ---------------------------------------------------------
 # Settings
 # ---------------------------------------------------------
 
 OUTPUT_DIR = r"C:\Maxwell_STEP_Export"
+
+# Delay between each export (seconds) - increase if crashes persist
+EXPORT_DELAY = 1.5
 
 # ---------------------------------------------------------
 # Helpers
@@ -62,9 +66,11 @@ else:
     success = []
     failed  = []
 
-    for obj_name in solid_objects:
+    for i, obj_name in enumerate(solid_objects):
         safe_name = sanitize_filename(obj_name)
         filepath  = os.path.join(OUTPUT_DIR, safe_name + ".step")
+
+        msg("[{}/{}] Exporting: {}".format(i + 1, len(solid_objects), obj_name))
 
         try:
             oEditor.Export(
@@ -72,8 +78,8 @@ else:
                     "NAME:ExportParameters",
                     "AllowRegionDependentPartSelectionForPMLCreation:=", True,
                     "AllowRegionSelectionForPMLCreation:=",              True,
-                    "Selections:=",   obj_name,
-                    "File Name:=",    filepath,
+                    "Selections:=",    obj_name,
+                    "File Name:=",     filepath,
                     "Major Version:=", -1,
                     "Minor Version:=", -1,
                 ]
@@ -83,6 +89,9 @@ else:
         except Exception as e:
             msg("  FAIL: " + obj_name + " | " + str(e)[:100])
             failed.append(obj_name)
+
+        # Give Maxwell time to finish writing the file before the next export
+        time.sleep(EXPORT_DELAY)
 
     msg("=" * 50)
     msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
