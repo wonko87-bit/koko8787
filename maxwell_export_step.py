@@ -144,14 +144,19 @@ else:
 
     # Generate run_all.bat
     bat_path = os.path.join(SCRIPTS_DIR, "run_all.bat")
-    bat_lines = ["@echo off",
-                 "echo Maxwell STEP Batch Export",
-                 "echo =========================",
-                 "set MAXWELL=\"{}\" ".format(MAXWELL_EXE),
-                 ""]
+    bat_lines = [
+        "@echo off",
+        "echo Maxwell STEP Batch Export",
+        "echo =========================",
+        "set MAXWELL=\"{}\" ".format(MAXWELL_EXE),
+        "",
+    ]
     for i, sp in enumerate(script_paths):
         bat_lines.append("echo [{}/{}] Exporting...".format(i + 1, len(script_paths)))
         bat_lines.append("%MAXWELL% -RunScriptAndExit \"{}\"".format(sp))
+        # Force-kill any lingering Maxwell process and wait for handles to release
+        bat_lines.append("taskkill /F /IM ansysedt.exe /T >nul 2>&1")
+        bat_lines.append("timeout /t 3 /nobreak >nul")
         bat_lines.append("")
     bat_lines += ["echo Done.", "pause"]
 
