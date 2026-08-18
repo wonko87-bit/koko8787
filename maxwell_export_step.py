@@ -1,16 +1,17 @@
 """
 Maxwell 3D - STEP Export Automation
 
-STEP 1: Run THIS script once inside Maxwell.
-        It generates per-object export scripts + run_all.bat in SCRIPTS_DIR.
+STEP 1: Run THIS script once inside Maxwell to generate
+        per-object export scripts + run_all.bat.
 
-STEP 2: Close Maxwell (optional but recommended).
+STEP 2: Close Maxwell.
 
 STEP 3: Double-click run_all.bat.
-        Maxwell starts fresh for each object, exports it, then exits.
-        No crash from consecutive exports.
+        - Maxwell starts fresh per object, exports, then exits.
+        - If Maxwell crashes, the bat continues automatically.
+        - Already-exported files are skipped, so re-running is safe.
 
-Set MAXWELL_EXE to your actual Maxwell installation path if needed.
+Set MAXWELL_EXE to your actual installation path if needed.
 """
 
 import ScriptEnv
@@ -26,8 +27,6 @@ import re
 
 OUTPUT_DIR  = r"C:\Maxwell_STEP_Export"
 SCRIPTS_DIR = r"C:\Maxwell_STEP_Export\scripts"
-
-# Maxwell 2021 R1 default path - adjust if installed elsewhere
 MAXWELL_EXE = r"C:\Program Files\AnsysEM\AnsysEM21.1\Win64\ansysedt.exe"
 
 # ---------------------------------------------------------
@@ -54,42 +53,47 @@ FILEPATH     = {filepath_repr}
 def msg(text):
     oDesktop.AddMessage("", "", 0, str(text))
 
-# Remove stale lock file left by a previous crash
-for lock in [PROJECT_FILE + ".lock", PROJECT_FILE[:-5] + ".lock"]:
-    if os.path.exists(lock):
-        try:
-            os.remove(lock)
-            msg("Removed lock file: " + lock)
-        except Exception as le:
-            msg("Could not remove lock file: " + str(le))
+# Skip if already exported
+if os.path.exists(FILEPATH):
+    msg("SKIP (exists): " + OBJ_NAME)
+else:
+    # Remove stale lock file from previous crash
+    for lock in [PROJECT_FILE + ".lock", PROJECT_FILE[:-5] + ".lock"]:
+        if os.path.exists(lock):
+            try:
+                os.remove(lock)
+                msg("Removed lock: " + lock)
+            except Exception as le:
+                msg("Lock remove failed: " + str(le))
 
-oProject = oDesktop.OpenProject(PROJECT_FILE)
-if oProject is None:
-    raise RuntimeError("Failed to open project: " + PROJECT_FILE)
+    oProject = oDesktop.OpenProject(PROJECT_FILE)
+    if oProject is None:
+        raise RuntimeError("Failed to open project: " + PROJECT_FILE)
 
-oDesign = oProject.SetActiveDesign(DESIGN_NAME)
-oEditor = oDesign.SetActiveEditor("3D Modeler")
+    oDesign = oProject.SetActiveDesign(DESIGN_NAME)
+    oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-if not os.path.exists(os.path.dirname(FILEPATH)):
-    os.makedirs(os.path.dirname(FILEPATH))
+    output_dir = os.path.dirname(FILEPATH)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-try:
-    oEditor.Export(
-        [
-            "NAME:ExportParameters",
-            "AllowRegionDependentPartSelectionForPMLCreation:=", True,
-            "AllowRegionSelectionForPMLCreation:=",              True,
-            "Selections:=",    OBJ_NAME,
-            "File Name:=",     FILEPATH,
-            "Major Version:=", -1,
-            "Minor Version:=", -1,
-        ]
-    )
-    msg("OK: " + OBJ_NAME)
-except Exception as e:
-    msg("FAIL: " + OBJ_NAME + " | " + str(e))
+    try:
+        oEditor.Export(
+            [
+                "NAME:ExportParameters",
+                "AllowRegionDependentPartSelectionForPMLCreation:=", True,
+                "AllowRegionSelectionForPMLCreation:=",              True,
+                "Selections:=",    OBJ_NAME,
+                "File Name:=",     FILEPATH,
+                "Major Version:=", -1,
+                "Minor Version:=", -1,
+            ]
+        )
+        msg("OK: " + OBJ_NAME)
+    except Exception as e:
+        msg("FAIL: " + OBJ_NAME + " | " + str(e))
 
-oProject.Close()
+    oProject.Close()
 """
 
 # ---------------------------------------------------------
@@ -152,24 +156,25 @@ else:
         msg("  Generated: " + script_name)
 
     # Generate run_all.bat
-    bat_path = os.path.join(SCRIPTS_DIR, "run_all.bat")
-    lock_file = project_file + ".lock"
-    bat_lines = [
+    lock_file   = project_file + ".lock"
+    bat_path    = os.path.join(SCRIPTS_DIR, "run_all.bat")
+    bat_lines   = [
         "@echo off",
-        "echo Maxwell STEP Batch Export",
-        "echo =========================",
+        "echo Maxwell STEP Batch Export ({} objects)".format(len(solid_objects)),
+        "echo ================================================",
         "set MAXWELL=\"{}\" ".format(MAXWELL_EXE),
         "set LOCKFILE=\"{}\"".format(lock_file),
         "",
     ]
     for i, sp in enumerate(script_paths):
-        bat_lines.append("echo [{}/{}] Exporting...".format(i + 1, len(script_paths)))
+        bat_lines.append("echo [{}/{}] {}".format(
+            i + 1, len(script_paths), os.path.basename(sp)))
         bat_lines.append("%MAXWELL% -RunScriptAndExit \"{}\"".format(sp))
         bat_lines.append("taskkill /F /IM ansysedt.exe /T >nul 2>&1")
         bat_lines.append("timeout /t 3 /nobreak >nul")
         bat_lines.append("del %LOCKFILE% >nul 2>&1")
         bat_lines.append("")
-    bat_lines += ["echo Done.", "pause"]
+    bat_lines += ["echo All done.", "pause"]
 
     with open(bat_path, "w") as f:
         f.write("\r\n".join(bat_lines))
@@ -177,6 +182,6 @@ else:
     msg("=" * 50)
     msg("Generated {} scripts + run_all.bat".format(len(solid_objects)))
     msg("Folder: " + SCRIPTS_DIR)
-    msg("-> Double-click run_all.bat to export all objects automatically.")
-    msg("   (Close Maxwell first, or at minimum save the project.)")
+    msg("-> run_all.bat auto-skips already-exported files.")
+    msg("   Re-run it anytime to resume after a crash.")
     msg("=" * 50)
