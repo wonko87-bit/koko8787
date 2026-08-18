@@ -10,6 +10,8 @@ oDesktop.RestoreWindow()
 
 import os
 import re
+import System
+from System import Array, Object
 
 # ---------------------------------------------------------
 # Settings
@@ -26,6 +28,13 @@ def msg(text):
 
 def sanitize_filename(name):
     return re.sub(r'[\\/:*?"<>|]', '_', name)
+
+def make_array(*args):
+    """Convert args to a .NET Object array for AEDT COM calls."""
+    a = Array.CreateInstance(Object, len(args))
+    for i, v in enumerate(args):
+        a[i] = v
+    return a
 
 
 # ---------------------------------------------------------
@@ -44,7 +53,6 @@ if oDesign is None:
 
 oEditor = oDesign.SetActiveEditor("3D Modeler")
 
-# Only solid objects can be exported as STEP
 try:
     solid_objects = list(oEditor.GetObjectsInGroup("Solids"))
 except Exception as e:
@@ -68,34 +76,34 @@ else:
         filepath  = os.path.join(OUTPUT_DIR, safe_name + ".step")
 
         exported = False
-        for params in [
-            # format A: list with SelectionList
-            ["NAME:ExportParameters",
-             "FileName:=",      filepath,
-             "SelectionList:=", obj_name],
-            # format B: tuple with SelectionList
-            ("NAME:ExportParameters",
-             "FileName:=",      filepath,
-             "SelectionList:=", obj_name),
-            # format C: no SelectionList (export after setting selection)
-            ["NAME:ExportParameters",
-             "FileName:=",      filepath],
-        ]:
+
+        # Attempt 1: .NET Object array
+        try:
+            params = make_array(
+                "NAME:ExportParameters",
+                "FileName:=",      filepath,
+                "SelectionList:=", obj_name,
+            )
+            oEditor.Export(params)
+            msg("  OK (NET array): " + obj_name)
+            success.append(obj_name)
+            exported = True
+        except Exception as e:
+            msg("  A fail: " + str(e)[:100])
+
+        # Attempt 2: positional args (no wrapping)
+        if not exported:
             try:
-                if isinstance(params, list) and "SelectionList:=" not in params:
-                    # Pre-select object before exporting
-                    oEditor.SetSelectionList(
-                        ["NAME:Selections",
-                         "Selections:=", obj_name,
-                         "NewPartsModelFlag:=", "Model"]
-                    )
-                oEditor.Export(params)
-                msg("  OK  : " + obj_name + " (" + str(type(params).__name__) + ")")
+                oEditor.Export(
+                    "NAME:ExportParameters",
+                    "FileName:=",      filepath,
+                    "SelectionList:=", obj_name,
+                )
+                msg("  OK (positional): " + obj_name)
                 success.append(obj_name)
                 exported = True
-                break
             except Exception as e:
-                msg("  try failed (" + str(type(params).__name__) + "): " + str(e)[:80])
+                msg("  B fail: " + str(e)[:100])
 
         if not exported:
             failed.append(obj_name)
@@ -105,3 +113,5 @@ else:
     msg("Done.  Success: {}  /  Failed: {}  /  Total: {}".format(
         len(success), len(failed), len(solid_objects)))
     msg("=" * 50)
+    msg("If all failed: use Maxwell script recorder to capture")
+    msg("  Modeler -> Export on a selected object, then share the .py")
