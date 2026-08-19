@@ -13,8 +13,21 @@
         WindowStyle="None">
 
   <Window.Resources>
+    <!--
+      Every setting row is a two-column grid: the label takes what is left after the
+      control has claimed the width it needs. Laying both children in one cell and
+      pushing the control right instead lets a wide control slide under the label,
+      which is exactly what used to happen on the wider rows.
+    -->
     <Style x:Key="Row" TargetType="Grid">
       <Setter Property="Margin" Value="0,0,0,14" />
+    </Style>
+    <Style x:Key="RowLabel" TargetType="StackPanel">
+      <Setter Property="Margin" Value="0,0,12,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style x:Key="Text.RowTitle" TargetType="TextBlock" BasedOn="{StaticResource Text.Body}">
+      <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
   </Window.Resources>
 
@@ -50,8 +63,16 @@
           <TextBlock Margin="0,0,0,8" Style="{StaticResource Text.Section}" Text="화면" />
 
           <Grid Style="{StaticResource Row}">
-            <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Body}" Text="테마" />
-            <Border HorizontalAlignment="Right"
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Margin="0,0,12,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Text.RowTitle}"
+                       Text="테마" />
+            <Border Grid.Column="1"
+                    VerticalAlignment="Center"
                     Background="{DynamicResource Brush.SurfaceAlt}"
                     CornerRadius="{StaticResource Corner.Small}">
               <StackPanel Orientation="Horizontal">
@@ -70,11 +91,17 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="위젯 표시 방식" />
-              <TextBlock Style="{StaticResource Text.Meta}" Text="바탕화면 고정은 다른 창 뒤에 머무릅니다" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="위젯 표시 방식" />
+              <TextBlock Style="{StaticResource Text.Meta}"
+                         Text="바탕화면 고정은 다른 창 뒤에 머무릅니다"
+                         TextWrapping="Wrap" />
             </StackPanel>
-            <Border HorizontalAlignment="Right"
+            <Border Grid.Column="1"
                     VerticalAlignment="Center"
                     Background="{DynamicResource Brush.SurfaceAlt}"
                     CornerRadius="{StaticResource Corner.Small}">
@@ -99,8 +126,16 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Body}" Text="위젯 불투명도" />
-            <Border HorizontalAlignment="Right"
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Margin="0,0,12,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Text.RowTitle}"
+                       Text="위젯 불투명도" />
+            <Border Grid.Column="1"
+                    VerticalAlignment="Center"
                     Background="{DynamicResource Brush.SurfaceAlt}"
                     CornerRadius="{StaticResource Corner.Small}">
               <StackPanel Orientation="Horizontal">
@@ -132,8 +167,16 @@
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="달력" />
 
           <Grid Style="{StaticResource Row}">
-            <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Body}" Text="주 시작 요일" />
-            <Border HorizontalAlignment="Right"
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Margin="0,0,12,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Text.RowTitle}"
+                       Text="주 시작 요일" />
+            <Border Grid.Column="1"
+                    VerticalAlignment="Center"
                     Background="{DynamicResource Brush.SurfaceAlt}"
                     CornerRadius="{StaticResource Corner.Small}">
               <StackPanel Orientation="Horizontal">
@@ -152,14 +195,18 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="토요일 파랑 · 일요일 빨강" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="토요일 파랑 · 일요일 빨강" />
               <TextBlock Style="{StaticResource Text.Meta}"
                          Text="끄면 주말도 나머지와 같은 회색조로 표시됩니다"
                          TextWrapping="Wrap" />
             </StackPanel>
             <CheckBox x:Name="ColorWeekends"
-                      HorizontalAlignment="Right"
+                      Grid.Column="1"
                       VerticalAlignment="Center"
                       Style="{StaticResource CheckBox.Setting}" />
           </Grid>
@@ -168,13 +215,17 @@
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="단축키" />
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="빠른 입력 열기" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="빠른 입력 열기" />
               <TextBlock Style="{StaticResource Text.Meta}" Text="예) Ctrl+Alt+Space" />
             </StackPanel>
-            <Border Width="150"
+            <Border Grid.Column="1"
+                    Width="150"
                     Padding="10,6"
-                    HorizontalAlignment="Right"
                     VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Surface}"
                     BorderBrush="{DynamicResource Brush.Border}"
@@ -189,13 +240,17 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="위젯 표시/숨기기" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="위젯 표시/숨기기" />
               <TextBlock Style="{StaticResource Text.Meta}" Text="예) Ctrl+Alt+D" />
             </StackPanel>
-            <Border Width="150"
+            <Border Grid.Column="1"
+                    Width="150"
                     Padding="10,6"
-                    HorizontalAlignment="Right"
                     VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Surface}"
                     BorderBrush="{DynamicResource Brush.Border}"
@@ -210,13 +265,17 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="일정 목록 열기/닫기" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="일정 목록 열기/닫기" />
               <TextBlock Style="{StaticResource Text.Meta}" Text="예) Ctrl+Alt+C" />
             </StackPanel>
-            <Border Width="150"
+            <Border Grid.Column="1"
+                    Width="150"
                     Padding="10,6"
-                    HorizontalAlignment="Right"
                     VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Surface}"
                     BorderBrush="{DynamicResource Brush.Border}"
@@ -231,13 +290,17 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="할일 목록 열기/닫기" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="할일 목록 열기/닫기" />
               <TextBlock Style="{StaticResource Text.Meta}" Text="예) Ctrl+Alt+T" />
             </StackPanel>
-            <Border Width="150"
+            <Border Grid.Column="1"
+                    Width="150"
                     Padding="10,6"
-                    HorizontalAlignment="Right"
                     VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Surface}"
                     BorderBrush="{DynamicResource Brush.Border}"
@@ -260,15 +323,24 @@
           <!-- ============ input behaviour ============ -->
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="입력 해석" />
 
+          <!--
+            Four segments plus a wrapping hint do not fit side by side at this window
+            width, so the label sits above the segments instead of beside them.
+          -->
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center" Width="250" HorizontalAlignment="Left">
-              <TextBlock Style="{StaticResource Text.Body}" Text="표기가 없을 때 기본 분류" />
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel>
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="표기가 없을 때 기본 분류" />
               <TextBlock x:Name="DefaultTargetHint"
                          Style="{StaticResource Text.Meta}"
                          TextWrapping="Wrap" />
             </StackPanel>
-            <Border HorizontalAlignment="Right"
-                    VerticalAlignment="Center"
+            <Border Grid.Row="1"
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Left"
                     Background="{DynamicResource Brush.SurfaceAlt}"
                     CornerRadius="{StaticResource Corner.Small}">
               <StackPanel Orientation="Horizontal">
@@ -297,14 +369,18 @@
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel VerticalAlignment="Center" Width="330" HorizontalAlignment="Left">
-              <TextBlock Style="{StaticResource Text.Body}" Text="'2시'를 오후로 해석" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="'2시'를 오후로 해석" />
               <TextBlock Style="{StaticResource Text.Meta}"
                          Text="오전/오후 표기가 없는 1~7시를 오후로 읽습니다"
                          TextWrapping="Wrap" />
             </StackPanel>
             <CheckBox x:Name="AfternoonBias"
-                      HorizontalAlignment="Right"
+                      Grid.Column="1"
                       VerticalAlignment="Center"
                       Style="{StaticResource CheckBox.Setting}" />
           </Grid>
@@ -315,54 +391,74 @@
             <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="Outlook 연동" />
 
             <Grid Style="{StaticResource Row}">
-              <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource Text.Body}" Text="Outlook 연동 사용" />
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Style="{StaticResource RowLabel}">
+                <TextBlock Style="{StaticResource Text.RowTitle}" Text="Outlook 연동 사용" />
                 <TextBlock Style="{StaticResource Text.Meta}"
                            Text="끄면 아래 항목까지 전부 멈춥니다. Outlook이 깔려 있어도 앱은 완전히 로컬로 동작합니다."
                            TextWrapping="Wrap" />
               </StackPanel>
               <CheckBox x:Name="UseOutlook"
-                        HorizontalAlignment="Right"
+                        Grid.Column="1"
                         VerticalAlignment="Center"
                         Style="{StaticResource CheckBox.Setting}" />
             </Grid>
 
             <Grid Style="{StaticResource Row}">
-              <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource Text.Body}" Text="새 항목을 Outlook에도 저장" />
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Style="{StaticResource RowLabel}">
+                <TextBlock Style="{StaticResource Text.RowTitle}" Text="새 항목을 Outlook에도 저장" />
                 <TextBlock Style="{StaticResource Text.Meta}"
                            Text="끄더라도 !OL 을 붙이면 그 항목만 보냅니다. 켠 뒤 !NOL 은 그 항목만 제외합니다."
                            TextWrapping="Wrap" />
               </StackPanel>
               <CheckBox x:Name="PushToOutlook"
-                        HorizontalAlignment="Right"
+                        Grid.Column="1"
                         VerticalAlignment="Center"
                         Style="{StaticResource CheckBox.Setting}" />
             </Grid>
 
             <Grid Style="{StaticResource Row}">
-              <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource Text.Body}" Text="Outlook 일정 같이 보기" />
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <StackPanel Style="{StaticResource RowLabel}">
+                <TextBlock Style="{StaticResource Text.RowTitle}" Text="Outlook 일정 같이 보기" />
                 <TextBlock Style="{StaticResource Text.Meta}"
                            Text="위젯에 회사 캘린더를 흐리게 겹쳐 보여줍니다. 읽기만 하고 고치지 않습니다."
                            TextWrapping="Wrap" />
               </StackPanel>
               <CheckBox x:Name="ShowOutlookCalendar"
-                        HorizontalAlignment="Right"
+                        Grid.Column="1"
                         VerticalAlignment="Center"
                         Checked="OnCalendarOverlayChanged"
                         Unchecked="OnCalendarOverlayChanged"
                         Style="{StaticResource CheckBox.Setting}" />
             </Grid>
 
+            <!-- Five segments plus the minutes box need the whole width to themselves. -->
             <Grid x:Name="RefreshRow" Style="{StaticResource Row}">
-              <StackPanel Width="200" HorizontalAlignment="Left" VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource Text.Body}" Text="다시 읽는 주기" />
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel>
+                <TextBlock Style="{StaticResource Text.RowTitle}" Text="다시 읽는 주기" />
                 <TextBlock x:Name="RefreshHint"
                            Style="{StaticResource Text.Meta}"
                            TextWrapping="Wrap" />
               </StackPanel>
-              <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" VerticalAlignment="Center">
+              <StackPanel Grid.Row="1"
+                          Margin="0,8,0,0"
+                          HorizontalAlignment="Left"
+                          Orientation="Horizontal">
                 <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="{StaticResource Corner.Small}">
                   <StackPanel Orientation="Horizontal">
                     <RadioButton x:Name="Refresh5"
@@ -418,13 +514,17 @@
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="Teams 회의" />
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel Width="290" HorizontalAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="주소록" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="주소록" />
               <TextBlock x:Name="ContactsSummary"
                          Style="{StaticResource Text.Meta}"
                          TextWrapping="Wrap" />
             </StackPanel>
-            <Button HorizontalAlignment="Right"
+            <Button Grid.Column="1"
                     VerticalAlignment="Center"
                     Click="OnContactsClick"
                     Content="주소록 편집"
@@ -435,20 +535,31 @@
           <TextBlock Margin="0,8,0,8" Style="{StaticResource Text.Section}" Text="시스템" />
 
           <Grid Style="{StaticResource Row}">
-            <StackPanel Width="330" HorizontalAlignment="Left" VerticalAlignment="Center">
-              <TextBlock Style="{StaticResource Text.Body}" Text="Windows 시작 시 자동 실행" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="Windows 시작 시 자동 실행" />
               <TextBlock x:Name="StartupHint" Style="{StaticResource Text.Meta}" TextWrapping="Wrap" />
             </StackPanel>
             <CheckBox x:Name="LaunchAtStartup"
-                      HorizontalAlignment="Right"
+                      Grid.Column="1"
                       VerticalAlignment="Center"
                       Style="{StaticResource CheckBox.Setting}" />
           </Grid>
 
           <Grid Style="{StaticResource Row}">
-            <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Body}" Text="시작할 때 위젯 표시" />
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Margin="0,0,12,0"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource Text.RowTitle}"
+                       Text="시작할 때 위젯 표시" />
             <CheckBox x:Name="ShowWidgetOnStart"
-                      HorizontalAlignment="Right"
+                      Grid.Column="1"
                       VerticalAlignment="Center"
                       Style="{StaticResource CheckBox.Setting}" />
           </Grid>
