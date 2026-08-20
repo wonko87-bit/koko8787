@@ -172,6 +172,12 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
     });
     let inbox = inbox?;
 
+    if !path.is_file() {
+        return None; // 폴더나 사라진 경로는 수집하지 않는다
+    }
+    if path.starts_with(&inbox) {
+        return None; // 이미 관리함 안에 있는 파일
+    }
     let name = path.file_name()?.to_string_lossy().to_string();
     std::fs::create_dir_all(&inbox).ok()?;
     let dest = unique_dest(&inbox, &name);
@@ -191,6 +197,7 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
         status: EntryStatus::Inbox,
         filed_to: None,
         filed_at: None,
+        record_id: None,
     };
     store.update(|d| d.entries.push(entry.clone()));
     let _ = app.emit("entries-changed", ());

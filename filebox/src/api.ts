@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  BatchResult,
   Candidate,
   Favorite,
   FileEntry,
@@ -25,6 +26,15 @@ export const api = {
   setTags: (entryId: string, tags: string[]) =>
     invoke<void>("set_tags", { entryId, tags }),
   removeEntry: (entryId: string) => invoke<void>("remove_entry", { entryId }),
+  removeEntries: (entryIds: string[]) =>
+    invoke<void>("remove_entries", { entryIds }),
+  setCategoryMany: (entryIds: string[], category: string) =>
+    invoke<void>("set_category_many", { entryIds, category }),
+  sendManyToFavorite: (entryIds: string[], favoriteId: string) =>
+    invoke<BatchResult>("send_many_to_favorite", { entryIds, favoriteId }),
+  sendManyToPath: (entryIds: string[], destDir: string) =>
+    invoke<BatchResult>("send_many_to_path", { entryIds, destDir }),
+  undoMove: (entryId: string) => invoke<FileEntry>("undo_move", { entryId }),
   clearHistory: () => invoke<void>("clear_history"),
 
   listFavorites: () => invoke<Favorite[]>("list_favorites"),

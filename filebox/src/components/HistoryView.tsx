@@ -44,6 +44,12 @@ export default function HistoryView({ entries }: { entries: FileEntry[] }) {
             {e.filed_at ? ` · ${formatDate(e.filed_at)}` : ""}
           </span>
           <button
+            title="파일을 관리함으로 되돌리고 이 이동의 학습 기록도 취소"
+            onClick={() => api.undoMove(e.id).catch((err) => alert(String(err)))}
+          >
+            되돌리기
+          </button>
+          <button
             className="ghost"
             title="이 기록만 삭제 (파일은 그대로)"
             onClick={() => api.removeEntry(e.id)}

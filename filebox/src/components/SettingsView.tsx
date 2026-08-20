@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { api } from "../api";
 import { openFolder } from "../openFolder";
 import type { Settings } from "../types";
@@ -10,6 +12,22 @@ export default function SettingsView({
   settings: Settings;
   onChange: (s: Settings) => void;
 }) {
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    isEnabled().then(setAutostart).catch(() => setAutostart(null));
+  }, []);
+
+  const toggleAutostart = async (on: boolean) => {
+    try {
+      if (on) await enable();
+      else await disable();
+      setAutostart(await isEnabled());
+    } catch (e) {
+      alert(String(e));
+    }
+  };
+
   const save = async (next: Settings) => {
     onChange(await api.updateSettings(next));
   };
@@ -72,6 +90,21 @@ export default function SettingsView({
 
       <div className="panel">
         <h2>동작</h2>
+        <div className="toggle-row">
+          <div>
+            <div>윈도우 시작 시 자동 실행</div>
+            <div className="desc">
+              FileBox가 켜져 있어야 새 파일이 자동 수집돼요. 트레이에 조용히
+              상주합니다.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={autostart === true}
+            disabled={autostart === null}
+            onChange={(e) => toggleAutostart(e.target.checked)}
+          />
+        </div>
         <div className="toggle-row">
           <div>
             <div>자동 수집</div>

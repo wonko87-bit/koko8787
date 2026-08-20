@@ -105,11 +105,41 @@ mod tests {
                 status: EntryStatus::Inbox,
                 filed_to: None,
                 filed_at: None,
+                record_id: None,
             });
         });
         let reloaded = Store::load(path);
         assert_eq!(reloaded.read(|d| d.entries.len()), 1);
         assert_eq!(reloaded.read(|d| d.entries[0].file_name.clone()), "a.pdf");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// 구버전(record_id / MoveRecord.id 없음) 저장 파일도 손실 없이 읽혀야 한다.
+    /// 파싱에 실패하면 기본값으로 덮어써져 사용자 데이터가 통째로 사라진다.
+    #[test]
+    fn loads_store_written_by_older_version() {
+        let dir = temp_dir("compat");
+        let path = dir.join("store.json");
+        let legacy = r#"{
+          "entries": [{
+            "id": "e1", "file_name": "a.pdf", "path": "/inbox/a.pdf",
+            "origin": "/dl/a.pdf", "size": 10, "added_at": 1,
+            "category": "문서", "tags": ["급함"], "status": "filed",
+            "filed_to": "/dest", "filed_at": 2
+          }],
+          "favorites": [{"id": "f1", "name": "문서함", "path": "/dest"}],
+          "rules": [],
+          "records": [{"ext": "pdf", "tokens": ["report"], "favorite_id": "f1", "at": 3}],
+          "settings": null
+        }"#;
+        fs::write(&path, legacy).unwrap();
+
+        let store = Store::load(path);
+        assert_eq!(store.read(|d| d.entries.len()), 1, "구버전 항목이 유실됨");
+        assert_eq!(store.read(|d| d.records.len()), 1, "구버전 학습 기록이 유실됨");
+        assert_eq!(store.read(|d| d.favorites.len()), 1);
+        assert_eq!(store.read(|d| d.entries[0].tags.clone()), vec!["급함"]);
+        assert!(store.read(|d| d.entries[0].record_id.is_none()));
         let _ = fs::remove_dir_all(dir);
     }
 

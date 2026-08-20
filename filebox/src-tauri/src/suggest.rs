@@ -87,6 +87,7 @@ mod tests {
 
     fn rec(ext: &str, tokens: &[&str], fav: &str) -> MoveRecord {
         MoveRecord {
+            id: format!("{ext}-{fav}-{}", tokens.join("_")),
             ext: ext.into(),
             tokens: tokens.iter().map(|s| s.to_string()).collect(),
             favorite_id: fav.into(),

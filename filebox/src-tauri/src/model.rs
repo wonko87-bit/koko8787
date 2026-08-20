@@ -25,6 +25,9 @@ pub struct FileEntry {
     pub status: EntryStatus,
     pub filed_to: Option<PathBuf>,
     pub filed_at: Option<u64>,
+    /// 이동 시 남긴 학습 기록의 id. 되돌리기 때 그 기록만 정확히 제거한다.
+    #[serde(default)]
+    pub record_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +55,8 @@ pub struct Rule {
 /// 학습용: 사용자가 파일을 즐겨찾기로 보낸 기록
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoveRecord {
+    #[serde(default)]
+    pub id: String,
     pub ext: String,
     pub tokens: Vec<String>,
     pub favorite_id: String,

@@ -81,8 +81,11 @@ fn file_entry_to(
     move_file(&entry.path, &dest).map_err(|e| format!("이동 실패: {e}"))?;
 
     let updated = store.update(|d| {
+        let mut record_id = None;
         if let Some(fav_id) = &learn_favorite {
+            let id = new_id();
             d.records.push(MoveRecord {
+                id: id.clone(),
                 ext: ext_of(&entry.file_name),
                 tokens: tokenize(&stem_of(&entry.file_name)),
                 favorite_id: fav_id.clone(),
@@ -92,12 +95,14 @@ fn file_entry_to(
             if len > MAX_RECORDS {
                 d.records.drain(0..len - MAX_RECORDS);
             }
+            record_id = Some(id);
         }
         d.entries.iter_mut().find(|e| e.id == entry_id).map(|e| {
             e.status = EntryStatus::Filed;
             e.path = dest.clone();
             e.filed_to = Some(dest_dir.clone());
             e.filed_at = Some(now_millis());
+            e.record_id = record_id;
             e.clone()
         })
     });
@@ -174,6 +179,132 @@ pub fn set_tags(
 pub fn remove_entry(app: AppHandle, store: State<Store>, entry_id: String) {
     store.update(|d| d.entries.retain(|e| e.id != entry_id));
     let _ = app.emit("entries-changed", ());
+}
+
+/// 여러 항목을 목록에서 제거 (파일은 그대로)
+#[tauri::command]
+pub fn remove_entries(app: AppHandle, store: State<Store>, entry_ids: Vec<String>) {
+    store.update(|d| d.entries.retain(|e| !entry_ids.contains(&e.id)));
+    let _ = app.emit("entries-changed", ());
+}
+
+/// 여러 항목의 카테고리를 한 번에 변경
+#[tauri::command]
+pub fn set_category_many(
+    app: AppHandle,
+    store: State<Store>,
+    entry_ids: Vec<String>,
+    category: String,
+) {
+    store.update(|d| {
+        for e in d.entries.iter_mut().filter(|e| entry_ids.contains(&e.id)) {
+            e.category = category.clone();
+        }
+    });
+    let _ = app.emit("entries-changed", ());
+}
+
+#[derive(Serialize)]
+pub struct BatchResult {
+    pub moved: usize,
+    pub errors: Vec<String>,
+}
+
+fn move_many(
+    app: &AppHandle,
+    store: &Store,
+    entry_ids: Vec<String>,
+    dest_dir: PathBuf,
+    favorite_id: Option<String>,
+) -> BatchResult {
+    let mut moved = 0;
+    let mut errors = Vec::new();
+    for id in entry_ids {
+        let name = store.read(|d| {
+            d.entries.iter().find(|e| e.id == id).map(|e| e.file_name.clone())
+        });
+        match file_entry_to(app, store, &id, dest_dir.clone(), favorite_id.clone()) {
+            Ok(_) => moved += 1,
+            Err(e) => errors.push(format!("{}: {e}", name.unwrap_or(id))),
+        }
+    }
+    BatchResult { moved, errors }
+}
+
+/// 여러 항목을 한 즐겨찾기로 일괄 이동
+#[tauri::command]
+pub fn send_many_to_favorite(
+    app: AppHandle,
+    store: State<Store>,
+    entry_ids: Vec<String>,
+    favorite_id: String,
+) -> Result<BatchResult, String> {
+    let fav = store
+        .read(|d| d.favorites.iter().find(|f| f.id == favorite_id).cloned())
+        .ok_or("즐겨찾기를 찾을 수 없습니다")?;
+    Ok(move_many(&app, &store, entry_ids, fav.path, Some(fav.id)))
+}
+
+/// 여러 항목을 임의의 폴더로 일괄 이동
+#[tauri::command]
+pub fn send_many_to_path(
+    app: AppHandle,
+    store: State<Store>,
+    entry_ids: Vec<String>,
+    dest_dir: String,
+) -> BatchResult {
+    let dest = PathBuf::from(dest_dir);
+    let fav_id = store.read(|d| {
+        d.favorites.iter().find(|f| f.path == dest).map(|f| f.id.clone())
+    });
+    move_many(&app, &store, entry_ids, dest, fav_id)
+}
+
+/// 이동을 되돌린다: 파일을 관리함으로 되돌리고, 그때 남긴 학습 기록도 제거한다.
+#[tauri::command]
+pub fn undo_move(
+    app: AppHandle,
+    store: State<Store>,
+    entry_id: String,
+) -> Result<FileEntry, String> {
+    let (entry, inbox) = store.read(|d| {
+        (
+            d.entries.iter().find(|e| e.id == entry_id).cloned(),
+            d.settings.as_ref().map(|s| s.inbox_dir.clone()),
+        )
+    });
+    let entry = entry.ok_or("항목을 찾을 수 없습니다")?;
+    let inbox = inbox.ok_or("관리함 폴더가 설정되지 않았습니다")?;
+    if entry.status != EntryStatus::Filed {
+        return Err("이미 관리함에 있는 항목입니다".into());
+    }
+    if !entry.path.is_file() {
+        return Err("파일이 이동되었거나 삭제되어 되돌릴 수 없습니다".into());
+    }
+    std::fs::create_dir_all(&inbox).map_err(|e| format!("관리함 폴더 생성 실패: {e}"))?;
+
+    let dest = unique_dest(&inbox, &entry.file_name);
+    move_file(&entry.path, &dest).map_err(|e| format!("되돌리기 실패: {e}"))?;
+
+    let updated = store.update(|d| {
+        if let Some(rid) = &entry.record_id {
+            d.records.retain(|r| &r.id != rid);
+        }
+        d.entries.iter_mut().find(|e| e.id == entry_id).map(|e| {
+            e.status = EntryStatus::Inbox;
+            e.path = dest.clone();
+            e.file_name = dest
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| e.file_name.clone());
+            e.filed_to = None;
+            e.filed_at = None;
+            e.record_id = None;
+            e.clone()
+        })
+    });
+    let _ = app.emit("entries-changed", ());
+    updated.ok_or_else(|| "항목 갱신 실패".into())
 }
 
 /// 이동 완료(Filed) 기록 전체 삭제. 학습 데이터(records)는 유지된다.

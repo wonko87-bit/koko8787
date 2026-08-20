@@ -19,6 +19,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             // ---- 스토어 로드 & 기본 설정 ----
             let data_dir = app.path().app_data_dir()?;
@@ -124,6 +128,11 @@ pub fn run() {
             commands::set_category,
             commands::set_tags,
             commands::remove_entry,
+            commands::remove_entries,
+            commands::set_category_many,
+            commands::send_many_to_favorite,
+            commands::send_many_to_path,
+            commands::undo_move,
             commands::clear_history,
             commands::list_favorites,
             commands::add_favorite,

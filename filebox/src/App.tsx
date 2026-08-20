@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api } from "./api";
 import type { FileEntry, Favorite, Rule, Settings } from "./types";
 import InboxView from "./components/InboxView";
@@ -19,6 +20,7 @@ export default function App() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [collectOpen, setCollectOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const reloadEntries = useCallback(() => {
     api.listEntries().then(setEntries).catch(console.error);
@@ -48,6 +50,33 @@ export default function App() {
       unsubs.forEach((p) => p.then((un) => un()));
     };
   }, [reloadEntries, reloadFavorites, reloadRules, reloadSettings]);
+
+  // 창에 파일을 끌어다 놓으면 감시 폴더 밖의 파일도 관리함으로 수집한다.
+  useEffect(() => {
+    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === "over") {
+        setDragOver(true);
+      } else if (event.payload.type === "drop") {
+        setDragOver(false);
+        const paths = event.payload.paths;
+        if (paths.length > 0) {
+          api
+            .collectPaths(paths)
+            .then((count) => {
+              if (count === 0) {
+                alert("수집할 수 있는 파일이 없어요. (폴더는 수집되지 않습니다)");
+              }
+            })
+            .catch((e) => alert(String(e)));
+        }
+      } else {
+        setDragOver(false);
+      }
+    });
+    return () => {
+      unlisten.then((un) => un());
+    };
+  }, []);
 
   const inboxCount = entries.filter((e) => e.status === "inbox").length;
 
@@ -104,6 +133,15 @@ export default function App() {
           <SettingsView settings={settings} onChange={setSettings} />
         )}
       </div>
+
+      {dragOver && (
+        <div className="drop-overlay">
+          <div className="drop-card">
+            <div className="drop-icon">📥</div>
+            여기에 놓으면 관리함으로 수집됩니다
+          </div>
+        </div>
+      )}
 
       {collectOpen && (
         <CollectModal

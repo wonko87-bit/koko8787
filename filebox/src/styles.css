@@ -370,3 +370,114 @@ select:focus {
   filter: brightness(1.15);
   color: #fff;
 }
+
+/* ---------- 검색 / 필터 툴바 ---------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.toolbar .search {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- 일괄 처리 바 ---------- */
+
+.batch-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+.batch-bar strong {
+  color: var(--accent);
+}
+
+.file-card.selected {
+  border-color: var(--accent);
+  background: #fbfbff;
+}
+
+/* ---------- 태그 ---------- */
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: #eef0f7;
+  color: #4a5069;
+  border-radius: 999px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+}
+.tag-x {
+  border: none;
+  background: transparent;
+  color: #8b90a6;
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tag-x:hover {
+  color: var(--danger);
+}
+.tag-add {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.tag-input {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  width: 160px;
+}
+
+/* ---------- 드래그 앤 드롭 오버레이 ---------- */
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(79, 91, 213, 0.12);
+  backdrop-filter: blur(1px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.drop-card {
+  background: var(--panel);
+  border: 2px dashed var(--accent);
+  border-radius: 16px;
+  padding: 32px 44px;
+  text-align: center;
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 12px 40px rgba(20, 22, 40, 0.18);
+}
+.drop-icon {
+  font-size: 44px;
+  margin-bottom: 8px;
+}

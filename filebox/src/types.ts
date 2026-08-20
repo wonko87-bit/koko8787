@@ -12,6 +12,12 @@ export interface FileEntry {
   status: EntryStatus;
   filed_to: string | null;
   filed_at: number | null;
+  record_id: string | null;
+}
+
+export interface BatchResult {
+  moved: number;
+  errors: string[];
 }
 
 export interface Favorite {
