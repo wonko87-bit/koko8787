@@ -134,6 +134,7 @@ pub fn run() {
             commands::list_uncollected,
             commands::collect_paths,
             commands::open_entry,
+            commands::open_folder,
             commands::reveal_entry,
             commands::hide_toast,
             commands::show_main_window,

@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
+import { openFolder } from "../openFolder";
 import type { Settings } from "../types";
 
 export default function SettingsView({
@@ -41,6 +42,7 @@ export default function SettingsView({
         {settings.watch_dirs.map((d) => (
           <div className="row" key={d}>
             <div className="grow path">{d}</div>
+            <button onClick={() => openFolder(d)}>열기</button>
             <button className="ghost" onClick={() => removeWatchDir(d)}>
               제거
             </button>
@@ -59,6 +61,7 @@ export default function SettingsView({
         <h2>관리함 폴더</h2>
         <div className="row">
           <div className="grow path">{settings.inbox_dir}</div>
+          <button onClick={() => openFolder(settings.inbox_dir)}>열기</button>
           <button onClick={changeInbox}>변경…</button>
         </div>
         <div className="hint">

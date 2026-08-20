@@ -349,3 +349,13 @@ pub fn show_main_window(app: AppHandle) {
         let _ = win.set_focus();
     }
 }
+
+/// 임의의 폴더 경로를 탐색기로 연다. (즐겨찾기 / 감시 폴더 / 관리함 폴더 열기용)
+#[tauri::command]
+pub fn open_folder(path: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    if !path.is_dir() {
+        return Err(format!("폴더를 찾을 수 없습니다: {}", path.display()));
+    }
+    tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| e.to_string())
+}

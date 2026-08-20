@@ -41,6 +41,7 @@ export const api = {
   collectPaths: (paths: string[]) => invoke<number>("collect_paths", { paths }),
 
   openEntry: (entryId: string) => invoke<void>("open_entry", { entryId }),
+  openFolder: (path: string) => invoke<void>("open_folder", { path }),
   revealEntry: (entryId: string) => invoke<void>("reveal_entry", { entryId }),
 
   hideToast: () => invoke<void>("hide_toast"),

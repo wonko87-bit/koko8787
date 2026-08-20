@@ -2,12 +2,17 @@ use crate::model::{ext_of, stem_of, tokenize, Favorite, MoveRecord, Rule, Sugges
 use crate::rules::rule_favorites;
 use std::collections::HashMap;
 
+/// 확장자만 일치하는 약한 신호로 추천을 띄우기 위해 필요한 최소 이동 횟수.
+/// xlsx/pdf처럼 흔한 확장자에서 한 번의 이동이 모든 동종 파일로 번지는 것을 막는다.
+const EXT_ONLY_MIN_MOVES: i64 = 3;
+
 /// 파일명 하나에 대해 즐겨찾기 추천 목록(점수 내림차순, 최대 `limit`개)을 계산한다.
 ///
 /// 점수 구성:
 /// - 규칙이 직접 지정한 즐겨찾기: +40 (첫 규칙), 이후 규칙은 +30
-/// - 학습 기록: 확장자 일치 +6, 파일명 토큰 일치 토큰당 +4 (기록당 최대 +12)
-/// - 학습 기록의 단순 사용 빈도: 기록당 +1 (최대 +5)
+/// - 파일명 토큰 일치: 기록마다 토큰당 +4 (기록당 최대 +12)
+/// - 확장자 일치: 같은 확장자를 그 즐겨찾기로 `EXT_ONLY_MIN_MOVES`회 이상 보냈을 때만 +6
+/// - 사용 빈도: 이미 다른 신호로 점수를 받은 즐겨찾기에 한해 기록당 +1 (최대 +5)
 pub fn suggest(
     rules: &[Rule],
     records: &[MoveRecord],
@@ -23,19 +28,33 @@ pub fn suggest(
 
     let ext = ext_of(file_name);
     let tokens = tokenize(&stem_of(file_name));
+
+    // 즐겨찾기별로 학습 신호를 따로 모은다.
+    let mut token_score: HashMap<String, i64> = HashMap::new();
+    let mut ext_moves: HashMap<String, i64> = HashMap::new();
     let mut usage: HashMap<String, i64> = HashMap::new();
 
     for rec in records {
-        let mut s = 0i64;
+        *usage.entry(rec.favorite_id.clone()).or_default() += 1;
+
         if !ext.is_empty() && rec.ext == ext {
-            s += 6;
+            *ext_moves.entry(rec.favorite_id.clone()).or_default() += 1;
         }
         let overlap = rec.tokens.iter().filter(|t| tokens.contains(t)).count() as i64;
-        s += (overlap * 4).min(12);
-        if s > 0 {
-            *scores.entry(rec.favorite_id.clone()).or_default() += s;
+        if overlap > 0 {
+            *token_score.entry(rec.favorite_id.clone()).or_default() += (overlap * 4).min(12);
         }
-        *usage.entry(rec.favorite_id.clone()).or_default() += 1;
+    }
+
+    // 파일명이 겹치는 신호는 그 자체로 유효하다.
+    for (fav_id, s) in token_score {
+        *scores.entry(fav_id).or_default() += s;
+    }
+    // 확장자만 겹치는 신호는 반복 확인된 경우에만 인정한다.
+    for (fav_id, moves) in ext_moves {
+        if moves >= EXT_ONLY_MIN_MOVES {
+            *scores.entry(fav_id).or_default() += 6;
+        }
     }
     for (fav_id, count) in usage {
         if let Some(s) = scores.get_mut(&fav_id) {
@@ -116,5 +135,32 @@ mod tests {
         let records = vec![rec("pdf", &["report"], "f_gone")];
         let out = suggest(&[], &records, &[], "report.pdf", 3);
         assert!(out.is_empty());
+    }
+
+    /// 확장자만 같고 파일명이 전혀 겹치지 않으면, 반복 이동 전까지는 추천하지 않는다.
+    #[test]
+    fn ext_only_match_needs_repetition() {
+        let favorites = vec![fav("f_proj", "국책법카")];
+        let few = vec![
+            rec("xlsx", &["국책과제", "실적이체"], "f_proj"),
+            rec("xlsx", &["국책과제", "실적이체", "2026"], "f_proj"),
+        ];
+        let out = suggest(&[], &few, &favorites, "월간_매출집계.xlsx", 3);
+        assert!(out.is_empty(), "2회 이동만으로 무관한 xlsx에 추천이 떠서는 안 된다");
+
+        let mut many = few.clone();
+        many.push(rec("xlsx", &["국책과제", "실적이체", "3분기"], "f_proj"));
+        let out = suggest(&[], &many, &favorites, "월간_매출집계.xlsx", 3);
+        assert_eq!(out.len(), 1, "3회 이상이면 확장자 신호를 인정한다");
+    }
+
+    /// 파일명이 겹치면 이동 횟수와 무관하게 첫 번째부터 추천한다.
+    #[test]
+    fn token_match_works_from_first_move() {
+        let favorites = vec![fav("f_proj", "국책법카")];
+        let records = vec![rec("xlsx", &["국책과제", "실적이체"], "f_proj")];
+        let out = suggest(&[], &records, &favorites, "국책과제_실적이체_8월.xlsx", 3);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].favorite.id, "f_proj");
     }
 }

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
+import { openFolder } from "../openFolder";
 import type { Favorite } from "../types";
 
 export default function FavoritesView({ favorites }: { favorites: Favorite[] }) {
@@ -73,6 +74,7 @@ export default function FavoritesView({ favorites }: { favorites: Favorite[] }) 
               <div>⭐ {f.name}</div>
               <div className="path">{f.path}</div>
             </div>
+            <button onClick={() => openFolder(f.path)}>열기</button>
             <button className="ghost" onClick={() => api.removeFavorite(f.id)}>
               삭제
             </button>
