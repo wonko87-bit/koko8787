@@ -124,6 +124,7 @@ pub fn run() {
             commands::set_category,
             commands::set_tags,
             commands::remove_entry,
+            commands::clear_history,
             commands::list_favorites,
             commands::add_favorite,
             commands::remove_favorite,

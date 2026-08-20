@@ -176,6 +176,13 @@ pub fn remove_entry(app: AppHandle, store: State<Store>, entry_id: String) {
     let _ = app.emit("entries-changed", ());
 }
 
+/// 이동 완료(Filed) 기록 전체 삭제. 학습 데이터(records)는 유지된다.
+#[tauri::command]
+pub fn clear_history(app: AppHandle, store: State<Store>) {
+    store.update(|d| d.entries.retain(|e| e.status != EntryStatus::Filed));
+    let _ = app.emit("entries-changed", ());
+}
+
 // ---------- 즐겨찾기 ----------
 
 #[tauri::command]

@@ -2,9 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "../api";
+import { installContextMenuBlocker } from "../disableContextMenu";
 import { categoryIcon } from "../types";
 import type { FileEntry, Suggestion } from "../types";
 import "../styles.css";
+
+installContextMenuBlocker();
 
 interface ToastItem {
   entry: FileEntry;

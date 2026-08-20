@@ -25,6 +25,7 @@ export const api = {
   setTags: (entryId: string, tags: string[]) =>
     invoke<void>("set_tags", { entryId, tags }),
   removeEntry: (entryId: string) => invoke<void>("remove_entry", { entryId }),
+  clearHistory: () => invoke<void>("clear_history"),
 
   listFavorites: () => invoke<Favorite[]>("list_favorites"),
   addFavorite: (name: string, path: string) =>
