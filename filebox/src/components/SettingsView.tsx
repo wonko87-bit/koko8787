@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { getVersion } from "@tauri-apps/api/app";
 import { api } from "../api";
 import { openFolder } from "../openFolder";
+import { checkForUpdate } from "../updater";
 import type { Settings } from "../types";
 
 export default function SettingsView({
@@ -13,10 +15,19 @@ export default function SettingsView({
   onChange: (s: Settings) => void;
 }) {
   const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [version, setVersion] = useState("");
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     isEnabled().then(setAutostart).catch(() => setAutostart(null));
+    getVersion().then(setVersion).catch(() => {});
   }, []);
+
+  const runUpdateCheck = async () => {
+    setChecking(true);
+    await checkForUpdate(true);
+    setChecking(false);
+  };
 
   const toggleAutostart = async (on: boolean) => {
     try {
@@ -85,6 +96,21 @@ export default function SettingsView({
         <div className="hint">
           수집된 파일이 실제로 보관되는 폴더예요. 분류는 폴더 이동 없이 앱
           안에서 가상으로 관리됩니다.
+        </div>
+      </div>
+
+      <div className="panel">
+        <h2>버전</h2>
+        <div className="row">
+          <div className="grow">
+            FileBox {version ? `v${version}` : ""}
+            <div className="path">
+              업데이트가 있으면 시작할 때 알려드려요.
+            </div>
+          </div>
+          <button onClick={runUpdateCheck} disabled={checking}>
+            {checking ? "확인 중…" : "업데이트 확인"}
+          </button>
         </div>
       </div>
 

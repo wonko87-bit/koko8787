@@ -35,7 +35,8 @@ jobs:
         working-directory: filebox/src-tauri
 
       - name: Build Windows installer (NSIS)
-        run: npm run tauri build
+        # 서명 키가 필요한 업데이터 아티팩트는 릴리스 워크플로에서만 만든다
+        run: npm run tauri build -- --config src-tauri/tauri.ci.conf.json
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

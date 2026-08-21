@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "FileBox",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.koko8787.filebox",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -26,7 +26,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -36,9 +38,21 @@
     ],
     "windows": {
       "nsis": {
-        "languages": ["Korean", "English"],
+        "languages": [
+          "Korean",
+          "English"
+        ],
         "installMode": "currentUser"
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/wonko87-bit/koko8787/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhGNkRBNkY5NTdEM0Q1QzQKUldURTFkTlgrYVp0ajZhUW5Pd0J1RFJ3RE03THpacTNoRGx0aEt5cUdzUE41THRlT3cya0FOZUkK"
     }
   }
 }

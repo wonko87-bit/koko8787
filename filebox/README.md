@@ -65,6 +65,20 @@ cargo test
 
 ## Windows 설치 파일 받기
 
-GitHub Actions의 **FileBox Windows Build** 워크플로가 푸시마다 NSIS 설치 파일을 만들어
-`FileBox-windows-installer` 아티팩트로 업로드합니다.
-(Actions 탭 → 해당 실행 → Artifacts에서 다운로드)
+- **정식 릴리스**: [Releases](https://github.com/wonko87-bit/koko8787/releases)에서 `.exe`를 받아 설치합니다.
+  이미 설치되어 있다면 앱을 켤 때 새 버전을 자동으로 알려줍니다.
+- **개발 중 빌드**: 푸시마다 도는 **FileBox Windows Build** 워크플로의
+  `FileBox-windows-installer` 아티팩트 (Actions 탭 → 해당 실행 → Artifacts).
+  이 빌드에는 서명이 없어 자동 업데이트가 동작하지 않습니다.
+
+## 새 버전 배포하기
+
+1. `filebox/package.json`, `filebox/src-tauri/tauri.conf.json`, `filebox/src-tauri/Cargo.toml`의
+   `version`을 동일하게 올립니다.
+2. Actions 탭 → **FileBox Release** → *Run workflow* (또는 `filebox-v<버전>` 태그 푸시).
+3. 서명된 설치 파일과 `latest.json`이 담긴 GitHub Release가 자동 생성되고,
+   기존 사용자는 다음 실행 때 업데이트 알림을 받습니다.
+
+배포에는 저장소 시크릿 `TAURI_SIGNING_PRIVATE_KEY`와
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`가 필요합니다. 개인키를 잃어버리면 기존 설치본에
+업데이트를 내보낼 수 없으니 별도로 백업해 두세요.

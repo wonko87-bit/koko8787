@@ -1,0 +1,53 @@
+name: FileBox Release
+
+# 자동 업데이트용 서명 설치 파일과 latest.json을 GitHub Releases에 발행한다.
+# Actions 탭에서 수동 실행하거나, filebox-v* 태그를 푸시하면 동작한다.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["filebox-v*"]
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: filebox/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: filebox/src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: filebox
+
+      - name: Run Rust tests
+        run: cargo test
+        working-directory: filebox/src-tauri
+
+      - name: Build, sign and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: filebox
+          tagName: filebox-v__VERSION__
+          releaseName: FileBox v__VERSION__
+          releaseBody: |
+            아래 `.exe` 설치 파일을 받아 설치하세요.
+            이미 FileBox를 쓰고 있다면 앱이 시작할 때 업데이트를 알려줍니다.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true

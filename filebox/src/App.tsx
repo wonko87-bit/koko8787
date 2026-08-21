@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api } from "./api";
+import { checkForUpdate } from "./updater";
 import type { FileEntry, Favorite, Rule, Settings } from "./types";
 import InboxView from "./components/InboxView";
 import HistoryView from "./components/HistoryView";
@@ -76,6 +77,11 @@ export default function App() {
     return () => {
       unlisten.then((un) => un());
     };
+  }, []);
+
+  // 시작 시 조용히 업데이트 확인 (오프라인이면 아무 일도 일어나지 않음)
+  useEffect(() => {
+    checkForUpdate(false);
   }, []);
 
   const inboxCount = entries.filter((e) => e.status === "inbox").length;
