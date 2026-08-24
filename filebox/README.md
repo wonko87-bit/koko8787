@@ -79,6 +79,7 @@ cargo test
 3. 서명된 설치 파일과 `latest.json`이 담긴 GitHub Release가 자동 생성되고,
    기존 사용자는 다음 실행 때 업데이트 알림을 받습니다.
 
-배포에는 저장소 시크릿 `TAURI_SIGNING_PRIVATE_KEY`와
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`가 필요합니다. 개인키를 잃어버리면 기존 설치본에
-업데이트를 내보낼 수 없으니 별도로 백업해 두세요.
+배포에는 저장소 시크릿 `TAURI_SIGNING_PRIVATE_KEY`(업데이트 서명용 개인키)가 필요합니다.
+키에 비밀번호를 걸었다면 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`도 함께 등록하고,
+비밀번호 없는 키라면 이 시크릿은 만들지 않으면 됩니다.
+개인키를 잃어버리면 기존 설치본에 업데이트를 내보낼 수 없으니 별도로 백업해 두세요.
