@@ -75,6 +75,13 @@ pub struct Settings {
     pub toast_enabled: bool,
     /// 감시 일시정지
     pub paused: bool,
+    /// 앱을 켤 때 새 버전을 자동으로 확인할지. 꺼도 설정 탭에서 수동 확인은 가능하다.
+    #[serde(default = "default_true")]
+    pub auto_update_check: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Settings {
@@ -85,6 +92,7 @@ impl Settings {
             auto_collect: true,
             toast_enabled: true,
             paused: false,
+            auto_update_check: true,
         }
     }
 }

@@ -104,13 +104,26 @@ export default function SettingsView({
         <div className="row">
           <div className="grow">
             FileBox {version ? `v${version}` : ""}
-            <div className="path">
-              업데이트가 있으면 시작할 때 알려드려요.
-            </div>
           </div>
           <button onClick={runUpdateCheck} disabled={checking}>
             {checking ? "확인 중…" : "업데이트 확인"}
           </button>
+        </div>
+        <div className="toggle-row">
+          <div>
+            <div>시작할 때 자동으로 업데이트 확인</div>
+            <div className="desc">
+              꺼두면 앱이 알아서 확인하지 않아요. 위의 "업데이트 확인" 버튼으로
+              원할 때만 확인할 수 있고, 설치 여부는 언제나 직접 결정합니다.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.auto_update_check}
+            onChange={(e) =>
+              save({ ...settings, auto_update_check: e.target.checked })
+            }
+          />
         </div>
       </div>
 

@@ -41,6 +41,7 @@ export interface Settings {
   auto_collect: boolean;
   toast_enabled: boolean;
   paused: boolean;
+  auto_update_check: boolean;
 }
 
 export interface Suggestion {

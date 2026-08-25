@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { api } from "./api";
@@ -79,10 +79,13 @@ export default function App() {
     };
   }, []);
 
-  // 시작 시 조용히 업데이트 확인 (오프라인이면 아무 일도 일어나지 않음)
+  // 설정이 읽힌 뒤 한 번만, 그리고 사용자가 켜둔 경우에만 조용히 업데이트를 확인한다.
+  const updateChecked = useRef(false);
   useEffect(() => {
-    checkForUpdate(false);
-  }, []);
+    if (!settings || updateChecked.current) return;
+    updateChecked.current = true;
+    if (settings.auto_update_check) checkForUpdate(false);
+  }, [settings]);
 
   const inboxCount = entries.filter((e) => e.status === "inbox").length;
 

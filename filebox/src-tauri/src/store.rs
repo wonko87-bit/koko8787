@@ -143,6 +143,34 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    /// 구버전 설정에는 auto_update_check 필드가 없다. 이 필드 하나 때문에 파싱이
+    /// 실패하면 감시 폴더·관리함 경로까지 통째로 초기화되므로 기본값으로 읽혀야 한다.
+    #[test]
+    fn loads_settings_without_auto_update_field() {
+        let dir = temp_dir("compat-settings");
+        let path = dir.join("store.json");
+        let legacy = r#"{
+          "entries": [], "favorites": [], "rules": [], "records": [],
+          "settings": {
+            "watch_dirs": ["C:/Downloads"],
+            "inbox_dir": "C:/FileBox",
+            "auto_collect": true,
+            "toast_enabled": false,
+            "paused": true
+          }
+        }"#;
+        fs::write(&path, legacy).unwrap();
+
+        let store = Store::load(path);
+        let settings = store.read(|d| d.settings.clone()).expect("설정이 유실됨");
+        assert_eq!(settings.watch_dirs.len(), 1, "감시 폴더가 유실됨");
+        assert_eq!(settings.inbox_dir.to_string_lossy(), "C:/FileBox");
+        assert!(!settings.toast_enabled, "기존 설정값이 덮어써짐");
+        assert!(settings.paused, "기존 설정값이 덮어써짐");
+        assert!(settings.auto_update_check, "새 옵션은 기본으로 켜져 있어야 한다");
+        let _ = fs::remove_dir_all(dir);
+    }
+
     #[test]
     fn unique_dest_appends_counter() {
         let dir = temp_dir("unique");
