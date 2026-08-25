@@ -493,3 +493,36 @@ select:focus {
   font-size: 44px;
   margin-bottom: 8px;
 }
+
+/* ---------- 위험한 동작 ---------- */
+
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--panel);
+}
+button.danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+button.danger:disabled:hover {
+  background: var(--panel);
+  color: var(--danger);
+}
+
+.panel.danger-panel {
+  border-color: #f0cfcd;
+}
+.danger-note {
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  background: #fdf1f0;
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.danger-note strong {
+  font-weight: 700;
+}

@@ -1,4 +1,4 @@
-export type EntryStatus = "inbox" | "filed";
+export type EntryStatus = "inbox" | "filed" | "trashed";
 
 export interface FileEntry {
   id: string;

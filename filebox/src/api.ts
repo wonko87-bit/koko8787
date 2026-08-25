@@ -35,6 +35,12 @@ export const api = {
   sendManyToPath: (entryIds: string[], destDir: string) =>
     invoke<BatchResult>("send_many_to_path", { entryIds, destDir }),
   undoMove: (entryId: string) => invoke<FileEntry>("undo_move", { entryId }),
+
+  trashEntry: (entryId: string) => invoke<FileEntry>("trash_entry", { entryId }),
+  trashMany: (entryIds: string[]) => invoke<BatchResult>("trash_many", { entryIds }),
+  trashCount: () => invoke<number>("trash_count"),
+  emptyTrash: () => invoke<number>("empty_trash"),
+  openTrash: () => invoke<void>("open_trash"),
   clearHistory: () => invoke<void>("clear_history"),
 
   listFavorites: () => invoke<Favorite[]>("list_favorites"),

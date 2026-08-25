@@ -8,6 +8,8 @@ pub enum EntryStatus {
     Inbox,
     /// 즐겨찾기 폴더 등 최종 목적지로 이동 완료
     Filed,
+    /// OS 휴지통으로 보냄 (복구는 윈도우 휴지통에서)
+    Trashed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

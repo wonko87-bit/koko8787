@@ -490,3 +490,114 @@ pub fn open_folder(path: String) -> Result<(), String> {
     }
     tauri_plugin_opener::open_path(path, None::<&str>).map_err(|e| e.to_string())
 }
+
+// ---------- 휴지통 ----------
+
+/// 관리함의 파일을 OS 휴지통으로 보낸다. 영구 삭제는 하지 않으며,
+/// 휴지통이 없는 위치(네트워크 드라이브 등)에서는 아무것도 하지 않고 실패를 알린다.
+#[tauri::command]
+pub fn trash_entry(
+    app: AppHandle,
+    store: State<Store>,
+    entry_id: String,
+) -> Result<FileEntry, String> {
+    let entry = store
+        .read(|d| d.entries.iter().find(|e| e.id == entry_id).cloned())
+        .ok_or("항목을 찾을 수 없습니다")?;
+    if entry.status != EntryStatus::Inbox {
+        return Err("관리함에 있는 파일만 휴지통으로 보낼 수 있습니다".into());
+    }
+    if !entry.path.is_file() {
+        return Err("파일을 찾을 수 없습니다. 이미 옮겨졌거나 삭제된 것 같아요".into());
+    }
+    trash::delete(&entry.path)
+        .map_err(|e| format!("휴지통으로 보내지 못했습니다: {e}"))?;
+
+    let updated = store.update(|d| {
+        d.entries.iter_mut().find(|e| e.id == entry_id).map(|e| {
+            e.status = EntryStatus::Trashed;
+            e.filed_to = None;
+            e.filed_at = Some(now_millis());
+            e.record_id = None;
+            e.clone()
+        })
+    });
+    let _ = app.emit("entries-changed", ());
+    updated.ok_or_else(|| "항목 갱신 실패".into())
+}
+
+/// 여러 항목을 한 번에 휴지통으로 보낸다.
+#[tauri::command]
+pub fn trash_many(app: AppHandle, store: State<Store>, entry_ids: Vec<String>) -> BatchResult {
+    let mut moved = 0;
+    let mut errors = Vec::new();
+    for id in entry_ids {
+        let name = store.read(|d| {
+            d.entries.iter().find(|e| e.id == id).map(|e| e.file_name.clone())
+        });
+        match trash_entry_inner(&app, &store, &id) {
+            Ok(()) => moved += 1,
+            Err(e) => errors.push(format!("{}: {e}", name.unwrap_or(id))),
+        }
+    }
+    BatchResult { moved, errors }
+}
+
+fn trash_entry_inner(app: &AppHandle, store: &Store, entry_id: &str) -> Result<(), String> {
+    let entry = store
+        .read(|d| d.entries.iter().find(|e| e.id == entry_id).cloned())
+        .ok_or("항목을 찾을 수 없습니다")?;
+    if entry.status != EntryStatus::Inbox {
+        return Err("관리함에 있는 파일만 휴지통으로 보낼 수 있습니다".into());
+    }
+    if !entry.path.is_file() {
+        return Err("파일을 찾을 수 없습니다".into());
+    }
+    trash::delete(&entry.path).map_err(|e| format!("휴지통으로 보내지 못했습니다: {e}"))?;
+    store.update(|d| {
+        if let Some(e) = d.entries.iter_mut().find(|e| e.id == entry_id) {
+            e.status = EntryStatus::Trashed;
+            e.filed_to = None;
+            e.filed_at = Some(now_millis());
+            e.record_id = None;
+        }
+    });
+    let _ = app.emit("entries-changed", ());
+    Ok(())
+}
+
+/// 윈도우 휴지통에 들어 있는 항목 수 (FileBox가 보낸 것뿐 아니라 전체)
+#[tauri::command]
+pub fn trash_count() -> Result<usize, String> {
+    trash::os_limited::list()
+        .map(|items| items.len())
+        .map_err(|e| format!("휴지통을 읽지 못했습니다: {e}"))
+}
+
+/// 윈도우 휴지통을 통째로 비운다. 되돌릴 수 없으므로 화면에서 반드시 확인을 받는다.
+#[tauri::command]
+pub fn empty_trash() -> Result<usize, String> {
+    let items = trash::os_limited::list()
+        .map_err(|e| format!("휴지통을 읽지 못했습니다: {e}"))?;
+    let count = items.len();
+    trash::os_limited::purge_all(items)
+        .map_err(|e| format!("휴지통을 비우지 못했습니다: {e}"))?;
+    Ok(count)
+}
+
+/// 윈도우 휴지통 폴더를 탐색기로 연다.
+#[tauri::command]
+pub fn open_trash() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg("shell:RecycleBinFolder")
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("휴지통을 열지 못했습니다: {e}"))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("이 플랫폼에서는 휴지통 열기를 지원하지 않습니다".into())
+    }
+}

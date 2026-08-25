@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import {
   categoryIcon,
@@ -183,10 +183,18 @@ function FileCard({
         <button
           className="ghost"
           disabled={busy}
-          title="목록에서만 제거 (파일은 관리함 폴더에 남음)"
+          title="목록에서만 지웁니다. 파일은 관리함 폴더에 그대로 남아요"
           onClick={() => run(() => api.removeEntry(entry.id))}
         >
-          제거
+          목록에서 숨기기
+        </button>
+        <button
+          className="danger"
+          disabled={busy}
+          title="파일을 윈도우 휴지통으로 보냅니다 (휴지통에서 복구 가능)"
+          onClick={() => run(() => api.trashEntry(entry.id))}
+        >
+          🗑 휴지통으로
         </button>
       </div>
     </div>
@@ -273,6 +281,15 @@ export default function InboxView({
     } finally {
       setBusy(false);
     }
+  };
+
+  const batchToTrash = async () => {
+    const ok = await ask(
+      `선택한 ${selected.size}개 파일을 윈도우 휴지통으로 보낼까요?\n` +
+        `필요하면 윈도우 휴지통에서 다시 꺼낼 수 있어요.`,
+      { title: "휴지통으로 보내기", kind: "warning" },
+    );
+    if (ok) runBatch(async () => reportBatch(await api.trashMany(ids)));
   };
 
   const batchToOther = () =>
@@ -366,10 +383,13 @@ export default function InboxView({
           <button
             className="ghost"
             disabled={busy}
-            title="목록에서만 제거 (파일은 관리함 폴더에 남음)"
+            title="목록에서만 지웁니다 (파일은 관리함 폴더에 남음)"
             onClick={() => runBatch(() => api.removeEntries(ids))}
           >
-            목록에서 제거
+            목록에서 숨기기
+          </button>
+          <button className="danger" disabled={busy} onClick={batchToTrash}>
+            🗑 휴지통으로
           </button>
           <div className="grow" />
           <button className="ghost" onClick={() => setSelected(new Set())}>

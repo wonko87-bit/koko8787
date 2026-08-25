@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { ask, message } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
 import { api } from "../api";
 import { openFolder } from "../openFolder";
@@ -17,11 +18,38 @@ export default function SettingsView({
   const [autostart, setAutostart] = useState<boolean | null>(null);
   const [version, setVersion] = useState("");
   const [checking, setChecking] = useState(false);
+  const [trashCount, setTrashCount] = useState<number | null>(null);
+  const [emptying, setEmptying] = useState(false);
+
+  const refreshTrash = () => {
+    api.trashCount().then(setTrashCount).catch(() => setTrashCount(null));
+  };
 
   useEffect(() => {
     isEnabled().then(setAutostart).catch(() => setAutostart(null));
     getVersion().then(setVersion).catch(() => {});
+    refreshTrash();
   }, []);
+
+  const emptyTrash = async () => {
+    const ok = await ask(
+      "윈도우 휴지통을 완전히 비웁니다.\n\n" +
+        "FileBox에서 보낸 파일뿐 아니라 휴지통에 있는 모든 항목이 사라지며, " +
+        "되돌릴 수 없습니다.\n\n정말 비울까요?",
+      { title: "휴지통 비우기", kind: "warning", okLabel: "비우기", cancelLabel: "취소" },
+    );
+    if (!ok) return;
+    setEmptying(true);
+    try {
+      const removed = await api.emptyTrash();
+      await message(`휴지통을 비웠어요. (${removed}개 항목)`, { title: "휴지통 비우기" });
+    } catch (e) {
+      await message(String(e), { title: "휴지통 비우기 실패", kind: "error" });
+    } finally {
+      setEmptying(false);
+      refreshTrash();
+    }
+  };
 
   const runUpdateCheck = async () => {
     setChecking(true);
@@ -97,6 +125,33 @@ export default function SettingsView({
           수집된 파일이 실제로 보관되는 폴더예요. 분류는 폴더 이동 없이 앱
           안에서 가상으로 관리됩니다.
         </div>
+      </div>
+
+      <div className="panel danger-panel">
+        <h2>휴지통</h2>
+        <div className="row">
+          <div className="grow">
+            <div>
+              윈도우 휴지통
+              {trashCount !== null ? ` — ${trashCount}개 항목` : ""}
+            </div>
+            <div className="path">
+              관리함에서 "휴지통으로" 보낸 파일은 여기에 있어요. 되돌리려면
+              휴지통을 열어 복구하면 됩니다.
+            </div>
+          </div>
+          <button onClick={() => api.openTrash().catch((e) => alert(String(e)))}>
+            휴지통 열기
+          </button>
+          <button className="danger" onClick={emptyTrash} disabled={emptying}>
+            {emptying ? "비우는 중…" : "휴지통 비우기"}
+          </button>
+        </div>
+        <p className="danger-note">
+          ⚠ 휴지통 비우기는 <strong>윈도우 휴지통 전체</strong>를 지웁니다.
+          FileBox가 보낸 파일뿐 아니라 다른 프로그램에서 버린 파일까지 모두
+          사라지며, 되돌릴 수 없습니다.
+        </p>
       </div>
 
       <div className="panel">
