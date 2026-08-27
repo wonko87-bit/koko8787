@@ -33,6 +33,7 @@ public partial class App : Application, IAppShell
     private NaturalLanguageParser? _parser;
     private ExternalCalendarFeed? _calendar;
     private DispatcherTimer? _calendarTimer;
+    private InboxWatcher? _inbox;
     private AppSettings _settings = new();
 
     private WidgetWindow? _widget;
@@ -151,6 +152,7 @@ public partial class App : Application, IAppShell
         if (_settings.LaunchAtStartup) StartupService.RepairIfStale();
 
         ApplyCalendarOverlay();
+        ApplyInboxWatch();
 
         if (_settings.ShowWidgetOnStart) ShowWidget();
         _tray.SetWidgetVisible(_widget.IsVisible);
@@ -236,6 +238,40 @@ public partial class App : Application, IAppShell
             _calendar.RefreshAsync(today.AddDays(-45), today.AddDays(120)),
             "ExternalCalendarFeed.Refresh");
     }
+
+    /// <summary>
+    /// Starts or stops watching the inbox folder. Restarted rather than reconfigured when the
+    /// folder changes, because a <see cref="FileSystemWatcher"/> is bound to its directory.
+    /// </summary>
+    public void ApplyInboxWatch()
+    {
+        if (_repository is null) return;
+
+        _inbox?.Dispose();
+        _inbox = null;
+
+        if (!_settings.EnableInboxWatch) return;
+
+        try
+        {
+            _inbox = new InboxWatcher(_repository, InboxFolder, Dispatcher, (title, message) => _tray?.Notify(title, message));
+            _inbox.Start();
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            // A folder that cannot be made or watched is worth saying once. Everything else
+            // about the app still works without it.
+            _inbox = null;
+            CrashReporter.ReportRecovered("InboxWatcher.Start", ex);
+            _tray?.Notify("Flowdeck", "받는 폴더를 열지 못했습니다. 설정에서 경로를 확인해 주세요.");
+        }
+    }
+
+    /// <summary>The folder another application drops files into. Overridable in settings.json.</summary>
+    public string InboxFolder =>
+        string.IsNullOrWhiteSpace(_settings.InboxFolder)
+            ? Path.Combine(DataFolder, "inbox")
+            : _settings.InboxFolder!;
 
     public void ApplyParserSettings()
     {
@@ -346,6 +382,7 @@ public partial class App : Application, IAppShell
         if (_widget is not null) SaveSettings();
 
         _calendarTimer?.Stop();
+        _inbox?.Dispose();
         _reminders?.Dispose();
         _hotKeys?.Dispose();
         _tray?.Dispose();

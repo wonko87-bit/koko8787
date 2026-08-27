@@ -31,6 +31,14 @@ public interface IAppShell
     void ApplyCalendarOverlay();
 
     /// <summary>
+    /// Starts or stops watching the folder other applications hand entries over through.
+    /// </summary>
+    void ApplyInboxWatch();
+
+    /// <summary>The folder being watched for hand-overs, whether or not watching is on.</summary>
+    string InboxFolder { get; }
+
+    /// <summary>
     /// Re-claims the configured hot keys. Returns a message describing any that could
     /// not be taken, or an empty string when all of them registered.
     /// </summary>

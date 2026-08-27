@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -74,6 +75,9 @@ public partial class SettingsWindow : Window
         DescribeStartup();
         ShowWidgetOnStart.IsChecked = Settings.ShowWidgetOnStart;
 
+        WatchInbox.IsChecked = Settings.EnableInboxWatch;
+        DescribeInbox();
+
         _loading = false;
 
         AfternoonBias.Checked += OnParserOptionChanged;
@@ -88,6 +92,8 @@ public partial class SettingsWindow : Window
         LaunchAtStartup.Unchecked += OnStartupChanged;
         ShowWidgetOnStart.Checked += OnShowOnStartChanged;
         ShowWidgetOnStart.Unchecked += OnShowOnStartChanged;
+        WatchInbox.Checked += OnWatchInboxChanged;
+        WatchInbox.Unchecked += OnWatchInboxChanged;
     }
 
     private void OnThemeChanged(object sender, RoutedEventArgs e)
@@ -360,6 +366,38 @@ public partial class SettingsWindow : Window
 
         Settings.ShowWidgetOnStart = ShowWidgetOnStart.IsChecked == true;
         _shell.SaveSettings();
+    }
+
+    private void OnWatchInboxChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        Settings.EnableInboxWatch = WatchInbox.IsChecked == true;
+        _shell.SaveSettings();
+        _shell.ApplyInboxWatch();
+        DescribeInbox();
+    }
+
+    /// <summary>
+    /// Names the folder outright. Somebody setting up the sending application has to type
+    /// this path in over there, and a description that does not include it is no help.
+    /// </summary>
+    private void DescribeInbox() =>
+        InboxHint.Text = WatchInbox.IsChecked == true
+            ? $"{_shell.InboxFolder} 에 들어온 Flowdeck 파일을 자동으로 가져옵니다"
+            : "받는 폴더에 파일이 들어와도 가져오지 않습니다";
+
+    private void OnOpenInboxClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(_shell.InboxFolder);
+            Process.Start(new ProcessStartInfo(_shell.InboxFolder) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            Status("받는 폴더를 열지 못했습니다: " + ex.Message);
+        }
     }
 
     /// <summary>Turns the pressed combination into a gesture string, if it is a usable one.</summary>

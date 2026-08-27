@@ -124,6 +124,23 @@ public sealed class AppSettings
     [JsonIgnore]
     public int EffectiveOutlookRefreshMinutes => Math.Clamp(OutlookCalendarRefreshMinutes, 1, 1440);
 
+    /// <summary>
+    /// Whether to take entries that another application leaves in the inbox folder.
+    ///
+    /// On by default. What is watched is a folder inside Flowdeck's own data folder, so the
+    /// only person who can put anything there is the one running the app; and somebody who
+    /// has set up the sending side has already said what they want — making them find a
+    /// second switch over here would just make the hand-over look broken.
+    /// </summary>
+    public bool EnableInboxWatch { get; set; } = true;
+
+    /// <summary>
+    /// Where that folder is. Null means <c>inbox</c> inside the data folder, which is what
+    /// the sending side assumes; this is the way out for a machine where the data folder is
+    /// a slow roaming profile, and both sides have to be pointed at the new place by hand.
+    /// </summary>
+    public string? InboxFolder { get; set; }
+
     /// <summary>Editable so the routing vocabulary can be tuned without a rebuild.</summary>
     public RoutingRules Routing { get; set; } = new();
 

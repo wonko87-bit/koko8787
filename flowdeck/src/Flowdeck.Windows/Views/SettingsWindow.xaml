@@ -564,6 +564,27 @@
                       Style="{StaticResource CheckBox.Setting}" />
           </Grid>
 
+          <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="다른 앱에서 보낸 항목 받기" />
+              <TextBlock x:Name="InboxHint" Style="{StaticResource Text.Meta}" TextWrapping="Wrap" />
+            </StackPanel>
+            <CheckBox x:Name="WatchInbox"
+                      Grid.Column="1"
+                      VerticalAlignment="Center"
+                      Style="{StaticResource CheckBox.Setting}" />
+          </Grid>
+
+          <StackPanel Margin="0,-6,0,14" Orientation="Horizontal">
+            <Button Click="OnOpenInboxClick"
+                    Content="받는 폴더 열기"
+                    Style="{StaticResource Button.Ghost}" />
+          </StackPanel>
+
           <!-- ============ transfer ============ -->
           <TextBlock Margin="0,12,0,4" Style="{StaticResource Text.Section}" Text="자료 주고받기" />
           <TextBlock Margin="0,0,0,10"
