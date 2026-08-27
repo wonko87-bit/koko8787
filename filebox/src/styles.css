@@ -526,3 +526,39 @@ button.danger:disabled:hover {
 .danger-note strong {
   font-weight: 700;
 }
+
+/* ---------- Flowdeck 연동 ---------- */
+
+/* 특별규칙은 규칙 폼 안의 또 하나의 폼이라, 들여쓰기로 소속을 보여준다. */
+.subform {
+  margin: 0 0 4px;
+  padding: 12px 14px;
+  background: var(--accent-soft);
+  border-radius: 8px;
+}
+.subform .form-grid label {
+  color: #5b62a8;
+}
+.toggle-row.special-rule {
+  border-bottom: none;
+  padding-bottom: 6px;
+}
+.inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.inline .time {
+  width: 160px;
+}
+.flowdeck-line {
+  color: var(--accent) !important;
+  margin-top: 2px;
+}
+/* 이미 보낸 파일. 다시 눌러도 안전하다는 뜻이라 비활성이 아니라 채워진 모양으로 둔다. */
+button.flowdeck-sent {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+  font-weight: 600;
+}

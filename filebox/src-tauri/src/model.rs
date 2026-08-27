@@ -30,6 +30,20 @@ pub struct FileEntry {
     /// 이동 시 남긴 학습 기록의 id. 되돌리기 때 그 기록만 정확히 제거한다.
     #[serde(default)]
     pub record_id: Option<String>,
+    /// Flowdeck 으로 넘긴 할일들. 화면에 "등록됨"을 표시하기 위한 것이고,
+    /// 중복 방지 자체는 여기 의존하지 않는다 (id 가 결정적이라 - flowdeck::todo_id 참고).
+    #[serde(default)]
+    pub flowdeck_todos: Vec<FlowdeckTodo>,
+}
+
+/// FileBox 가 Flowdeck 에 넘긴 할일 하나의 흔적.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowdeckTodo {
+    /// 어떤 규칙이 보냈는지. 수동 발송이면 빈 문자열.
+    pub rule_id: String,
+    /// Flowdeck 쪽 TodoItem.Id (하이픈 없는 32자 hex)
+    pub todo_id: String,
+    pub at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +66,41 @@ pub struct Rule {
     pub category: Option<String>,
     /// 매칭 시 우선 추천할 즐겨찾기
     pub favorite_id: Option<String>,
+    /// 특별규칙: 매칭된 파일을 Flowdeck 할일로도 등록한다. None 이면 보내지 않는다.
+    #[serde(default)]
+    pub flowdeck: Option<FlowdeckSpec>,
+}
+
+/// 매칭된 파일을 Flowdeck 할일로 만들 때 쓰는 값들.
+///
+/// 파일명에서 날짜를 뽑아내는 일은 하지 않는다. 규칙이 "이런 파일은 며칠 안에 본다"를
+/// 정하고, 그 며칠을 수집일에 더하는 것까지가 여기서 하는 전부다.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FlowdeckSpec {
+    /// 할일 제목 템플릿. {파일명} {확장자} {카테고리} 를 치환한다.
+    pub title: String,
+    /// 수집일로부터 며칠 뒤가 기한인지. None 이면 기한 없는 할일이 된다.
+    pub due_in_days: Option<i64>,
+    /// 기한 시각 "HH:MM". None 이면 날짜만 지정된 할일이 된다.
+    pub due_time: Option<String>,
+    /// Flowdeck 의 Priority enum 이름 그대로. 빈 값이면 None 으로 간다.
+    pub priority: String,
+    pub tags: Vec<String>,
+    /// 기한 몇 분 전에 알릴지. None 이면 알림 없음.
+    pub reminder_minutes: Option<i64>,
+}
+
+impl Default for FlowdeckSpec {
+    fn default() -> Self {
+        Self {
+            title: "{파일명}".into(),
+            due_in_days: Some(7),
+            due_time: None,
+            priority: "Normal".into(),
+            tags: Vec::new(),
+            reminder_minutes: None,
+        }
+    }
 }
 
 /// 학습용: 사용자가 파일을 즐겨찾기로 보낸 기록
@@ -80,6 +129,13 @@ pub struct Settings {
     /// 앱을 켤 때 새 버전을 자동으로 확인할지. 꺼도 설정 탭에서 수동 확인은 가능하다.
     #[serde(default = "default_true")]
     pub auto_update_check: bool,
+    /// Flowdeck 으로 할일을 넘길지. 실제로 보낼지는 규칙마다 따로 정하므로
+    /// 이건 연동 전체를 끄는 스위치다.
+    #[serde(default = "default_true")]
+    pub flowdeck_enabled: bool,
+    /// Flowdeck 이 감시하는 폴더. None 이면 %APPDATA%\\Flowdeck\\inbox 를 쓴다.
+    #[serde(default)]
+    pub flowdeck_inbox: Option<PathBuf>,
 }
 
 fn default_true() -> bool {
@@ -95,6 +151,8 @@ impl Settings {
             toast_enabled: true,
             paused: false,
             auto_update_check: true,
+            flowdeck_enabled: true,
+            flowdeck_inbox: None,
         }
     }
 }

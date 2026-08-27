@@ -16,7 +16,7 @@ pub fn default_category(ext: &str) -> &'static str {
     }
 }
 
-fn rule_matches(rule: &Rule, file_name: &str) -> bool {
+pub fn rule_matches(rule: &Rule, file_name: &str) -> bool {
     let ext = ext_of(file_name);
     let lower_name = file_name.to_lowercase();
 
@@ -80,6 +80,7 @@ mod tests {
             keywords: kws.iter().map(|s| s.to_string()).collect(),
             category: cat.map(|s| s.to_string()),
             favorite_id: fav.map(|s| s.to_string()),
+            flowdeck: None,
         }
     }
 

@@ -103,6 +103,7 @@ mod tests {
             extensions: vec!["pdf".into()],
             keywords: vec![],
             category: None,
+            flowdeck: None,
             favorite_id: Some("f_docs".into()),
         }];
         let records = vec![rec("pdf", &["invoice"], "f_other")];

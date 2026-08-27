@@ -4,6 +4,7 @@ import type {
   Candidate,
   Favorite,
   FileEntry,
+  FlowdeckStatus,
   Rule,
   Settings,
   Suggestion,
@@ -52,6 +53,10 @@ export const api = {
   listRules: () => invoke<Rule[]>("list_rules"),
   upsertRule: (rule: Rule) => invoke<Rule>("upsert_rule", { rule }),
   removeRule: (ruleId: string) => invoke<void>("remove_rule", { ruleId }),
+
+  flowdeckStatus: () => invoke<FlowdeckStatus>("flowdeck_status"),
+  sendToFlowdeck: (entryId: string) =>
+    invoke<string>("send_to_flowdeck", { entryId }),
 
   listUncollected: () => invoke<Candidate[]>("list_uncollected"),
   collectPaths: (paths: string[]) => invoke<number>("collect_paths", { paths }),

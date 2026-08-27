@@ -13,7 +13,47 @@ export interface FileEntry {
   filed_to: string | null;
   filed_at: number | null;
   record_id: string | null;
+  flowdeck_todos: FlowdeckTodo[];
 }
+
+export interface FlowdeckTodo {
+  rule_id: string;
+  todo_id: string;
+  at: number;
+}
+
+/** 매칭된 파일을 Flowdeck 할일로 등록하는 특별규칙 */
+export interface FlowdeckSpec {
+  title: string;
+  due_in_days: number | null;
+  due_time: string | null;
+  priority: string;
+  tags: string[];
+  reminder_minutes: number | null;
+}
+
+export interface FlowdeckStatus {
+  inbox: string | null;
+  exists: boolean;
+  rule_count: number;
+}
+
+export const PRIORITIES: { value: string; label: string }[] = [
+  { value: "None", label: "없음" },
+  { value: "Low", label: "낮음" },
+  { value: "Normal", label: "보통" },
+  { value: "High", label: "높음" },
+  { value: "Urgent", label: "긴급" },
+];
+
+export const DEFAULT_FLOWDECK: FlowdeckSpec = {
+  title: "{파일명}",
+  due_in_days: 7,
+  due_time: null,
+  priority: "Normal",
+  tags: [],
+  reminder_minutes: null,
+};
 
 export interface BatchResult {
   moved: number;
@@ -33,6 +73,7 @@ export interface Rule {
   keywords: string[];
   category: string | null;
   favorite_id: string | null;
+  flowdeck: FlowdeckSpec | null;
 }
 
 export interface Settings {
@@ -42,6 +83,8 @@ export interface Settings {
   toast_enabled: boolean;
   paused: boolean;
   auto_update_check: boolean;
+  flowdeck_enabled: boolean;
+  flowdeck_inbox: string | null;
 }
 
 export interface Suggestion {

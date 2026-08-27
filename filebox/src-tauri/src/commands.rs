@@ -393,6 +393,86 @@ pub fn remove_rule(app: AppHandle, store: State<Store>, rule_id: String) {
     let _ = app.emit("rules-changed", ());
 }
 
+// ---------- Flowdeck 연동 ----------
+
+#[derive(Serialize)]
+pub struct FlowdeckStatus {
+    /// 지금 쓰는 감시 폴더. 연동이 꺼져 있으면 None.
+    pub inbox: Option<String>,
+    /// 그 폴더가 실제로 있는지. Flowdeck 을 한 번도 켜지 않았으면 없다.
+    pub exists: bool,
+    /// 특별규칙이 붙은 규칙 수
+    pub rule_count: usize,
+}
+
+#[tauri::command]
+pub fn flowdeck_status(store: State<Store>) -> FlowdeckStatus {
+    let inbox = crate::flowdeck::inbox_of(&store);
+    let rule_count = store.read(|d| d.rules.iter().filter(|r| r.flowdeck.is_some()).count());
+    FlowdeckStatus {
+        exists: inbox.as_ref().is_some_and(|p| p.is_dir()),
+        inbox: inbox.map(|p| p.to_string_lossy().to_string()),
+        rule_count,
+    }
+}
+
+/// 규칙과 상관없이 이 파일을 지금 Flowdeck 할일로 보낸다.
+///
+/// 걸리는 특별규칙이 있으면 그 규칙의 설정을 그대로 쓰고, 없으면 기한 없는 할일을
+/// 만든다. 규칙을 미리 만들어 둘 만큼 반복되지 않는 파일이 있어서다.
+#[tauri::command]
+pub fn send_to_flowdeck(
+    app: AppHandle,
+    store: State<Store>,
+    entry_id: String,
+) -> Result<String, String> {
+    let inbox = crate::flowdeck::inbox_of(&store)
+        .ok_or("Flowdeck 연동이 꺼져 있습니다. 설정에서 켜 주세요.")?;
+    let entry = store
+        .read(|d| d.entries.iter().find(|e| e.id == entry_id).cloned())
+        .ok_or("항목을 찾을 수 없습니다.")?;
+
+    let rules = store.read(|d| d.rules.clone());
+    let matched = crate::flowdeck::matching_specs(&rules, &entry.file_name);
+    let (spec, rule_id, rule_name) = match matched.first() {
+        Some(r) => (
+            r.flowdeck.clone().unwrap_or_default(),
+            r.id.clone(),
+            r.name.clone(),
+        ),
+        None => (
+            crate::model::FlowdeckSpec {
+                due_in_days: None,
+                ..Default::default()
+            },
+            String::new(),
+            String::new(),
+        ),
+    };
+
+    let todo = crate::flowdeck::send(
+        &inbox,
+        &spec,
+        &entry.id,
+        &rule_id,
+        &rule_name,
+        &entry.file_name,
+        &entry.path,
+        &entry.category,
+    )
+    .map_err(|e| format!("Flowdeck 폴더에 쓰지 못했습니다: {e}"))?;
+
+    store.update(|d| {
+        if let Some(e) = d.entries.iter_mut().find(|e| e.id == entry_id) {
+            // 같은 규칙으로 다시 보낸 것이면 흔적도 하나만 남긴다.
+            e.flowdeck_todos.retain(|t| t.todo_id != todo.todo_id);
+            e.flowdeck_todos.push(todo.clone());
+        }
+    });
+    let _ = app.emit("entries-changed", ());
+    Ok(todo.todo_id)
+}
+
 // ---------- 수동 수집 ----------
 
 #[derive(Serialize)]

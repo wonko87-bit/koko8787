@@ -1,4 +1,5 @@
 mod commands;
+mod flowdeck;
 mod model;
 mod rules;
 mod store;
@@ -147,6 +148,8 @@ pub fn run() {
             commands::list_rules,
             commands::upsert_rule,
             commands::remove_rule,
+            commands::flowdeck_status,
+            commands::send_to_flowdeck,
             commands::list_uncollected,
             commands::collect_paths,
             commands::open_entry,

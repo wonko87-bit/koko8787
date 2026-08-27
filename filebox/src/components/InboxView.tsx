@@ -115,6 +115,7 @@ function FileCard({
       if (typeof dir === "string") await api.sendToPath(entry.id, dir);
     });
 
+  const sentToFlowdeck = entry.flowdeck_todos.length > 0;
   const suggested = new Set(suggestions.map((s) => s.favorite.id));
   const otherFavorites = favorites.filter((f) => !suggested.has(f.id));
 
@@ -179,6 +180,22 @@ function FileCard({
         </button>
         <button disabled={busy} onClick={() => api.revealEntry(entry.id)}>
           위치 보기
+        </button>
+        <button
+          disabled={busy}
+          className={sentToFlowdeck ? "flowdeck-sent" : ""}
+          title={
+            sentToFlowdeck
+              ? "이미 Flowdeck으로 보냈어요. 다시 눌러도 할일이 늘어나지 않습니다"
+              : "Flowdeck에 나중에 읽을 할일로 등록합니다"
+          }
+          onClick={() =>
+            run(async () => {
+              await api.sendToFlowdeck(entry.id);
+            })
+          }
+        >
+          {sentToFlowdeck ? "📋 등록됨" : "📋 Flowdeck"}
         </button>
         <button
           className="ghost"

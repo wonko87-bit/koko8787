@@ -106,6 +106,7 @@ mod tests {
                 filed_to: None,
                 filed_at: None,
                 record_id: None,
+                flowdeck_todos: Vec::new(),
             });
         });
         let reloaded = Store::load(path);
@@ -168,6 +169,48 @@ mod tests {
         assert!(!settings.toast_enabled, "기존 설정값이 덮어써짐");
         assert!(settings.paused, "기존 설정값이 덮어써짐");
         assert!(settings.auto_update_check, "새 옵션은 기본으로 켜져 있어야 한다");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn loads_store_written_before_the_flowdeck_bridge() {
+        // 0.2.3 이하가 쓴 파일. 파싱이 실패하면 사용자 데이터 전체가 조용히 사라진다.
+        let dir = temp_dir("compat-flowdeck");
+        let path = dir.join("store.json");
+        let legacy = r#"{
+          "entries": [{
+            "id": "e1", "file_name": "a.pdf", "path": "/inbox/a.pdf", "origin": "/dl/a.pdf",
+            "size": 10, "added_at": 1, "category": "문서", "tags": [], "status": "inbox",
+            "filed_to": null, "filed_at": null
+          }],
+          "favorites": [],
+          "rules": [{
+            "id": "r1", "name": "청구서", "extensions": ["pdf"], "keywords": ["청구서"],
+            "category": "경리", "favorite_id": null
+          }],
+          "records": [],
+          "settings": {
+            "watch_dirs": ["C:/Downloads"], "inbox_dir": "C:/FileBox",
+            "auto_collect": true, "toast_enabled": true, "paused": false,
+            "auto_update_check": false
+          }
+        }"#;
+        fs::write(&path, legacy).unwrap();
+
+        let store = Store::load(path);
+        let (entries, rules, settings) =
+            store.read(|d| (d.entries.clone(), d.rules.clone(), d.settings.clone()));
+
+        assert_eq!(entries.len(), 1, "항목이 유실됨");
+        assert!(entries[0].flowdeck_todos.is_empty());
+        assert_eq!(rules.len(), 1, "규칙이 유실됨");
+        assert_eq!(rules[0].category.as_deref(), Some("경리"), "기존 규칙이 뭉개짐");
+        assert!(rules[0].flowdeck.is_none(), "옛 규칙은 특별규칙이 없어야 한다");
+
+        let settings = settings.expect("설정이 유실됨");
+        assert!(!settings.auto_update_check, "기존 설정값이 덮어써짐");
+        assert!(settings.flowdeck_enabled, "연동은 기본으로 켜져 있어야 한다");
+        assert!(settings.flowdeck_inbox.is_none(), "경로는 기본값을 쓴다");
         let _ = fs::remove_dir_all(dir);
     }
 

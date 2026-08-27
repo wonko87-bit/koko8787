@@ -154,11 +154,16 @@ fn consider(
             s.map(|s| s.inbox_dir.clone()).unwrap_or_default(),
         )
     });
-    if !active || path.starts_with(&inbox) {
+    if !active || path.starts_with(&inbox) || in_flowdeck_inbox(&store, path) {
         return;
     }
 
     pending.insert(path.to_path_buf(), (meta.len(), Instant::now()));
+}
+
+/// Flowdeck 에 넘기려고 쓴 파일인지. 그 폴더가 감시 폴더 아래에 있을 수 있다.
+fn in_flowdeck_inbox(store: &Store, path: &Path) -> bool {
+    crate::flowdeck::inbox_of(store).is_some_and(|dir| path.starts_with(&dir))
 }
 
 /// 파일 하나를 관리함으로 이동하고 항목으로 등록한다. (감시/수동 수집 공용)
@@ -177,6 +182,11 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
     }
     if path.starts_with(&inbox) {
         return None; // 이미 관리함 안에 있는 파일
+    }
+    if in_flowdeck_inbox(&store, path) {
+        // FileBox 가 Flowdeck 에 넘기려고 방금 쓴 파일. 감시 폴더 안에 Flowdeck 감시
+        // 폴더가 있으면 자기가 쓴 것을 자기가 도로 주워 오게 된다.
+        return None;
     }
     let name = path.file_name()?.to_string_lossy().to_string();
     std::fs::create_dir_all(&inbox).ok()?;
@@ -198,8 +208,27 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
         filed_to: None,
         filed_at: None,
         record_id: None,
+        flowdeck_todos: Vec::new(),
     };
     store.update(|d| d.entries.push(entry.clone()));
+
+    // 특별규칙이 걸려 있으면 Flowdeck 으로도 넘긴다. 실패해도 수집 자체는 끝난
+    // 일이므로, 여기서 되돌리지 않고 항목은 그대로 둔다.
+    let sent = crate::flowdeck::dispatch(&store, &entry);
+    let entry = if sent.is_empty() {
+        entry
+    } else {
+        store.update(|d| {
+            match d.entries.iter_mut().find(|e| e.id == entry.id) {
+                Some(e) => {
+                    e.flowdeck_todos = sent.clone();
+                    e.clone()
+                }
+                None => entry.clone(),
+            }
+        })
+    };
+
     let _ = app.emit("entries-changed", ());
     Some(entry)
 }

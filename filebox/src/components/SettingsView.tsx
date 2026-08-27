@@ -6,7 +6,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { api } from "../api";
 import { openFolder } from "../openFolder";
 import { checkForUpdate } from "../updater";
-import type { Settings } from "../types";
+import type { FlowdeckStatus, Settings } from "../types";
 
 export default function SettingsView({
   settings,
@@ -20,6 +20,11 @@ export default function SettingsView({
   const [checking, setChecking] = useState(false);
   const [trashCount, setTrashCount] = useState<number | null>(null);
   const [emptying, setEmptying] = useState(false);
+  const [flowdeck, setFlowdeck] = useState<FlowdeckStatus | null>(null);
+
+  const refreshFlowdeck = () => {
+    api.flowdeckStatus().then(setFlowdeck).catch(() => setFlowdeck(null));
+  };
 
   const refreshTrash = () => {
     api.trashCount().then(setTrashCount).catch(() => setTrashCount(null));
@@ -29,6 +34,7 @@ export default function SettingsView({
     isEnabled().then(setAutostart).catch(() => setAutostart(null));
     getVersion().then(setVersion).catch(() => {});
     refreshTrash();
+    refreshFlowdeck();
   }, []);
 
   const emptyTrash = async () => {
@@ -92,6 +98,20 @@ export default function SettingsView({
     }
   };
 
+  /// 저장까지 끝난 뒤에 상태를 다시 읽는다. 경로 표시가 저장 결과와 어긋나면
+  /// 무엇이 실제로 적용됐는지 화면만 보고는 알 수 없다.
+  const saveFlowdeck = async (next: Settings) => {
+    await save(next);
+    refreshFlowdeck();
+  };
+
+  const changeFlowdeckInbox = async () => {
+    const dir = await open({ directory: true, title: "Flowdeck 감시 폴더 선택" });
+    if (typeof dir === "string") {
+      await saveFlowdeck({ ...settings, flowdeck_inbox: dir });
+    }
+  };
+
   return (
     <>
       <div className="panel">
@@ -125,6 +145,63 @@ export default function SettingsView({
           수집된 파일이 실제로 보관되는 폴더예요. 분류는 폴더 이동 없이 앱
           안에서 가상으로 관리됩니다.
         </div>
+      </div>
+
+      <div className="panel">
+        <h2>Flowdeck 연동</h2>
+        <div className="toggle-row">
+          <div>
+            <div>할일 넘기기</div>
+            <div className="desc">
+              특별규칙이 걸린 파일을 Flowdeck 할일로 등록해요. 어떤 파일을 보낼지는
+              규칙 탭에서 규칙마다 따로 정합니다.
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.flowdeck_enabled}
+            onChange={(e) =>
+              saveFlowdeck({ ...settings, flowdeck_enabled: e.target.checked })
+            }
+          />
+        </div>
+
+        {settings.flowdeck_enabled && (
+          <>
+            <div className="row">
+              <div className="grow path">
+                {flowdeck?.inbox ?? "경로를 찾을 수 없어요"}
+              </div>
+              {flowdeck?.inbox && (
+                <button onClick={() => openFolder(flowdeck.inbox!)}>열기</button>
+              )}
+              <button onClick={changeFlowdeckInbox}>변경…</button>
+              {settings.flowdeck_inbox && (
+                <button
+                  className="ghost"
+                  title="기본 경로로 되돌립니다"
+                  onClick={() =>
+                    saveFlowdeck({ ...settings, flowdeck_inbox: null })
+                  }
+                >
+                  기본값
+                </button>
+              )}
+            </div>
+            <div className="hint">
+              {flowdeck?.exists === false && (
+                <>
+                  ⚠️ 이 폴더가 아직 없어요. Flowdeck을 한 번 실행하면 만들어집니다.
+                  (없어도 FileBox가 보낼 때 만들지만, 경로가 맞는지 확인해 보세요.)
+                  <br />
+                </>
+              )}
+              특별규칙이 걸린 규칙 {flowdeck?.rule_count ?? 0}개. FileBox는 이 폴더에
+              파일만 놓고, 할일 등록은 Flowdeck이 합니다. Flowdeck이 꺼져 있으면
+              다음에 켤 때 한꺼번에 읽어가요.
+            </div>
+          </>
+        )}
       </div>
 
       <div className="panel danger-panel">
