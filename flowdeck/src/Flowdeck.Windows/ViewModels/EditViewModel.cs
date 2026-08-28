@@ -1,4 +1,7 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Windows.Input;
 using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
@@ -32,6 +35,9 @@ public sealed class EditViewModel : ObservableObject
     private string _reminder;
     private string _status = string.Empty;
 
+    /// <summary>The file this entry is about, when it came from an application that named one.</summary>
+    private readonly string? _file;
+
     private EditViewModel(
         WorkspaceRepository repository,
         TodoItem? todo,
@@ -58,8 +64,14 @@ public sealed class EditViewModel : ObservableObject
         var minutes = todo?.ReminderMinutesBefore ?? source?.ReminderMinutesBefore;
         _reminder = minutes?.ToString(Ko.Culture) ?? string.Empty;
 
+        // Read from the note as it was when the window opened. Editing the note text does not
+        // move the buttons around underneath the person typing.
+        _file = AttachedFile.PathIn(_notes);
+
         SaveCommand = new AsyncRelayCommand(SaveAsync);
         DeleteCommand = new AsyncRelayCommand(DeleteAsync);
+        OpenFileCommand = new RelayCommand(OpenFile, () => CanOpenFile);
+        ShowFileCommand = new RelayCommand(ShowFile, () => HasFile);
     }
 
     /// <summary>
@@ -98,6 +110,40 @@ public sealed class EditViewModel : ObservableObject
     public ICommand SaveCommand { get; }
 
     public ICommand DeleteCommand { get; }
+
+    public ICommand OpenFileCommand { get; }
+
+    public ICommand ShowFileCommand { get; }
+
+    // ---- the file this entry is about ---------------------------------------
+
+    /// <summary>
+    /// Whether to show the file row at all. An entry typed by hand names no file and gets
+    /// the window exactly as it was before this existed, rather than a disabled button it
+    /// can never use.
+    /// </summary>
+    public bool HasFile => _file is not null;
+
+    public string FileName => _file is null ? string.Empty : SafeName(_file);
+
+    /// <summary>The whole path, for the tooltip: the name alone does not say which copy.</summary>
+    public string FilePath => _file ?? string.Empty;
+
+    /// <summary>
+    /// Opening is offered only for a file that is there and is not a program. Showing it in
+    /// its folder stays available either way — that hands the decision to Explorer, where a
+    /// person can see what they are about to run.
+    /// </summary>
+    public bool CanOpenFile => _file is not null && !AttachedFile.IsRunnable(_file) && Exists(_file);
+
+    /// <summary>Says why the open button is off, and nothing at all when it is on.</summary>
+    public string FileNote =>
+        _file is null ? string.Empty
+        : !Exists(_file) ? "파일을 찾을 수 없습니다. 옮겨졌거나 지워졌을 수 있습니다."
+        : AttachedFile.IsRunnable(_file) ? "실행 파일은 Flowdeck에서 열지 않습니다. 폴더에서 확인해 주세요."
+        : string.Empty;
+
+    public bool HasFileNote => FileNote.Length > 0;
 
     public string Title
     {
@@ -261,6 +307,110 @@ public sealed class EditViewModel : ObservableObject
         else await _repository.DeleteEventAsync(_event!.Id);
 
         Finished?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Hands the file to whatever opens that kind of file. Checked again here rather than
+    /// trusted from when the window opened: a file can go away while the window is up, and
+    /// the failure to say so would be silent.
+    /// </summary>
+    private void OpenFile()
+    {
+        if (_file is null) return;
+
+        if (!Exists(_file))
+        {
+            Status = "파일을 찾을 수 없습니다: " + _file;
+            return;
+        }
+
+        if (AttachedFile.IsRunnable(_file))
+        {
+            Status = "실행 파일은 열지 않습니다.";
+            return;
+        }
+
+        Launch(new ProcessStartInfo(_file) { UseShellExecute = true }, "파일을 열지 못했습니다");
+    }
+
+    /// <summary>
+    /// Opens the folder with the file picked out in it. Falls back to the folder on its own
+    /// when the file has gone, which is the more useful answer to "where did it go".
+    /// </summary>
+    private void ShowFile()
+    {
+        if (_file is null) return;
+
+        if (Exists(_file))
+        {
+            Launch(
+                new ProcessStartInfo("explorer.exe", $"/select,\"{_file}\"") { UseShellExecute = true },
+                "폴더를 열지 못했습니다");
+            return;
+        }
+
+        var folder = Folder(_file);
+        if (folder is null || !Directory.Exists(folder))
+        {
+            Status = "폴더를 찾을 수 없습니다: " + _file;
+            return;
+        }
+
+        Launch(new ProcessStartInfo(folder) { UseShellExecute = true }, "폴더를 열지 못했습니다");
+    }
+
+    private void Launch(ProcessStartInfo start, string failure)
+    {
+        try
+        {
+            Process.Start(start);
+        }
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
+        {
+            Status = failure + ": " + e.Message;
+        }
+    }
+
+    /// <summary>
+    /// The path came out of a file another program wrote, so every one of these can be handed
+    /// something that is not a path at all. None of them is worth an exception: a path that
+    /// cannot be understood is simply a file that is not there.
+    /// </summary>
+    private static bool Exists(string path)
+    {
+        try
+        {
+            return File.Exists(path);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static string SafeName(string path)
+    {
+        try
+        {
+            var name = Path.GetFileName(path);
+            return name.Length > 0 ? name : path;
+        }
+        catch (ArgumentException)
+        {
+            return path;
+        }
+    }
+
+    private static string? Folder(string path)
+    {
+        try
+        {
+            return Path.GetDirectoryName(path);
+        }
+        catch (Exception e) when (e is ArgumentException or PathTooLongException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

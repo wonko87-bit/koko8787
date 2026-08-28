@@ -81,6 +81,51 @@
                  Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" />
       </Border>
 
+      <!-- ============ the file it is about ============ -->
+      <!-- Only for an entry handed over with a file named in its note. An entry typed by
+           hand shows nothing here, so the window is unchanged for the ordinary case. -->
+      <Border Margin="0,14,0,0"
+              Padding="12,10"
+              Background="{DynamicResource Brush.SurfaceAlt}"
+              CornerRadius="{StaticResource Corner.Small}"
+              Visibility="{Binding HasFile, Converter={StaticResource BoolToVisibility}}">
+        <StackPanel>
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Margin="0,0,10,0" VerticalAlignment="Center">
+              <TextBlock Style="{StaticResource Text.Meta}" Text="연결된 파일" />
+              <TextBlock Margin="0,2,0,0"
+                         Style="{StaticResource Text.Body}"
+                         Text="{Binding FileName}"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip="{Binding FilePath}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+              <Button Margin="0,0,6,0"
+                      Command="{Binding OpenFileCommand}"
+                      Content="열기"
+                      Style="{StaticResource Button.Primary}"
+                      ToolTip="{Binding FilePath}" />
+              <Button Command="{Binding ShowFileCommand}"
+                      Content="폴더"
+                      Style="{StaticResource Button.Ghost}"
+                      ToolTip="탐색기에서 이 파일을 선택한 채로 엽니다" />
+            </StackPanel>
+          </Grid>
+
+          <TextBlock Margin="0,8,0,0"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding FileNote}"
+                     TextWrapping="Wrap"
+                     Visibility="{Binding HasFileNote, Converter={StaticResource BoolToVisibility}}" />
+        </StackPanel>
+      </Border>
+
       <!-- ============ the note ============ -->
       <TextBlock Margin="2,14,0,5" Style="{StaticResource Text.Meta}" Text="메모" />
       <Border Style="{StaticResource Field}">

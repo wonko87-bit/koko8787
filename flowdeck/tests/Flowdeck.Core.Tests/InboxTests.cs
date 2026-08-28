@@ -330,6 +330,11 @@ public class InboxImporterTests : IDisposable
         Assert.Equal("2026_상반기_시장분석.pdf", todo.SourceText);
         Assert.Equal(30, todo.ReminderMinutesBefore);
 
+        // And the path in that note survives well enough to open the file from the entry.
+        Assert.Equal(
+            @"C:\Users\andrew\Documents\관리함\2026_상반기_시장분석.pdf",
+            AttachedFile.PathIn(todo.Notes));
+
         // Left out of the file on purpose, and each has to land on its own default rather
         // than on null: the todo goes straight into a workspace that expects them set.
         Assert.False(todo.Recurrence.IsRepeating);
