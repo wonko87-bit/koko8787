@@ -15,6 +15,7 @@ export interface FileEntry {
   record_id: string | null;
   flowdeck_todos: FlowdeckTodo[];
   flowdeck_pending: boolean;
+  recent_cleared: boolean;
 }
 
 export interface FlowdeckTodo {

@@ -580,6 +580,7 @@ mod tests {
             record_id: None,
             flowdeck_todos: vec![],
             flowdeck_pending: false,
+            recent_cleared: false,
         }
     }
 

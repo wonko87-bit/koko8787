@@ -218,6 +218,75 @@ function FileCard({
   );
 }
 
+/// 옮긴 지 얼마 안 된 파일을 "처리됨"에 남겨 두는 시간.
+///
+/// 마음이 바뀌어 Flowdeck 으로 보내고 싶어지는 건 옮긴 직후지 한참 뒤가 아니다.
+/// 무기한 쌓아 두면 이 칸을 비우는 일 자체가 새로운 잡일이 된다. 더 오래된 것은
+/// 기록 탭에 검색과 함께 그대로 남아 있다.
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function DoneRow({ entry }: { entry: FileEntry }) {
+  const [busy, setBusy] = useState(false);
+  const registered = entry.flowdeck_todos.length > 0;
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      alert(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="row done-row">
+      <div className="grow">
+        <div className="done-name">{entry.file_name}</div>
+        <div className="path" title={entry.filed_to ?? ""}>
+          → {entry.filed_to}
+        </div>
+      </div>
+      {registered ? (
+        <span className="flowdeck-chip">📋 등록됨</span>
+      ) : (
+        <button
+          disabled={busy}
+          title="이 파일을 Flowdeck 할일로 등록합니다"
+          onClick={() => run(() => api.sendToFlowdeck(entry.id))}
+        >
+          📋 Flowdeck
+        </button>
+      )}
+      {entry.filed_to && (
+        <button
+          disabled={busy}
+          title="옮긴 폴더 열기"
+          onClick={() => api.openFolder(entry.filed_to!)}
+        >
+          열기
+        </button>
+      )}
+      <button
+        disabled={busy}
+        title="파일을 관리함으로 되돌리고 이 이동의 학습 기록도 취소"
+        onClick={() => run(() => api.undoMove(entry.id))}
+      >
+        되돌리기
+      </button>
+      <button
+        className="ghost"
+        disabled={busy}
+        title="이 칸에서만 치웁니다. 파일과 기록은 그대로예요"
+        onClick={() => run(() => api.clearRecent([entry.id]))}
+      >
+        치우기
+      </button>
+    </div>
+  );
+}
+
 export default function InboxView({
   entries,
   favorites,
@@ -237,6 +306,20 @@ export default function InboxView({
         .sort((a, b) => b.added_at - a.added_at),
     [entries],
   );
+
+  // 방금 옮긴 파일들. 옮기자마자 사라지면 뒤늦게 Flowdeck 으로 보내려 할 때
+  // 기록 탭까지 들어가야 한다.
+  const done = useMemo(() => {
+    const cutoff = Date.now() - RECENT_WINDOW_MS;
+    return entries
+      .filter(
+        (e) =>
+          e.status === "filed" &&
+          !e.recent_cleared &&
+          (e.filed_at ?? 0) >= cutoff,
+      )
+      .sort((a, b) => (b.filed_at ?? 0) - (a.filed_at ?? 0));
+  }, [entries]);
 
   const allCategories = useMemo(
     () => [...new Set([...DEFAULT_CATEGORIES, ...inbox.map((e) => e.category)])],
@@ -315,14 +398,40 @@ export default function InboxView({
       if (typeof dir === "string") reportBatch(await api.sendManyToPath(ids, dir));
     });
 
+
+  const doneSection = done.length > 0 && (
+    <div className="category-group done-group">
+      <h2>
+        ✅ 처리됨 ({done.length})
+        <button
+          className="ghost"
+          title="이 칸을 비웁니다. 파일과 기록은 그대로예요"
+          onClick={() => api.clearRecent(done.map((e) => e.id))}
+        >
+          모두 치우기
+        </button>
+      </h2>
+      <div className="hint done-hint">
+        최근 하루 안에 폴더로 옮긴 파일이에요. Flowdeck으로 보내면 이 칸에서
+        빠지고, 그냥 두면 하루 뒤 사라집니다. 더 오래된 건 기록 탭에 있어요.
+      </div>
+      {done.map((e) => (
+        <DoneRow key={e.id} entry={e} />
+      ))}
+    </div>
+  );
+
   if (inbox.length === 0) {
     return (
-      <div className="empty">
-        <div className="big">📭</div>
-        관리함이 비어 있어요.
-        <br />
-        감시 폴더에 새 파일이 생기거나, 창에 파일을 끌어다 놓으면 수집됩니다.
-      </div>
+      <>
+        <div className="empty">
+          <div className="big">📭</div>
+          관리함이 비어 있어요.
+          <br />
+          감시 폴더에 새 파일이 생기거나, 창에 파일을 끌어다 놓으면 수집됩니다.
+        </div>
+        {doneSection}
+      </>
     );
   }
 
@@ -439,6 +548,8 @@ export default function InboxView({
           </div>
         ))
       )}
+
+      {doneSection}
     </>
   );
 }

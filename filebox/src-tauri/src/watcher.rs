@@ -210,6 +210,7 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
         record_id: None,
         flowdeck_todos: Vec::new(),
         flowdeck_pending: false,
+        recent_cleared: false,
     };
     store.update(|d| d.entries.push(entry.clone()));
 

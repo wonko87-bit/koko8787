@@ -108,6 +108,7 @@ mod tests {
                 record_id: None,
                 flowdeck_todos: Vec::new(),
                 flowdeck_pending: false,
+                recent_cleared: false,
             });
         });
         let reloaded = Store::load(path);
@@ -204,6 +205,8 @@ mod tests {
 
         assert_eq!(entries.len(), 1, "항목이 유실됨");
         assert!(entries[0].flowdeck_todos.is_empty());
+        assert!(!entries[0].flowdeck_pending);
+        assert!(!entries[0].recent_cleared, "옛 항목은 치워지지 않은 상태여야 한다");
         assert_eq!(rules.len(), 1, "규칙이 유실됨");
         assert_eq!(rules[0].category.as_deref(), Some("경리"), "기존 규칙이 뭉개짐");
         assert!(rules[0].flowdeck.is_none(), "옛 규칙은 특별규칙이 없어야 한다");

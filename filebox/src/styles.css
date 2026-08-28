@@ -572,3 +572,47 @@ button.flowdeck-sent {
   font-size: 11px;
   font-weight: 600;
 }
+
+/* ---------- 관리함 하단의 '처리됨' ---------- */
+
+/* 아직 안 치운 것과 이미 옮긴 것을 한눈에 가르기 위해 선으로 떼어 놓는다. */
+.done-group {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.done-group h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.done-group h2 button {
+  font-size: 12px;
+  padding: 2px 8px;
+}
+.done-hint {
+  margin: 0 0 10px 2px;
+}
+.done-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  padding: 10px 12px;
+}
+/* 처리가 끝난 줄이라 관리함 카드보다 한 단계 뒤로 물린다. */
+.done-name {
+  color: var(--muted);
+}
+/* 긴 경로가 줄바꿈되면 행 높이가 제각각이 되어 버튼 위치가 흔들린다.
+   전체 경로는 마우스를 올리면 보인다. */
+.done-row .path {
+  overflow-wrap: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.done-row .grow {
+  overflow: hidden;
+}

@@ -59,6 +59,8 @@ export const api = {
     invoke<string>("send_to_flowdeck", { entryId }),
   setFlowdeckPending: (entryId: string, pending: boolean) =>
     invoke<FileEntry>("set_flowdeck_pending", { entryId, pending }),
+  clearRecent: (entryIds: string[]) =>
+    invoke<void>("clear_recent", { entryIds }),
 
   listUncollected: () => invoke<Candidate[]>("list_uncollected"),
   collectPaths: (paths: string[]) => invoke<number>("collect_paths", { paths }),

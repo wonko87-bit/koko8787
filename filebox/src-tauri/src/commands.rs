@@ -102,6 +102,9 @@ fn file_entry_to(
             e.filed_to = Some(dest_dir.clone());
             e.filed_at = Some(now_millis());
             e.record_id = record_id;
+            // 다시 옮겼으면 "처리됨" 칸에 새로 뜬다. 치웠던 것이 계속 숨어 있으면
+            // 방금 한 일이 화면에 안 보인다.
+            e.recent_cleared = false;
             e.clone()
         })
     });
@@ -449,6 +452,17 @@ pub fn flowdeck_status(store: State<Store>) -> FlowdeckStatus {
     }
 }
 
+/// "처리됨" 칸에서 치운다. 목록에서만 빠지고 기록과 파일은 그대로다.
+#[tauri::command]
+pub fn clear_recent(app: AppHandle, store: State<Store>, entry_ids: Vec<String>) {
+    store.update(|d| {
+        for e in d.entries.iter_mut().filter(|e| entry_ids.contains(&e.id)) {
+            e.recent_cleared = true;
+        }
+    });
+    let _ = app.emit("entries-changed", ());
+}
+
 /// 관리함에 있는 파일을 "옮길 때 Flowdeck 에 등록" 으로 표시하거나 해제한다.
 ///
 /// 지금 바로 보내지 않는 이유는 하나다. 관리함은 거쳐 가는 곳이라 지금 보내면
@@ -528,6 +542,8 @@ pub fn send_to_flowdeck(
             // 같은 규칙으로 다시 보낸 것이면 흔적도 하나만 남긴다.
             e.flowdeck_todos.retain(|t| t.todo_id != todo.todo_id);
             e.flowdeck_todos.push(todo.clone());
+            // 보내는 것이 이 칸에 남겨 둔 목적이었으므로, 보냈으면 치운다.
+            e.recent_cleared = true;
         }
     });
     let _ = app.emit("entries-changed", ());
@@ -790,6 +806,7 @@ mod tests {
                 record_id: None,
                 flowdeck_todos: vec![],
                 flowdeck_pending: pending,
+                recent_cleared: false,
             });
         });
 

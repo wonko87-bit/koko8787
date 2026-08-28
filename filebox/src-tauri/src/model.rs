@@ -34,6 +34,13 @@ pub struct FileEntry {
     /// 중복 방지 자체는 여기 의존하지 않는다 (id 가 결정적이라 - flowdeck::todo_id 참고).
     #[serde(default)]
     pub flowdeck_todos: Vec<FlowdeckTodo>,
+    /// 관리함 아래 "처리됨" 칸에서 치웠는지.
+    ///
+    /// 옮긴 파일이 목록에서 곧바로 사라지면, 나중에 Flowdeck 으로 보내고 싶어졌을 때
+    /// 기록 탭까지 찾아 들어가야 한다. 그래서 옮긴 뒤에도 잠시 남겨 두고, 사용자가
+    /// 치우거나 시간이 지나면 사라지게 한다. 항목 자체는 기록에 그대로 남는다.
+    #[serde(default)]
+    pub recent_cleared: bool,
     /// 걸리는 규칙이 없어도 이 파일은 Flowdeck 할일로 만들라는 표시.
     ///
     /// 관리함에 있는 동안에는 아직 보내지 않는다. 지금 보내면 메모에 관리함 경로가
