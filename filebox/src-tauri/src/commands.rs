@@ -807,6 +807,15 @@ mod tests {
             .unwrap_or_default()
     }
 
+    /// 전송 파일에서 Flowdeck 이 실제로 읽게 될 메모를 꺼낸다.
+    fn notes_of(file_text: &str) -> String {
+        let marker = crate::flowdeck::MARKER;
+        let start = file_text.find(marker).expect("마커가 있어야 한다") + marker.len();
+        let parsed: serde_json::Value =
+            serde_json::from_str(&file_text[start..]).expect("마커 뒤는 JSON 이어야 한다");
+        parsed["Todos"][0]["Notes"].as_str().unwrap_or_default().to_string()
+    }
+
     fn reading_rule() -> Rule {
         Rule {
             id: "r1".into(),
@@ -841,12 +850,16 @@ mod tests {
 
         let files = transfers(&env);
         assert_eq!(files.len(), 1);
-        let sent = &files[0];
+
+        // 원문이 아니라 파싱된 값을 본다. 윈도우 경로의 역슬래시는 JSON 에서
+        // 이스케이프되므로, Flowdeck 이 실제로 읽는 값과 원문은 다르게 생겼다.
+        let notes = notes_of(&files[0]);
+        let expected = dest.join("2026_상반기_시장분석.pdf");
         assert!(
-            sent.contains(dest.join("2026_상반기_시장분석.pdf").to_str().unwrap()),
-            "메모에 최종 경로가 없다: {sent}"
+            notes.contains(&expected.display().to_string()),
+            "메모에 최종 경로가 없다: {notes}"
         );
-        assert!(!sent.contains("관리함"), "관리함 경로가 새어 나갔다: {sent}");
+        assert!(!notes.contains("관리함"), "관리함 경로가 새어 나갔다: {notes}");
         std::fs::remove_dir_all(&env.root).ok();
     }
 

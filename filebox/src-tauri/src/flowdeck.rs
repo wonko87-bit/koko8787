@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 /// 사람이 읽는 부분과 앱이 읽는 부분의 경계. Flowdeck 이 이 문자열을 그대로 찾으므로
 /// 한 글자도 바꾸면 안 된다.
-const MARKER: &str = "--- 여기서부터는 앱이 읽는 부분입니다. 지우지 마세요 ---";
+pub(crate) const MARKER: &str = "--- 여기서부터는 앱이 읽는 부분입니다. 지우지 마세요 ---";
 const FORMAT: &str = "flowdeck.transfer";
 const VERSION: u32 = 1;
 
@@ -559,7 +559,9 @@ mod tests {
 
         let (_, files) = dispatch_into_temp(vec![flowdeck_rule()], &entry);
         assert_eq!(files.len(), 1);
-        assert!(files[0].contains("/home/u/프로젝트/시장분석/a.pdf"));
+        // 원문이 아니라 파싱된 값을 본다 — windows_paths_survive_json_escaping 참고.
+        let notes = json_of(&files[0])["Todos"][0]["Notes"].as_str().unwrap().to_string();
+        assert!(notes.contains("/home/u/프로젝트/시장분석/a.pdf"), "{notes}");
     }
 
     fn sample_entry() -> crate::model::FileEntry {
@@ -579,6 +581,26 @@ mod tests {
             flowdeck_todos: vec![],
             flowdeck_pending: false,
         }
+    }
+
+    #[test]
+    fn windows_paths_survive_json_escaping() {
+        // 역슬래시는 JSON 에서 \\ 로 이스케이프된다. 그래서 파일 원문을 문자열
+        // 포함으로 검사하면 윈도우에서만 어긋난다 — 정작 Flowdeck 은 파싱해서
+        // 원래 경로를 되찾으므로 아무 문제가 없는데도 그렇다.
+        let now = at(2026, 8, 27, 14, 32);
+        let win = Path::new(r"D:\작업\최종폴더\2026_상반기_시장분석.pdf");
+        let todo = build_todo(&spec(), "abc".into(), "a.pdf", win, "문서", "r", &now);
+        let text = build_file(vec![todo], &now);
+
+        // 원문에는 이스케이프된 형태로만 들어 있다.
+        assert!(!text.contains(r"D:\작업\최종폴더"), "원문 매칭은 성립하지 않아야 한다");
+        // 파싱하면 정확히 원래 경로가 나온다. Flowdeck 이 보는 것이 이쪽이다.
+        let notes = json_of(&text)["Todos"][0]["Notes"].as_str().unwrap().to_string();
+        assert!(
+            notes.contains(&win.display().to_string()),
+            "파싱된 메모에 경로가 없다: {notes}"
+        );
     }
 
     #[test]
