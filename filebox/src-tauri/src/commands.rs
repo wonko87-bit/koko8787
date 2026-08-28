@@ -60,8 +60,8 @@ pub fn get_suggestions(store: State<Store>, entry_id: String) -> Vec<Suggestion>
     })
 }
 
-fn file_entry_to(
-    app: &AppHandle,
+fn file_entry_to<R: tauri::Runtime>(
+    app: &AppHandle<R>,
     store: &Store,
     entry_id: &str,
     dest_dir: PathBuf,
@@ -123,7 +123,11 @@ fn file_entry_to(
 /// 규칙에 걸리면 그 규칙의 설정으로, 걸리지 않아도 사용자가 관리함에서 미리
 /// 표시해 뒀으면 기한 없는 할일로 보낸다. 실패해도 이동 자체는 이미 끝난 일이라
 /// 여기서 되돌리지 않는다.
-fn register_with_flowdeck(app: &AppHandle, store: &Store, entry: FileEntry) -> FileEntry {
+fn register_with_flowdeck<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    store: &Store,
+    entry: FileEntry,
+) -> FileEntry {
     let sent = crate::flowdeck::dispatch(store, &entry);
     if sent.is_empty() {
         return entry;
@@ -243,8 +247,8 @@ pub struct BatchResult {
     pub errors: Vec<String>,
 }
 
-fn move_many(
-    app: &AppHandle,
+fn move_many<R: tauri::Runtime>(
+    app: &AppHandle<R>,
     store: &Store,
     entry_ids: Vec<String>,
     dest_dir: PathBuf,
@@ -741,4 +745,149 @@ pub fn open_trash() -> Result<(), String> {
     {
         Err("이 플랫폼에서는 휴지통 열기를 지원하지 않습니다".into())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{FileEntry, FlowdeckSpec, Rule, Settings};
+    use tauri::Manager;
+
+    struct Env {
+        _app: tauri::App<tauri::test::MockRuntime>,
+        handle: AppHandle<tauri::test::MockRuntime>,
+        root: PathBuf,
+    }
+
+    impl Env {
+        /// 커맨드가 받는 것과 같은 형태로 스토어를 꺼낸다.
+        fn state(&self) -> State<'_, Store> {
+            self.handle.state::<Store>()
+        }
+    }
+
+    /// 관리함에 파일 하나가 수집돼 있고, 최종 폴더와 Flowdeck 감시 폴더가 준비된 상태.
+    fn setup(rule: Option<Rule>, pending: bool) -> Env {
+        let app = tauri::test::mock_app();
+        let root = std::env::temp_dir().join(format!("fbcmd-{}", new_id()));
+        let inbox = root.join("관리함");
+        let dest = root.join("최종폴더");
+        let fd = root.join("fd-inbox");
+        for dir in [&inbox, &dest, &fd] {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+
+        let file = inbox.join("2026_상반기_시장분석.pdf");
+        std::fs::write(&file, "리포트").unwrap();
+
+        let store = Store::load(root.join("store.json"));
+        store.update(|d| {
+            let mut settings = Settings::new(root.join("dl"), inbox.clone());
+            settings.flowdeck_enabled = true;
+            settings.flowdeck_inbox = Some(fd.clone());
+            d.settings = Some(settings);
+            if let Some(r) = rule.clone() {
+                d.rules.push(r);
+            }
+            d.entries.push(FileEntry {
+                id: "e1".into(),
+                file_name: "2026_상반기_시장분석.pdf".into(),
+                path: file.clone(),
+                origin: root.join("dl/2026_상반기_시장분석.pdf"),
+                size: 6,
+                added_at: now_millis(),
+                category: "리포트".into(),
+                tags: vec![],
+                status: EntryStatus::Inbox,
+                filed_to: None,
+                filed_at: None,
+                record_id: None,
+                flowdeck_todos: vec![],
+                flowdeck_pending: pending,
+            });
+        });
+
+        let handle = app.handle().clone();
+        handle.manage(store);
+        Env { _app: app, handle, root }
+    }
+
+    fn transfers(env: &Env) -> Vec<String> {
+        std::fs::read_dir(env.root.join("fd-inbox"))
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
+                    .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn reading_rule() -> Rule {
+        Rule {
+            id: "r1".into(),
+            name: "리포트 읽기".into(),
+            extensions: vec!["pdf".into()],
+            keywords: vec![],
+            category: None,
+            favorite_id: None,
+            flowdeck: Some(FlowdeckSpec {
+                title: "[읽기] {파일명}".into(),
+                due_in_days: Some(7),
+                due_time: Some("10:00".into()),
+                priority: "High".into(),
+                tags: vec!["리포트".into()],
+                reminder_minutes: Some(30),
+            }),
+        }
+    }
+
+    /// 이 릴리스의 요점. 이동 명령이 발송을 부르고, 메모에 최종 경로가 적혀야 한다.
+    #[test]
+    fn filing_sends_the_todo_with_the_destination_path() {
+        let env = setup(Some(reading_rule()), false);
+        assert!(transfers(&env).is_empty(), "이동 전에는 아무것도 보내지 않는다");
+
+        let dest = env.root.join("최종폴더");
+        let filed = file_entry_to(&env.handle, &env.state(), "e1", dest.clone(), None)
+            .expect("이동 실패");
+
+        assert_eq!(filed.status, EntryStatus::Filed);
+        assert_eq!(filed.flowdeck_todos.len(), 1, "이동했는데 할일이 안 만들어졌다");
+
+        let files = transfers(&env);
+        assert_eq!(files.len(), 1);
+        let sent = &files[0];
+        assert!(
+            sent.contains(dest.join("2026_상반기_시장분석.pdf").to_str().unwrap()),
+            "메모에 최종 경로가 없다: {sent}"
+        );
+        assert!(!sent.contains("관리함"), "관리함 경로가 새어 나갔다: {sent}");
+        std::fs::remove_dir_all(&env.root).ok();
+    }
+
+    /// 규칙이 없어도 관리함에서 표시해 둔 파일은 이동할 때 나가야 한다.
+    #[test]
+    fn filing_a_marked_file_sends_it_even_without_a_rule() {
+        let env = setup(None, true);
+        let dest = env.root.join("최종폴더");
+        let filed = file_entry_to(&env.handle, &env.state(), "e1", dest, None).expect("이동 실패");
+
+        assert_eq!(filed.flowdeck_todos.len(), 1);
+        assert!(!filed.flowdeck_pending, "표시는 소비돼야 한다");
+        assert_eq!(transfers(&env).len(), 1);
+        std::fs::remove_dir_all(&env.root).ok();
+    }
+
+    /// 규칙도 없고 표시도 없으면 조용히 지나가야 한다.
+    #[test]
+    fn filing_an_ordinary_file_sends_nothing() {
+        let env = setup(None, false);
+        let dest = env.root.join("최종폴더");
+        file_entry_to(&env.handle, &env.state(), "e1", dest, None).expect("이동 실패");
+
+        assert!(transfers(&env).is_empty(), "보낼 이유가 없는데 보냈다");
+        std::fs::remove_dir_all(&env.root).ok();
+    }
+
 }
