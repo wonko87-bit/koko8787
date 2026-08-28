@@ -150,6 +150,7 @@ pub fn run() {
             commands::remove_rule,
             commands::flowdeck_status,
             commands::send_to_flowdeck,
+            commands::set_flowdeck_pending,
             commands::list_uncollected,
             commands::collect_paths,
             commands::open_entry,

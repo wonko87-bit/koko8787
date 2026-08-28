@@ -34,6 +34,12 @@ pub struct FileEntry {
     /// 중복 방지 자체는 여기 의존하지 않는다 (id 가 결정적이라 - flowdeck::todo_id 참고).
     #[serde(default)]
     pub flowdeck_todos: Vec<FlowdeckTodo>,
+    /// 걸리는 규칙이 없어도 이 파일은 Flowdeck 할일로 만들라는 표시.
+    ///
+    /// 관리함에 있는 동안에는 아직 보내지 않는다. 지금 보내면 메모에 관리함 경로가
+    /// 박히는데, 그 경로는 파일을 최종 폴더로 옮기는 순간 죽는다.
+    #[serde(default)]
+    pub flowdeck_pending: bool,
 }
 
 /// FileBox 가 Flowdeck 에 넘긴 할일 하나의 흔적.

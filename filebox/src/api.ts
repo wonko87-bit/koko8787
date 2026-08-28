@@ -57,6 +57,8 @@ export const api = {
   flowdeckStatus: () => invoke<FlowdeckStatus>("flowdeck_status"),
   sendToFlowdeck: (entryId: string) =>
     invoke<string>("send_to_flowdeck", { entryId }),
+  setFlowdeckPending: (entryId: string, pending: boolean) =>
+    invoke<FileEntry>("set_flowdeck_pending", { entryId, pending }),
 
   listUncollected: () => invoke<Candidate[]>("list_uncollected"),
   collectPaths: (paths: string[]) => invoke<number>("collect_paths", { paths }),

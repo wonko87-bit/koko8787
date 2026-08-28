@@ -107,6 +107,7 @@ mod tests {
                 filed_at: None,
                 record_id: None,
                 flowdeck_todos: Vec::new(),
+                flowdeck_pending: false,
             });
         });
         let reloaded = Store::load(path);

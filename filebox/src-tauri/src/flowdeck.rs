@@ -290,8 +290,10 @@ pub fn dispatch(
     };
     let rules = store.read(|d| d.rules.clone());
 
+    let matched = matching_specs(&rules, &entry.file_name);
+
     let mut sent = Vec::new();
-    for rule in matching_specs(&rules, &entry.file_name) {
+    for rule in &matched {
         let Some(spec) = &rule.flowdeck else { continue };
         match send(
             &inbox,
@@ -307,6 +309,29 @@ pub fn dispatch(
             Err(e) => eprintln!("Flowdeck 전달 실패 ({}): {e}", entry.file_name),
         }
     }
+
+    // 걸리는 규칙이 없는데 사용자가 직접 표시해 둔 파일. 규칙이 이미 처리했다면
+    // 예약분까지 또 보내지 않는다 — 같은 파일로 할일이 두 개 생긴다.
+    if entry.flowdeck_pending && sent.is_empty() {
+        let spec = crate::model::FlowdeckSpec {
+            due_in_days: None,
+            ..Default::default()
+        };
+        match send(
+            &inbox,
+            &spec,
+            &entry.id,
+            "",
+            "",
+            &entry.file_name,
+            &entry.path,
+            &entry.category,
+        ) {
+            Ok(todo) => sent.push(todo),
+            Err(e) => eprintln!("Flowdeck 전달 실패 ({}): {e}", entry.file_name),
+        }
+    }
+
     sent
 }
 
@@ -443,6 +468,117 @@ mod tests {
         // 쓰면 현재 디렉터리에 파일을 흘리게 된다.
         assert_eq!(inbox_of(&store_with(true, Some(""))), default_inbox());
         assert_eq!(inbox_of(&store_with(true, None)), default_inbox());
+    }
+
+    #[test]
+    fn notes_carry_whatever_path_it_is_given() {
+        // 0.2.4 는 수집 시점에 보내서 메모에 관리함 경로가 박혔고, 파일을 옮기는
+        // 순간 그 경로가 죽었다. 이제 이동이 끝난 뒤에 보내므로 최종 경로가 들어간다.
+        // build_todo 는 받은 경로를 그대로 적는다 — 어느 경로를 넘기느냐가 전부다.
+        let now = at(2026, 8, 27, 14, 32);
+        let filed = Path::new("/home/u/프로젝트/시장분석/a.pdf");
+        let todo = build_todo(&spec(), "abc".into(), "a.pdf", filed, "문서", "r", &now);
+        let v = json_of(&build_file(vec![todo], &now));
+        let notes = v["Todos"][0]["Notes"].as_str().unwrap();
+        assert!(notes.contains("/home/u/프로젝트/시장분석/a.pdf"));
+        assert!(!notes.contains("관리함"), "관리함 경로가 새어 나갔다: {notes}");
+    }
+
+    /// dispatch 를 실제로 돌리고, 감시 폴더에 떨어진 전송 파일들을 읽어 온다.
+    fn dispatch_into_temp(
+        rules: Vec<Rule>,
+        entry: &crate::model::FileEntry,
+    ) -> (Vec<crate::model::FlowdeckTodo>, Vec<String>) {
+        let dir = std::env::temp_dir().join(format!("fbdisp-{}", crate::model::new_id()));
+        let store = store_with(true, Some(dir.to_str().unwrap()));
+        store.update(|d| d.rules = rules);
+
+        let sent = dispatch(&store, entry);
+        let mut files: Vec<String> = std::fs::read_dir(&dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
+                    .filter_map(|e| std::fs::read_to_string(e.path()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        files.sort();
+        std::fs::remove_dir_all(&dir).ok();
+        (sent, files)
+    }
+
+    fn flowdeck_rule() -> Rule {
+        Rule {
+            id: "r1".into(),
+            name: "리포트".into(),
+            extensions: vec!["pdf".into()],
+            keywords: vec![],
+            category: None,
+            favorite_id: None,
+            flowdeck: Some(spec()),
+        }
+    }
+
+    #[test]
+    fn nothing_is_sent_without_a_rule_or_a_mark() {
+        let (sent, files) = dispatch_into_temp(vec![], &sample_entry());
+        assert!(sent.is_empty());
+        assert!(files.is_empty(), "보낼 이유가 없는데 파일이 생겼다");
+    }
+
+    #[test]
+    fn a_marked_entry_goes_even_with_no_rule() {
+        // 규칙을 만들 만큼 반복되지 않는 파일. 관리함에서 표시해 두면 이동할 때 나간다.
+        let mut entry = sample_entry();
+        entry.flowdeck_pending = true;
+
+        let (sent, files) = dispatch_into_temp(vec![], &entry);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(files.len(), 1);
+        // 표시만으로 보낸 것은 기한을 붙이지 않는다.
+        assert!(!files[0].contains("\"DueAt\""), "기한 없이 나가야 한다");
+    }
+
+    #[test]
+    fn a_marked_entry_matching_a_rule_makes_one_todo_not_two() {
+        // 규칙이 이미 보냈는데 표시분까지 또 보내면 같은 파일로 할일이 두 개가 된다.
+        let mut entry = sample_entry();
+        entry.flowdeck_pending = true;
+
+        let (sent, files) = dispatch_into_temp(vec![flowdeck_rule()], &entry);
+        assert_eq!(sent.len(), 1, "할일이 두 개 만들어졌다");
+        assert_eq!(files.len(), 1);
+        assert!(files[0].contains("\"DueAt\""), "규칙의 기한이 쓰여야 한다");
+    }
+
+    #[test]
+    fn the_filed_path_is_what_reaches_flowdeck() {
+        // 이 릴리스의 요점. 메모에 최종 폴더가 적혀야 하고 관리함이 아니어야 한다.
+        let mut entry = sample_entry();
+        entry.path = "/home/u/프로젝트/시장분석/a.pdf".into();
+
+        let (_, files) = dispatch_into_temp(vec![flowdeck_rule()], &entry);
+        assert_eq!(files.len(), 1);
+        assert!(files[0].contains("/home/u/프로젝트/시장분석/a.pdf"));
+    }
+
+    fn sample_entry() -> crate::model::FileEntry {
+        crate::model::FileEntry {
+            id: "e1".into(),
+            file_name: "a.pdf".into(),
+            path: "/dest/a.pdf".into(),
+            origin: "/dl/a.pdf".into(),
+            size: 1,
+            added_at: 0,
+            category: "문서".into(),
+            tags: vec![],
+            status: crate::model::EntryStatus::Filed,
+            filed_to: Some("/dest".into()),
+            filed_at: Some(1),
+            record_id: None,
+            flowdeck_todos: vec![],
+            flowdeck_pending: false,
+        }
     }
 
     #[test]

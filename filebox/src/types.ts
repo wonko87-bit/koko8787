@@ -14,6 +14,7 @@ export interface FileEntry {
   filed_at: number | null;
   record_id: string | null;
   flowdeck_todos: FlowdeckTodo[];
+  flowdeck_pending: boolean;
 }
 
 export interface FlowdeckTodo {

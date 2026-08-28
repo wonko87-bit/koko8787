@@ -106,8 +106,41 @@ fn file_entry_to(
             e.clone()
         })
     });
+
+    // 갈 곳이 정해진 지금이 할일을 만들 때다. 메모에 적히는 경로가 최종 경로이므로
+    // 나중에 어긋나지 않는다. 관리함에 있을 때 보내면 이동하는 순간 죽는 경로가 된다.
+    let updated = match updated {
+        Some(entry) => Some(register_with_flowdeck(&app, &store, entry)),
+        None => None,
+    };
+
     let _ = app.emit("entries-changed", ());
     updated.ok_or_else(|| "항목 갱신 실패".into())
+}
+
+/// 이동이 끝난 항목을 Flowdeck 에 등록한다.
+///
+/// 규칙에 걸리면 그 규칙의 설정으로, 걸리지 않아도 사용자가 관리함에서 미리
+/// 표시해 뒀으면 기한 없는 할일로 보낸다. 실패해도 이동 자체는 이미 끝난 일이라
+/// 여기서 되돌리지 않는다.
+fn register_with_flowdeck(app: &AppHandle, store: &Store, entry: FileEntry) -> FileEntry {
+    let sent = crate::flowdeck::dispatch(store, &entry);
+    if sent.is_empty() {
+        return entry;
+    }
+    let updated = store.update(|d| {
+        d.entries.iter_mut().find(|e| e.id == entry.id).map(|e| {
+            for todo in &sent {
+                e.flowdeck_todos.retain(|t| t.todo_id != todo.todo_id);
+                e.flowdeck_todos.push(todo.clone());
+            }
+            // 예약은 소비됐다.
+            e.flowdeck_pending = false;
+            e.clone()
+        })
+    });
+    let _ = app.emit("flowdeck-registered", sent.len());
+    updated.unwrap_or(entry)
 }
 
 #[tauri::command]
@@ -416,10 +449,31 @@ pub fn flowdeck_status(store: State<Store>) -> FlowdeckStatus {
     }
 }
 
-/// 규칙과 상관없이 이 파일을 지금 Flowdeck 할일로 보낸다.
+/// 관리함에 있는 파일을 "옮길 때 Flowdeck 에 등록" 으로 표시하거나 해제한다.
 ///
-/// 걸리는 특별규칙이 있으면 그 규칙의 설정을 그대로 쓰고, 없으면 기한 없는 할일을
-/// 만든다. 규칙을 미리 만들어 둘 만큼 반복되지 않는 파일이 있어서다.
+/// 지금 바로 보내지 않는 이유는 하나다. 관리함은 거쳐 가는 곳이라 지금 보내면
+/// 메모에 적히는 경로가 곧 죽는다. 표시만 해 두고 갈 곳이 정해질 때 보낸다.
+#[tauri::command]
+pub fn set_flowdeck_pending(
+    app: AppHandle,
+    store: State<Store>,
+    entry_id: String,
+    pending: bool,
+) -> Result<FileEntry, String> {
+    let updated = store.update(|d| {
+        d.entries.iter_mut().find(|e| e.id == entry_id).map(|e| {
+            e.flowdeck_pending = pending;
+            e.clone()
+        })
+    });
+    let _ = app.emit("entries-changed", ());
+    updated.ok_or_else(|| "항목을 찾을 수 없습니다".into())
+}
+
+/// 이미 정리가 끝난 파일을 지금 Flowdeck 할일로 보낸다.
+///
+/// 이 파일은 최종 폴더에 있으므로 메모에 적히는 경로가 그대로 유효하다. 규칙을
+/// 만들 만큼 반복되지 않는 파일을 위한 길이다.
 #[tauri::command]
 pub fn send_to_flowdeck(
     app: AppHandle,
@@ -431,6 +485,13 @@ pub fn send_to_flowdeck(
     let entry = store
         .read(|d| d.entries.iter().find(|e| e.id == entry_id).cloned())
         .ok_or("항목을 찾을 수 없습니다.")?;
+
+    // 관리함 파일을 지금 보내면 곧 죽을 경로가 메모에 박힌다. 그쪽은 예약을 쓴다.
+    if entry.status == EntryStatus::Inbox {
+        return Err(
+            "아직 관리함에 있는 파일입니다. 폴더로 옮기면 자동으로 등록됩니다.".into(),
+        );
+    }
 
     let rules = store.read(|d| d.rules.clone());
     let matched = crate::flowdeck::matching_specs(&rules, &entry.file_name);

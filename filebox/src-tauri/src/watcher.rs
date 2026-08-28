@@ -209,25 +209,13 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
         filed_at: None,
         record_id: None,
         flowdeck_todos: Vec::new(),
+        flowdeck_pending: false,
     };
     store.update(|d| d.entries.push(entry.clone()));
 
-    // 특별규칙이 걸려 있으면 Flowdeck 으로도 넘긴다. 실패해도 수집 자체는 끝난
-    // 일이므로, 여기서 되돌리지 않고 항목은 그대로 둔다.
-    let sent = crate::flowdeck::dispatch(&store, &entry);
-    let entry = if sent.is_empty() {
-        entry
-    } else {
-        store.update(|d| {
-            match d.entries.iter_mut().find(|e| e.id == entry.id) {
-                Some(e) => {
-                    e.flowdeck_todos = sent.clone();
-                    e.clone()
-                }
-                None => entry.clone(),
-            }
-        })
-    };
+    // Flowdeck 으로는 여기서 보내지 않는다. 지금 이 파일의 경로는 관리함이고,
+    // 관리함은 거쳐 가는 곳이라 최종 폴더로 옮기는 순간 그 경로가 죽는다.
+    // 할일은 파일이 갈 곳이 정해진 뒤에 만든다 (commands::file_entry_to).
 
     let _ = app.emit("entries-changed", ());
     Some(entry)

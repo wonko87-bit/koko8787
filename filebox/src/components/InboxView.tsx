@@ -115,7 +115,6 @@ function FileCard({
       if (typeof dir === "string") await api.sendToPath(entry.id, dir);
     });
 
-  const sentToFlowdeck = entry.flowdeck_todos.length > 0;
   const suggested = new Set(suggestions.map((s) => s.favorite.id));
   const otherFavorites = favorites.filter((f) => !suggested.has(f.id));
 
@@ -183,19 +182,20 @@ function FileCard({
         </button>
         <button
           disabled={busy}
-          className={sentToFlowdeck ? "flowdeck-sent" : ""}
+          className={entry.flowdeck_pending ? "flowdeck-sent" : ""}
           title={
-            sentToFlowdeck
-              ? "이미 Flowdeck으로 보냈어요. 다시 눌러도 할일이 늘어나지 않습니다"
-              : "Flowdeck에 나중에 읽을 할일로 등록합니다"
+            entry.flowdeck_pending
+              ? "폴더로 옮길 때 Flowdeck 할일이 만들어집니다. 누르면 취소돼요"
+              : "이 파일을 Flowdeck 할일로 만들 예정으로 표시합니다. " +
+                "폴더가 정해져야 할일에서 파일을 열 수 있으므로, 옮길 때 등록됩니다"
           }
           onClick={() =>
-            run(async () => {
-              await api.sendToFlowdeck(entry.id);
-            })
+            run(() =>
+              api.setFlowdeckPending(entry.id, !entry.flowdeck_pending),
+            )
           }
         >
-          {sentToFlowdeck ? "📋 등록됨" : "📋 Flowdeck"}
+          {entry.flowdeck_pending ? "📋 옮길 때 등록" : "📋 Flowdeck"}
         </button>
         <button
           className="ghost"
