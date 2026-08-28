@@ -28,11 +28,6 @@ uuid = { version = "1", features = ["v4", "v5", "macro-diagnostics"] }
 # 기한 계산과 로컬 벽시계 표기. Flowdeck 이 시간대 없는 값을 기대한다.
 chrono = "0.4"
 
-[dev-dependencies]
-# 목 앱으로 커맨드 배선을 그대로 돌려 보기 위한 것. 발송 로직만 따로 검증하면
-# "이동 명령이 그 로직을 부르는가" 라는 정작 중요한 부분이 빠진다.
-tauri = { version = "2", features = ["test"] }
-
 [profile.release]
 codegen-units = 1
 lto = true

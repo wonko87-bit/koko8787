@@ -60,8 +60,7 @@ pub fn get_suggestions(store: State<Store>, entry_id: String) -> Vec<Suggestion>
     })
 }
 
-fn file_entry_to<R: tauri::Runtime>(
-    app: &AppHandle<R>,
+fn file_entry_to(
     store: &Store,
     entry_id: &str,
     dest_dir: PathBuf,
@@ -109,12 +108,7 @@ fn file_entry_to<R: tauri::Runtime>(
 
     // 갈 곳이 정해진 지금이 할일을 만들 때다. 메모에 적히는 경로가 최종 경로이므로
     // 나중에 어긋나지 않는다. 관리함에 있을 때 보내면 이동하는 순간 죽는 경로가 된다.
-    let updated = match updated {
-        Some(entry) => Some(register_with_flowdeck(&app, &store, entry)),
-        None => None,
-    };
-
-    let _ = app.emit("entries-changed", ());
+    let updated = updated.map(|entry| register_with_flowdeck(store, entry));
     updated.ok_or_else(|| "항목 갱신 실패".into())
 }
 
@@ -123,11 +117,7 @@ fn file_entry_to<R: tauri::Runtime>(
 /// 규칙에 걸리면 그 규칙의 설정으로, 걸리지 않아도 사용자가 관리함에서 미리
 /// 표시해 뒀으면 기한 없는 할일로 보낸다. 실패해도 이동 자체는 이미 끝난 일이라
 /// 여기서 되돌리지 않는다.
-fn register_with_flowdeck<R: tauri::Runtime>(
-    app: &AppHandle<R>,
-    store: &Store,
-    entry: FileEntry,
-) -> FileEntry {
+fn register_with_flowdeck(store: &Store, entry: FileEntry) -> FileEntry {
     let sent = crate::flowdeck::dispatch(store, &entry);
     if sent.is_empty() {
         return entry;
@@ -143,7 +133,6 @@ fn register_with_flowdeck<R: tauri::Runtime>(
             e.clone()
         })
     });
-    let _ = app.emit("flowdeck-registered", sent.len());
     updated.unwrap_or(entry)
 }
 
@@ -157,7 +146,9 @@ pub fn send_to_favorite(
     let fav = store
         .read(|d| d.favorites.iter().find(|f| f.id == favorite_id).cloned())
         .ok_or("즐겨찾기를 찾을 수 없습니다")?;
-    file_entry_to(&app, &store, &entry_id, fav.path, Some(fav.id))
+    let filed = file_entry_to(&store, &entry_id, fav.path, Some(fav.id));
+    let _ = app.emit("entries-changed", ());
+    filed
 }
 
 #[tauri::command]
@@ -172,7 +163,9 @@ pub fn send_to_path(
     let fav_id = store.read(|d| {
         d.favorites.iter().find(|f| f.path == dest).map(|f| f.id.clone())
     });
-    file_entry_to(&app, &store, &entry_id, dest, fav_id)
+    let filed = file_entry_to(&store, &entry_id, dest, fav_id);
+    let _ = app.emit("entries-changed", ());
+    filed
 }
 
 #[tauri::command]
@@ -247,8 +240,7 @@ pub struct BatchResult {
     pub errors: Vec<String>,
 }
 
-fn move_many<R: tauri::Runtime>(
-    app: &AppHandle<R>,
+fn move_many(
     store: &Store,
     entry_ids: Vec<String>,
     dest_dir: PathBuf,
@@ -260,7 +252,7 @@ fn move_many<R: tauri::Runtime>(
         let name = store.read(|d| {
             d.entries.iter().find(|e| e.id == id).map(|e| e.file_name.clone())
         });
-        match file_entry_to(app, store, &id, dest_dir.clone(), favorite_id.clone()) {
+        match file_entry_to(store, &id, dest_dir.clone(), favorite_id.clone()) {
             Ok(_) => moved += 1,
             Err(e) => errors.push(format!("{}: {e}", name.unwrap_or(id))),
         }
@@ -279,7 +271,9 @@ pub fn send_many_to_favorite(
     let fav = store
         .read(|d| d.favorites.iter().find(|f| f.id == favorite_id).cloned())
         .ok_or("즐겨찾기를 찾을 수 없습니다")?;
-    Ok(move_many(&app, &store, entry_ids, fav.path, Some(fav.id)))
+    let result = move_many(&store, entry_ids, fav.path, Some(fav.id));
+    let _ = app.emit("entries-changed", ());
+    Ok(result)
 }
 
 /// 여러 항목을 임의의 폴더로 일괄 이동
@@ -294,7 +288,9 @@ pub fn send_many_to_path(
     let fav_id = store.read(|d| {
         d.favorites.iter().find(|f| f.path == dest).map(|f| f.id.clone())
     });
-    move_many(&app, &store, entry_ids, dest, fav_id)
+    let result = move_many(&store, entry_ids, dest, fav_id);
+    let _ = app.emit("entries-changed", ());
+    result
 }
 
 /// 이동을 되돌린다: 파일을 관리함으로 되돌리고, 그때 남긴 학습 기록도 제거한다.
@@ -751,24 +747,14 @@ pub fn open_trash() -> Result<(), String> {
 mod tests {
     use super::*;
     use crate::model::{FileEntry, FlowdeckSpec, Rule, Settings};
-    use tauri::Manager;
 
     struct Env {
-        _app: tauri::App<tauri::test::MockRuntime>,
-        handle: AppHandle<tauri::test::MockRuntime>,
+        store: Store,
         root: PathBuf,
-    }
-
-    impl Env {
-        /// 커맨드가 받는 것과 같은 형태로 스토어를 꺼낸다.
-        fn state(&self) -> State<'_, Store> {
-            self.handle.state::<Store>()
-        }
     }
 
     /// 관리함에 파일 하나가 수집돼 있고, 최종 폴더와 Flowdeck 감시 폴더가 준비된 상태.
     fn setup(rule: Option<Rule>, pending: bool) -> Env {
-        let app = tauri::test::mock_app();
         let root = std::env::temp_dir().join(format!("fbcmd-{}", new_id()));
         let inbox = root.join("관리함");
         let dest = root.join("최종폴더");
@@ -807,9 +793,7 @@ mod tests {
             });
         });
 
-        let handle = app.handle().clone();
-        handle.manage(store);
-        Env { _app: app, handle, root }
+        Env { store, root }
     }
 
     fn transfers(env: &Env) -> Vec<String> {
@@ -849,7 +833,7 @@ mod tests {
         assert!(transfers(&env).is_empty(), "이동 전에는 아무것도 보내지 않는다");
 
         let dest = env.root.join("최종폴더");
-        let filed = file_entry_to(&env.handle, &env.state(), "e1", dest.clone(), None)
+        let filed = file_entry_to(&env.store, "e1", dest.clone(), None)
             .expect("이동 실패");
 
         assert_eq!(filed.status, EntryStatus::Filed);
@@ -871,7 +855,7 @@ mod tests {
     fn filing_a_marked_file_sends_it_even_without_a_rule() {
         let env = setup(None, true);
         let dest = env.root.join("최종폴더");
-        let filed = file_entry_to(&env.handle, &env.state(), "e1", dest, None).expect("이동 실패");
+        let filed = file_entry_to(&env.store, "e1", dest, None).expect("이동 실패");
 
         assert_eq!(filed.flowdeck_todos.len(), 1);
         assert!(!filed.flowdeck_pending, "표시는 소비돼야 한다");
@@ -884,7 +868,7 @@ mod tests {
     fn filing_an_ordinary_file_sends_nothing() {
         let env = setup(None, false);
         let dest = env.root.join("최종폴더");
-        file_entry_to(&env.handle, &env.state(), "e1", dest, None).expect("이동 실패");
+        file_entry_to(&env.store, "e1", dest, None).expect("이동 실패");
 
         assert!(transfers(&env).is_empty(), "보낼 이유가 없는데 보냈다");
         std::fs::remove_dir_all(&env.root).ok();
