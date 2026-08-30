@@ -1,0 +1,53 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.sentinel.monitor'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.sentinel.monitor"   // 휴대폰(Monitor)
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    buildFeatures {
+        compose true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.10'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    packaging {
+        resources.excludes += '/META-INF/{AL2.0,LGPL2.1}'
+    }
+}
+
+dependencies {
+    implementation project(':core')
+
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.activity:activity-compose:1.9.1'
+    implementation platform('androidx.compose:compose-bom:2024.06.00')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.material3:material3'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+}
