@@ -110,6 +110,7 @@ fun LockScreen(onAdmin: () -> Unit, onAdminPassword: () -> Unit, biometricNote: 
 fun ActivationScreen(
     onApproveFingerprint: (Int) -> Unit,
     onApprovePassword: (Int) -> Unit,
+    onViewLogs: () -> Unit,
     onCancel: () -> Unit,
 ) {
     var minutes by remember { mutableStateOf(30) }
@@ -147,7 +148,8 @@ fun ActivationScreen(
         OutlinedButton(onClick = { onApprovePassword(minutes) }, modifier = Modifier.fillMaxWidth()) {
             Text("별도 PW로 승인")
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onViewLogs, modifier = Modifier.fillMaxWidth()) { Text("사용 로그 보기") }
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("취소") }
     }
 }

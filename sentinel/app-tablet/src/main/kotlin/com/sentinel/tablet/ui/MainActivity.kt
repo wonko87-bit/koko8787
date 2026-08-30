@@ -9,12 +9,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import com.sentinel.core.ApprovalMethod
 import com.sentinel.core.TabletState
 import com.sentinel.tablet.admin.DeviceOwnerController
+import com.sentinel.tablet.logging.CsvExporter
+import com.sentinel.tablet.logging.LogRepository
 import com.sentinel.tablet.security.BiometricGate
 import com.sentinel.tablet.security.PasswordVault
 import com.sentinel.tablet.session.SessionEngine
+import kotlinx.coroutines.launch
 
 /**
  * 잠금 키오스크이자 홈 런처. 화면은 [SessionEngine] 상태로 완전히 구동된다.
@@ -27,11 +31,13 @@ class MainActivity : FragmentActivity() {
 
     private lateinit var owner: DeviceOwnerController
     private lateinit var vault: PasswordVault
+    private lateinit var logRepo: LogRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         owner = DeviceOwnerController(this)
         vault = PasswordVault(this)
+        logRepo = LogRepository.get(this)
 
         setContent { com.sentinel.tablet.ui.theme.SentinelTheme { Root() } }
     }
@@ -46,6 +52,7 @@ class MainActivity : FragmentActivity() {
         var approveViaPwMinutes by remember { mutableStateOf<Int?>(null) }
         var adminViaPw by remember { mutableStateOf(false) }     // 지문 대신 PW 관리자 진입
         var endingSession by remember { mutableStateOf(false) }
+        var showLogs by remember { mutableStateOf(false) }        // 로그 뷰어
         var pwError by remember { mutableStateOf<String?>(null) }
 
         // 상태 전이 → 키오스크 제어 + 임시 UI 플래그 리셋
@@ -56,6 +63,7 @@ class MainActivity : FragmentActivity() {
                     approveViaPwMinutes = null
                     adminViaPw = false
                     endingSession = false
+                    showLogs = false
                     pwError = null
                     if (DeviceOwnerController.lockTaskSupported()) owner.startLockTask(this@MainActivity)
                 }
@@ -104,6 +112,12 @@ class MainActivity : FragmentActivity() {
                 onCancel = { adminViaPw = false; pwError = null },
             )
 
+            adminAuthed && showLogs -> LogScreen(
+                repo = logRepo,
+                onBack = { showLogs = false },
+                onExport = { exportCsv() },
+            )
+
             adminAuthed && approveViaPwMinutes != null -> PasswordPromptScreen(
                 title = "활성화 승인",
                 error = pwError,
@@ -124,6 +138,7 @@ class MainActivity : FragmentActivity() {
                     )
                 },
                 onApprovePassword = { minutes -> approveViaPwMinutes = minutes; pwError = null },
+                onViewLogs = { showLogs = true },
                 onCancel = { adminAuthed = false },
             )
 
@@ -158,6 +173,15 @@ class MainActivity : FragmentActivity() {
             onSuccess = onOk,
             onFail = { _, _ -> /* 취소/오류: 아무 것도 안 함 (사용자 재시도) */ },
         )
+    }
+
+    private fun exportCsv() {
+        lifecycleScope.launch {
+            runCatching {
+                val file = CsvExporter.export(this@MainActivity, logRepo)
+                CsvExporter.share(this@MainActivity, file)
+            }
+        }
     }
 
     private fun formatClock(ms: Long): String {

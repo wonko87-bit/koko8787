@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.sentinel.core.EndReason
@@ -15,6 +16,11 @@ import com.sentinel.core.Session
 import com.sentinel.core.TabletState
 import com.sentinel.tablet.R
 import com.sentinel.tablet.admin.DeviceOwnerController
+import com.sentinel.tablet.logging.AppLabelResolver
+import com.sentinel.tablet.logging.LogRepository
+import com.sentinel.tablet.logging.ScreenReceiver
+import com.sentinel.tablet.logging.UsageCollector
+import com.sentinel.tablet.logging.db.EventType
 import com.sentinel.tablet.session.SessionEngine
 import com.sentinel.tablet.ui.MainActivity
 import kotlinx.coroutines.delay
@@ -33,18 +39,29 @@ import kotlinx.coroutines.launch
 class LockService : LifecycleService(), SessionEngine.Listener {
 
     private lateinit var owner: DeviceOwnerController
+    private lateinit var logRepo: LogRepository
+    private lateinit var usage: UsageCollector
+    private lateinit var labels: AppLabelResolver
+
+    @Volatile
+    private var activeSessionId: String? = null
+    private var screenReceiver: ScreenReceiver? = null
 
     override fun onCreate() {
         super.onCreate()
         owner = DeviceOwnerController(this)
         owner.configureLockTaskAllowlist()
+        logRepo = LogRepository.get(this)
+        usage = UsageCollector(this)
+        labels = AppLabelResolver(this)
         SessionEngine.setListener(this)
 
         startForeground(NOTIF_ID, buildNotification(TabletState.LOCKED, 0L))
 
-        // 1초 틱
+        // 1초 틱: ACTIVE면 전면 앱 폴링 후 세션 틱(만료 처리)
         lifecycleScope.launch {
             while (true) {
+                collectForegroundIfActive()
                 SessionEngine.tick()
                 delay(1_000L)
             }
@@ -69,6 +86,7 @@ class LockService : LifecycleService(), SessionEngine.Listener {
     }
 
     override fun onDestroy() {
+        unregisterScreenReceiver()
         SessionEngine.setListener(null)
         super.onDestroy()
     }
@@ -82,13 +100,45 @@ class LockService : LifecycleService(), SessionEngine.Listener {
 
     override fun onActivate(session: Session) {
         owner.exitLockdown()
-        // TODO(M2): 세션 로깅 시작
+        activeSessionId = session.id
+        usage.reset(session.startedAt)
+        logRepo.onSessionStarted(session)
+        registerScreenReceiver()
     }
 
     override fun onSessionEnded(session: Session) {
-        // TODO(M2): 세션 요약 로그 확정 + Firestore 동기화
+        logRepo.onSessionEnded(session)
         val reason = session.endReason ?: EndReason.EXPIRED
         android.util.Log.i(TAG, "session ${session.id} ended: $reason")
+        unregisterScreenReceiver()
+        activeSessionId = null
+        // TODO(M3): Firestore 동기화
+    }
+
+    // ---- 수집 배선 ----
+
+    private fun collectForegroundIfActive() {
+        val sid = activeSessionId ?: return
+        if (SessionEngine.state.value != TabletState.ACTIVE) return
+        val change = usage.poll() ?: return
+        logRepo.logAppForeground(sid, change.ts, change.pkg, labels.label(change.pkg))
+    }
+
+    private fun registerScreenReceiver() {
+        if (screenReceiver != null) return
+        val receiver = ScreenReceiver { type ->
+            val sid = activeSessionId ?: return@ScreenReceiver
+            logRepo.logEvent(sid, System.currentTimeMillis(), type)
+        }
+        ContextCompat.registerReceiver(
+            this, receiver, ScreenReceiver.filter(), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        screenReceiver = receiver
+    }
+
+    private fun unregisterScreenReceiver() {
+        screenReceiver?.let { runCatching { unregisterReceiver(it) } }
+        screenReceiver = null
     }
 
     // ---- 알림 ----

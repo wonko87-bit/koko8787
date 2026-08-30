@@ -28,8 +28,23 @@ sentinel/
   - 상태 엔진 `SessionEngine`(StateFlow) + 포그라운드 감시 `LockService`(1초 틱·만료 재잠금) + `BootReceiver`
   - Compose UI: PW 설정 → 잠금 → 관리자 인증 → 시간 부여/승인 → ACTIVE HUD → 종료
 
-> 아직 없음(다음 단계): 로그 수집(M2, UsageStats/화면이벤트), 폰 페어링·동기화(M3),
-> 콘텐츠 로깅·자동 스케줄 UI(M4).
+- **M2 로깅 엔진**
+  - Room 저장소: `SessionRecord`/`EventRecord` + `LogDao` + `LogRepository`(비동기 append)
+  - 수집: `UsageCollector`(전면 앱 전환 폴링, PACKAGE_USAGE_STATS), `ScreenReceiver`(화면 on/off·잠금해제),
+    `LockService`에 배선(ACTIVE 동안 1초 폴링)
+  - 태블릿 로그 뷰어(`LogScreen`): 세션 목록 → 이벤트 타임라인 + 앱별 사용시간
+  - CSV 추출(`CsvExporter`): 세션·이벤트 평면 CSV → 공유 시트로 내보내기(FileProvider)
+
+> 아직 없음(다음 단계): 폰 페어링·동기화(M3), 콘텐츠 로깅·자동 스케줄 UI(M4).
+
+### M2 주의 (실기 튜닝)
+
+- **사용 정보 접근 권한**은 특수 권한이라 사용자가 설정에서 켜야 한다(로그 화면 상단 배너 → 설정 열기).
+  꺼져 있으면 앱 전환 로그만 비고, 나머지(세션/화면/잠금해제)는 정상 기록.
+- **Device Owner 키오스크(lock task) 중**엔 허용 목록 밖 앱 실행이 막히므로, 잠금 상태에서 설정 화면 열기나
+  CSV 공유(다른 앱 호출)가 제한될 수 있다. 관리자 작업은 잠깐 lock task를 벗어난 관리자 컨텍스트에서
+  수행하도록 M3에서 다듬는다. (개발 중 일반 설치에선 정상 동작)
+- 전면 앱 폴링은 현재 메인 스레드 1초 주기 → 추후 IO 디스패처로 이동 최적화 예정.
 
 ## 빌드
 
