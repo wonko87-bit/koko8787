@@ -596,7 +596,10 @@ pub fn list_uncollected(store: State<Store>) -> Vec<Candidate> {
 pub fn collect_paths(app: AppHandle, paths: Vec<String>) -> usize {
     let mut count = 0;
     for p in paths {
-        if crate::watcher::collect_path(&app, std::path::Path::new(&p)).is_some() {
+        if matches!(
+            crate::watcher::collect_path(&app, std::path::Path::new(&p)),
+            crate::watcher::Collected::Ok(_)
+        ) {
             count += 1;
         }
     }

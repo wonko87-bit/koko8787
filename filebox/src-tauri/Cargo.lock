@@ -1039,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "filebox"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "chrono",
  "notify",

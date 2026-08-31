@@ -63,6 +63,11 @@ pub fn unique_dest(dest_dir: &Path, file_name: &str) -> PathBuf {
 }
 
 /// 드라이브 간 이동까지 지원하는 파일 이동 (rename 실패 시 copy+delete)
+///
+/// 원본을 지우지 못하면 복사본까지 되돌린다. 그러지 않으면 "이동에 실패했다"고
+/// 알리면서 관리함에는 목록에 없는 복사본이 남아, 원본과 사본이 동시에 존재하게 된다.
+/// 다른 프로그램이 파일을 붙잡고 있을 때 실제로 일어나는 일이다 — 윈도우에서는
+/// 읽기는 되고 삭제는 막히는 경우가 흔하다.
 pub fn move_file(src: &Path, dest: &Path) -> std::io::Result<()> {
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)?;
@@ -71,7 +76,13 @@ pub fn move_file(src: &Path, dest: &Path) -> std::io::Result<()> {
         Ok(()) => Ok(()),
         Err(_) => {
             fs::copy(src, dest)?;
-            fs::remove_file(src)
+            match fs::remove_file(src) {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    let _ = fs::remove_file(dest);
+                    Err(e)
+                }
+            }
         }
     }
 }
@@ -215,6 +226,42 @@ mod tests {
         assert!(!settings.auto_update_check, "기존 설정값이 덮어써짐");
         assert!(settings.flowdeck_enabled, "연동은 기본으로 켜져 있어야 한다");
         assert!(settings.flowdeck_inbox.is_none(), "경로는 기본값을 쓴다");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    /// 원본을 지우지 못하면 복사본도 남기지 않아야 한다. 남기면 목록에 없는
+    /// 파일이 관리함에 쌓이고, 원본은 감시 폴더에 그대로 있어 둘로 늘어난다.
+    ///
+    /// 다른 프로그램이 파일을 붙잡고 있는 상황을 여기서는 immutable 속성으로 흉내낸다.
+    /// 그 속성을 걸 수 없는 환경(권한 없음, 지원 안 하는 파일시스템)에서는 건너뛴다.
+    #[test]
+    fn failed_move_leaves_no_copy_behind() {
+        let dir = temp_dir("movefail");
+        let inbox = dir.join("inbox");
+        fs::create_dir_all(&inbox).unwrap();
+
+        let src = dir.join("a.pptx");
+        fs::write(&src, "x").unwrap();
+
+        let locked = std::process::Command::new("chattr")
+            .arg("+i")
+            .arg(&src)
+            .status()
+            .map(|st| st.success())
+            .unwrap_or(false);
+        if !locked {
+            let _ = fs::remove_dir_all(&dir);
+            return;
+        }
+
+        let dest = inbox.join("a.pptx");
+        let result = move_file(&src, &dest);
+
+        let _ = std::process::Command::new("chattr").arg("-i").arg(&src).status();
+
+        assert!(result.is_err(), "지우지 못했는데 성공으로 보고했다");
+        assert!(!dest.exists(), "관리함에 복사본이 남았다");
+        assert!(src.exists(), "원본은 그대로 있어야 한다");
         let _ = fs::remove_dir_all(dir);
     }
 

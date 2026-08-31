@@ -20,6 +20,16 @@ pub enum Msg {
 /// 파일 크기가 이만큼 유지되면 "다운로드 완료"로 간주
 const STABLE_AFTER: Duration = Duration::from_millis(2500);
 
+/// 옮기지 못한 파일을 다시 시도하는 최대 횟수.
+///
+/// 간격이 두 배씩 늘어나 전부 합치면 20분쯤 된다. 저장해 둔 문서를 닫기까지
+/// 그 정도면 대개 충분하고, 그 뒤에도 파일은 감시 폴더에 그대로 있으니
+/// '기존 파일 수집'으로 언제든 가져올 수 있다.
+const MAX_RETRIES: u32 = 9;
+
+/// 첫 재시도까지 기다리는 시간. 시도할 때마다 두 배가 된다.
+const FIRST_RETRY: Duration = Duration::from_secs(2);
+
 pub fn spawn(app: AppHandle) -> Sender<Msg> {
     let (tx, rx) = channel::<Msg>();
     let fs_tx = tx.clone();
@@ -43,6 +53,8 @@ pub fn spawn(app: AppHandle) -> Sender<Msg> {
 
         // 안정화 대기 중인 후보: path -> (마지막 크기, 마지막 크기변화 시각)
         let mut pending: HashMap<PathBuf, (u64, Instant)> = HashMap::new();
+        // 옮기지 못해 다시 시도할 것들: path -> (시도 횟수, 다음 시도 시각)
+        let mut retry: HashMap<PathBuf, (u32, Instant)> = HashMap::new();
 
         loop {
             match rx.recv_timeout(Duration::from_millis(800)) {
@@ -79,11 +91,49 @@ pub fn spawn(app: AppHandle) -> Sender<Msg> {
             });
 
             for path in ready {
-                known.insert(path.clone());
-                if let Some(entry) = collect_path(&app, &path) {
-                    notify_new_entry(&app, &entry);
+                match collect_path(&app, &path) {
+                    Collected::Ok(entry) => {
+                        known.insert(path.clone());
+                        retry.remove(&path);
+                        notify_new_entry(&app, &entry);
+                    }
+                    // 대상이 아니므로 다시 볼 필요도 없다.
+                    Collected::Skipped => {
+                        known.insert(path.clone());
+                        retry.remove(&path);
+                    }
+                    // 지금 못 옮겼을 뿐이다. known 에 넣어 버리면 파일을 붙잡고 있던
+                    // 프로그램이 놓아준 뒤에도 영영 들어오지 않는다.
+                    Collected::Failed(reason) => {
+                        let (attempts, _) = retry.get(&path).copied().unwrap_or((0, now));
+                        let attempts = attempts + 1;
+                        if attempts > MAX_RETRIES {
+                            eprintln!("[filebox] 수집 포기 ({attempts}회 시도): {reason}");
+                            known.insert(path.clone());
+                            retry.remove(&path);
+                        } else {
+                            let wait = FIRST_RETRY * 2u32.saturating_pow(attempts - 1);
+                            eprintln!("[filebox] 수집 실패, {wait:?} 뒤 다시 시도: {reason}");
+                            retry.insert(path.clone(), (attempts, now + wait));
+                        }
+                    }
                 }
             }
+
+            // 때가 된 재시도는 다시 안정화 줄에 세운다.
+            retry.retain(|path, (_, next_try)| {
+                if *next_try > now {
+                    return true;
+                }
+                match std::fs::metadata(path) {
+                    // 그 사이 사라졌다면 더 볼 것이 없다.
+                    Err(_) => false,
+                    Ok(meta) => {
+                        pending.insert(path.clone(), (meta.len(), now - STABLE_AFTER));
+                        true
+                    }
+                }
+            });
         }
     });
 
@@ -166,8 +216,22 @@ fn in_flowdeck_inbox(store: &Store, path: &Path) -> bool {
     crate::flowdeck::inbox_of(store).is_some_and(|dir| path.starts_with(&dir))
 }
 
+/// 수집을 시도한 결과.
+pub enum Collected {
+    /// 관리함으로 들어왔다.
+    Ok(FileEntry),
+    /// 애초에 수집 대상이 아니다 (폴더, 이미 관리함 안, 사라진 경로).
+    Skipped,
+    /// 대상은 맞는데 지금은 옮기지 못했다. 다시 시도할 가치가 있다.
+    ///
+    /// 파워포인트처럼 저장한 파일을 계속 붙잡고 있는 프로그램이 대표적이다.
+    /// 윈도우에서는 읽기는 되면서 이동과 삭제만 막히므로, 여기서 포기해 버리면
+    /// 그 프로그램을 닫아도 파일이 영영 들어오지 않는다.
+    Failed(String),
+}
+
 /// 파일 하나를 관리함으로 이동하고 항목으로 등록한다. (감시/수동 수집 공용)
-pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
+pub fn collect_path(app: &AppHandle, path: &Path) -> Collected {
     let store = app.state::<Store>();
     let (inbox, rules) = store.read(|d| {
         (
@@ -175,25 +239,33 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
             d.rules.clone(),
         )
     });
-    let inbox = inbox?;
+    let Some(inbox) = inbox else {
+        return Collected::Skipped;
+    };
 
     if !path.is_file() {
-        return None; // 폴더나 사라진 경로는 수집하지 않는다
+        return Collected::Skipped; // 폴더나 사라진 경로는 수집하지 않는다
     }
     if path.starts_with(&inbox) {
-        return None; // 이미 관리함 안에 있는 파일
+        return Collected::Skipped; // 이미 관리함 안에 있는 파일
     }
     if in_flowdeck_inbox(&store, path) {
         // FileBox 가 Flowdeck 에 넘기려고 방금 쓴 파일. 감시 폴더 안에 Flowdeck 감시
         // 폴더가 있으면 자기가 쓴 것을 자기가 도로 주워 오게 된다.
-        return None;
+        return Collected::Skipped;
     }
-    let name = path.file_name()?.to_string_lossy().to_string();
-    std::fs::create_dir_all(&inbox).ok()?;
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy().to_string()) else {
+        return Collected::Skipped;
+    };
+    if let Err(e) = std::fs::create_dir_all(&inbox) {
+        return Collected::Failed(format!("관리함 폴더를 만들지 못했습니다: {e}"));
+    }
     let dest = unique_dest(&inbox, &name);
-    move_file(path, &dest).ok()?;
+    if let Err(e) = move_file(path, &dest) {
+        return Collected::Failed(format!("{name}: {e}"));
+    }
     let size = std::fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
-    let final_name = dest.file_name()?.to_string_lossy().to_string();
+    let final_name = dest.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(name);
 
     let entry = FileEntry {
         id: new_id(),
@@ -219,7 +291,7 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Option<FileEntry> {
     // 할일은 파일이 갈 곳이 정해진 뒤에 만든다 (commands::file_entry_to).
 
     let _ = app.emit("entries-changed", ());
-    Some(entry)
+    Collected::Ok(entry)
 }
 
 /// 새 항목에 대해 토스트 또는 OS 알림을 띄운다.
