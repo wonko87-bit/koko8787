@@ -241,7 +241,7 @@ function DoneRow({ entry }: { entry: FileEntry }) {
   };
 
   return (
-    <div className="row done-row">
+    <div className={`row done-row${entry.pinned ? " is-pinned" : ""}`}>
       <div className="grow">
         <div className="done-name">{entry.file_name}</div>
         <div className="path" title={entry.filed_to ?? ""}>
@@ -268,6 +268,18 @@ function DoneRow({ entry }: { entry: FileEntry }) {
           열기
         </button>
       )}
+      <button
+        className={entry.pinned ? "pinned" : "ghost"}
+        disabled={busy}
+        title={
+          entry.pinned
+            ? "고정을 풀면 하루 뒤 이 칸에서 사라집니다"
+            : "이 칸에 계속 두기. 하루가 지나도, 모두 치우기를 눌러도 남아요"
+        }
+        onClick={() => run(() => api.setPinned(entry.id, !entry.pinned))}
+      >
+        {entry.pinned ? "📌 고정됨" : "📌"}
+      </button>
       <button
         disabled={busy}
         title="파일을 관리함으로 되돌리고 이 이동의 학습 기록도 취소"
@@ -315,10 +327,13 @@ export default function InboxView({
       .filter(
         (e) =>
           e.status === "filed" &&
-          !e.recent_cleared &&
-          (e.filed_at ?? 0) >= cutoff,
+          // 꽂아 둔 것은 기간과 상관없이 남는다. 언제 보낼지는 사용자가 정한다.
+          (e.pinned || (!e.recent_cleared && (e.filed_at ?? 0) >= cutoff)),
       )
-      .sort((a, b) => (b.filed_at ?? 0) - (a.filed_at ?? 0));
+      .sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        return (b.filed_at ?? 0) - (a.filed_at ?? 0);
+      });
   }, [entries]);
 
   const allCategories = useMemo(
@@ -403,17 +418,22 @@ export default function InboxView({
     <div className="category-group done-group">
       <h2>
         ✅ 처리됨 ({done.length})
-        <button
-          className="ghost"
-          title="이 칸을 비웁니다. 파일과 기록은 그대로예요"
-          onClick={() => api.clearRecent(done.map((e) => e.id))}
-        >
-          모두 치우기
-        </button>
+        {done.some((e) => !e.pinned) && (
+          <button
+            className="ghost"
+            title="고정한 것은 남기고 나머지를 치웁니다. 파일과 기록은 그대로예요"
+            onClick={() =>
+              api.clearRecent(done.filter((e) => !e.pinned).map((e) => e.id))
+            }
+          >
+            모두 치우기
+          </button>
+        )}
       </h2>
       <div className="hint done-hint">
-        최근 하루 안에 폴더로 옮긴 파일이에요. Flowdeck으로 보내면 이 칸에서
-        빠지고, 그냥 두면 하루 뒤 사라집니다. 더 오래된 건 기록 탭에 있어요.
+        최근 하루 안에 폴더로 옮긴 파일이에요. 그냥 두면 하루 뒤 사라지고, 더 오래된
+        건 기록 탭에 있어요. 아직 안 끝난 일이면 📌으로 고정해 두세요 — 풀기 전까지
+        계속 남습니다.
       </div>
       {done.map((e) => (
         <DoneRow key={e.id} entry={e} />

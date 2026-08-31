@@ -346,7 +346,9 @@ pub fn undo_move(
 /// 이동 완료(Filed) 기록 전체 삭제. 학습 데이터(records)는 유지된다.
 #[tauri::command]
 pub fn clear_history(app: AppHandle, store: State<Store>) {
-    store.update(|d| d.entries.retain(|e| e.status != EntryStatus::Filed));
+    // 꽂아 둔 것은 남긴다. 붙잡아 두라고 해 놓고 기록을 비웠다는 이유로
+    // 사라지면, 핀이 지키는 것이 없어진다.
+    store.update(|d| d.entries.retain(|e| e.status != EntryStatus::Filed || e.pinned));
     let _ = app.emit("entries-changed", ());
 }
 
@@ -453,14 +455,39 @@ pub fn flowdeck_status(store: State<Store>) -> FlowdeckStatus {
 }
 
 /// "처리됨" 칸에서 치운다. 목록에서만 빠지고 기록과 파일은 그대로다.
+///
+/// 꽂아 둔 것도 함께 푼다. 치우라고 직접 누른 것이므로 핀보다 우선한다.
 #[tauri::command]
 pub fn clear_recent(app: AppHandle, store: State<Store>, entry_ids: Vec<String>) {
     store.update(|d| {
         for e in d.entries.iter_mut().filter(|e| entry_ids.contains(&e.id)) {
             e.recent_cleared = true;
+            e.pinned = false;
         }
     });
     let _ = app.emit("entries-changed", ());
+}
+
+/// 관리함에 붙잡아 두거나 놓아준다.
+#[tauri::command]
+pub fn set_pinned(
+    app: AppHandle,
+    store: State<Store>,
+    entry_id: String,
+    pinned: bool,
+) -> Result<FileEntry, String> {
+    let updated = store.update(|d| {
+        d.entries.iter_mut().find(|e| e.id == entry_id).map(|e| {
+            e.pinned = pinned;
+            // 꽂는 것은 "아직 안 끝났다"는 뜻이므로 치운 표시도 되돌린다.
+            if pinned {
+                e.recent_cleared = false;
+            }
+            e.clone()
+        })
+    });
+    let _ = app.emit("entries-changed", ());
+    updated.ok_or_else(|| "항목을 찾을 수 없습니다".into())
 }
 
 /// 관리함에 있는 파일을 "옮길 때 Flowdeck 에 등록" 으로 표시하거나 해제한다.
@@ -810,6 +837,7 @@ mod tests {
                 flowdeck_todos: vec![],
                 flowdeck_pending: pending,
                 recent_cleared: false,
+                pinned: false,
             });
         });
 

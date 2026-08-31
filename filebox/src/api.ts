@@ -61,6 +61,8 @@ export const api = {
     invoke<FileEntry>("set_flowdeck_pending", { entryId, pending }),
   clearRecent: (entryIds: string[]) =>
     invoke<void>("clear_recent", { entryIds }),
+  setPinned: (entryId: string, pinned: boolean) =>
+    invoke<FileEntry>("set_pinned", { entryId, pinned }),
 
   listUncollected: () => invoke<Candidate[]>("list_uncollected"),
   collectPaths: (paths: string[]) => invoke<number>("collect_paths", { paths }),

@@ -16,6 +16,7 @@ export interface FileEntry {
   flowdeck_todos: FlowdeckTodo[];
   flowdeck_pending: boolean;
   recent_cleared: boolean;
+  pinned: boolean;
 }
 
 export interface FlowdeckTodo {

@@ -152,6 +152,7 @@ pub fn run() {
             commands::send_to_flowdeck,
             commands::set_flowdeck_pending,
             commands::clear_recent,
+            commands::set_pinned,
             commands::list_uncollected,
             commands::collect_paths,
             commands::open_entry,

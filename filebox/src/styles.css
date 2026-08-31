@@ -616,3 +616,18 @@ button.flowdeck-sent {
 .done-row .grow {
   overflow: hidden;
 }
+/* 고정된 항목. 이 칸에서 유일하게 시간이 지나도 남는 것이라 눈에 띄어야 한다. */
+button.pinned {
+  background: #fff6e5;
+  border-color: #e8c07d;
+  color: #8a6320;
+  font-weight: 600;
+}
+button.pinned:hover {
+  border-color: #d9a94e;
+  color: #6f4d15;
+}
+.done-row.is-pinned {
+  border-color: #e8c07d;
+  background: #fffdf8;
+}

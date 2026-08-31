@@ -34,6 +34,13 @@ pub struct FileEntry {
     /// 중복 방지 자체는 여기 의존하지 않는다 (id 가 결정적이라 - flowdeck::todo_id 참고).
     #[serde(default)]
     pub flowdeck_todos: Vec<FlowdeckTodo>,
+    /// 관리함에 붙잡아 두라는 표시.
+    ///
+    /// 폴더로 옮긴 뒤에도 그 일이 아직 안 끝났을 수 있다. 꽂아 두면 하루가 지나도,
+    /// 모두 치우기를 눌러도, 기록을 비워도 "처리됨" 칸에 남는다. 언제 보낼지는
+    /// 사용자가 정한다.
+    #[serde(default)]
+    pub pinned: bool,
     /// 관리함 아래 "처리됨" 칸에서 치웠는지.
     ///
     /// 옮긴 파일이 목록에서 곧바로 사라지면, 나중에 Flowdeck 으로 보내고 싶어졌을 때

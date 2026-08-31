@@ -283,6 +283,7 @@ pub fn collect_path(app: &AppHandle, path: &Path) -> Collected {
         flowdeck_todos: Vec::new(),
         flowdeck_pending: false,
         recent_cleared: false,
+        pinned: false,
     };
     store.update(|d| d.entries.push(entry.clone()));
 

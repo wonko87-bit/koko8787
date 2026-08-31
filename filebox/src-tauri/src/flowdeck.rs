@@ -581,6 +581,7 @@ mod tests {
             flowdeck_todos: vec![],
             flowdeck_pending: false,
             recent_cleared: false,
+            pinned: false,
         }
     }
 
