@@ -63,7 +63,7 @@ object CsvExporter {
 
     /** RFC-ish CSV escaping. */
     private fun csv(v: String): String =
-        if (v.contains(',') || v.contains('"') || v.contains('\n')) {
+        if (v.contains(',') || v.contains('"') || v.contains('\n') || v.contains('\r')) {
             "\"" + v.replace("\"", "\"\"") + "\""
         } else v
 }

@@ -20,7 +20,6 @@ import com.sentinel.tablet.logging.AppLabelResolver
 import com.sentinel.tablet.logging.LogRepository
 import com.sentinel.tablet.logging.ScreenReceiver
 import com.sentinel.tablet.logging.UsageCollector
-import com.sentinel.tablet.logging.db.EventType
 import com.sentinel.tablet.session.SessionEngine
 import com.sentinel.tablet.ui.MainActivity
 import kotlinx.coroutines.delay
@@ -120,8 +119,11 @@ class LockService : LifecycleService(), SessionEngine.Listener {
     private fun collectForegroundIfActive() {
         val sid = activeSessionId ?: return
         if (SessionEngine.state.value != TabletState.ACTIVE) return
-        val change = usage.poll() ?: return
-        logRepo.logAppForeground(sid, change.ts, change.pkg, labels.label(change.pkg))
+        // 로그 수집 실패가 만료·재잠금 틱(핵심 통제 루프)을 절대 죽이지 않도록 격리.
+        runCatching {
+            val change = usage.poll() ?: return
+            logRepo.logAppForeground(sid, change.ts, change.pkg, labels.label(change.pkg))
+        }.onFailure { android.util.Log.w(TAG, "foreground collection failed", it) }
     }
 
     private fun registerScreenReceiver() {
