@@ -12,8 +12,9 @@ Galaxy Tab S10 Ultra 전용 **태블릿 사용통제 & 사후 모니터링** 앱
 ```
 sentinel/
 ├── core/         순수 Kotlin. 상태머신·세션·정책(단위 테스트 포함, 안드로이드 의존 0)
-├── app-tablet/   Master. 잠금·인증·활성화·기록. (com.sentinel)
-└── app-phone/    Monitor(읽기 전용). 현재 스텁, M3에서 Firebase 연동. (com.sentinel.monitor)
+├── sync/         Firebase 동기화(config-optional). SyncClient/Firestore/페어링/DTO
+├── app-tablet/   Master. 잠금·인증·활성화·기록·동기화. (com.sentinel)
+└── app-phone/    Monitor(읽기 전용). 페어링·실시간 대시보드·로그 추출. (com.sentinel.monitor)
 ```
 
 ## 현재 구현 범위 (M0 + M1)
@@ -35,7 +36,29 @@ sentinel/
   - 태블릿 로그 뷰어(`LogScreen`): 세션 목록 → 이벤트 타임라인 + 앱별 사용시간
   - CSV 추출(`CsvExporter`): 세션·이벤트 평면 CSV → 공유 시트로 내보내기(FileProvider)
 
-> 아직 없음(다음 단계): 폰 페어링·동기화(M3), 콘텐츠 로깅·자동 스케줄 UI(M4).
+- **M3 폰 연동 (Firebase, config-optional)**
+  - `:sync` 모듈: `SyncClient` 인터페이스 + Firestore 구현 + `DisabledSyncClient` 폴백,
+    `FirebaseGate`(google-services.json 없이 값 주입으로 수동 초기화 → 미설정 시 자동 비활성)
+  - 태블릿: `TabletSync`가 liveState/세션/이벤트를 Firestore로 미러링(로컬 Room이 원본),
+    관리자 콘솔 '폰 연동'에서 페어링 코드 발급
+  - 폰(`app-phone`): 페어링 코드 입력 → 실시간 상태 카드(잠금/사용중·남은시간 카운트다운·현재 앱)
+    + 세션 히스토리 + CSV 추출. 미설정/미페어링 상태 처리
+
+> 아직 없음(다음 단계): 콘텐츠 로깅(URL·유튜브)·게임 옵트인 캡처, 자동 스케줄 UI(M4).
+
+### Firebase 설정 (M3 활성화)
+
+미설정이면 동기화는 자동 비활성(앱/빌드 정상). 활성화하려면 Firebase 콘솔에서 프로젝트를 만들고
+아래 3개 값을 주입한다. **비밀은 커밋하지 말 것** — 환경변수나 `~/.gradle/gradle.properties` 권장.
+
+```
+SENTINEL_FB_APP_ID=1:xxxx:android:xxxx
+SENTINEL_FB_API_KEY=AIza...
+SENTINEL_FB_PROJECT_ID=your-project-id
+```
+
+> 현재는 로컬 UUID를 ownerId로 쓰고 Firestore 규칙은 열려 있는 개발용 전제. 정식 배포 시
+> Firebase Auth(구글 계정 uid) + 보안 규칙(소유자 본인만 read, 태블릿만 write)로 강화 예정.
 
 ### M2 주의 (실기 튜닝)
 

@@ -18,6 +18,7 @@ import com.sentinel.tablet.logging.LogRepository
 import com.sentinel.tablet.security.BiometricGate
 import com.sentinel.tablet.security.PasswordVault
 import com.sentinel.tablet.session.SessionEngine
+import com.sentinel.tablet.sync.TabletSync
 import kotlinx.coroutines.launch
 
 /**
@@ -32,12 +33,14 @@ class MainActivity : FragmentActivity() {
     private lateinit var owner: DeviceOwnerController
     private lateinit var vault: PasswordVault
     private lateinit var logRepo: LogRepository
+    private lateinit var cloud: TabletSync
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         owner = DeviceOwnerController(this)
         vault = PasswordVault(this)
         logRepo = LogRepository.get(this)
+        cloud = TabletSync.get(this)
 
         setContent { com.sentinel.tablet.ui.theme.SentinelTheme { Root() } }
     }
@@ -53,6 +56,8 @@ class MainActivity : FragmentActivity() {
         var adminViaPw by remember { mutableStateOf(false) }     // 지문 대신 PW 관리자 진입
         var endingSession by remember { mutableStateOf(false) }
         var showLogs by remember { mutableStateOf(false) }        // 로그 뷰어
+        var showPairing by remember { mutableStateOf(false) }     // 폰 연동
+        var pairingCode by remember { mutableStateOf<String?>(null) }
         var pwError by remember { mutableStateOf<String?>(null) }
 
         // 상태 전이 → 키오스크 제어 + 임시 UI 플래그 리셋
@@ -64,6 +69,7 @@ class MainActivity : FragmentActivity() {
                     adminViaPw = false
                     endingSession = false
                     showLogs = false
+                    showPairing = false
                     pwError = null
                     if (DeviceOwnerController.lockTaskSupported()) owner.startLockTask(this@MainActivity)
                 }
@@ -118,6 +124,16 @@ class MainActivity : FragmentActivity() {
                 onExport = { exportCsv() },
             )
 
+            adminAuthed && showPairing -> PairingScreen(
+                enabled = cloud.enabled,
+                ownerId = cloud.ownerId,
+                code = pairingCode,
+                onGenerate = {
+                    lifecycleScope.launch { pairingCode = cloud.generatePairingCode() }
+                },
+                onBack = { showPairing = false; pairingCode = null },
+            )
+
             adminAuthed && approveViaPwMinutes != null -> PasswordPromptScreen(
                 title = "활성화 승인",
                 error = pwError,
@@ -139,6 +155,7 @@ class MainActivity : FragmentActivity() {
                 },
                 onApprovePassword = { minutes -> approveViaPwMinutes = minutes; pwError = null },
                 onViewLogs = { showLogs = true },
+                onPairing = { showPairing = true },
                 onCancel = { adminAuthed = false },
             )
 

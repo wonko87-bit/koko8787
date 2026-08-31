@@ -111,6 +111,7 @@ fun ActivationScreen(
     onApproveFingerprint: (Int) -> Unit,
     onApprovePassword: (Int) -> Unit,
     onViewLogs: () -> Unit,
+    onPairing: () -> Unit,
     onCancel: () -> Unit,
 ) {
     var minutes by remember { mutableStateOf(30) }
@@ -150,6 +151,7 @@ fun ActivationScreen(
         }
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onViewLogs, modifier = Modifier.fillMaxWidth()) { Text("사용 로그 보기") }
+        TextButton(onClick = onPairing, modifier = Modifier.fillMaxWidth()) { Text("폰 연동") }
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("취소") }
     }
 }
@@ -203,6 +205,48 @@ fun PasswordPromptScreen(
         }
         Spacer(Modifier.height(4.dp))
         TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("취소") }
+    }
+}
+
+/** 연동 상태 + 폰 페어링 코드 발급. */
+@Composable
+fun PairingScreen(
+    enabled: Boolean,
+    ownerId: String,
+    code: String?,
+    onGenerate: () -> Unit,
+    onBack: () -> Unit,
+) {
+    CenterCard(title = "폰 연동", subtitle = if (enabled) "Firebase 연동됨" else "미설정 — README의 Firebase 설정 필요") {
+        Text("소유자 ID", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            ownerId.take(8) + "…",
+            fontFamily = FontFamily.Monospace, fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.height(20.dp))
+        if (enabled) {
+            if (code != null) {
+                Text("폰에 입력할 페어링 코드", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    code,
+                    fontFamily = FontFamily.Monospace, fontSize = 40.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(16.dp))
+            }
+            Button(onClick = onGenerate, modifier = Modifier.fillMaxWidth()) {
+                Text(if (code == null) "페어링 코드 생성" else "새 코드 생성")
+            }
+        } else {
+            Text(
+                "gradle.properties 또는 환경변수에 SENTINEL_FB_* 값을 넣으면 폰 모니터링이 활성화됩니다.",
+                fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("뒤로") }
     }
 }
 

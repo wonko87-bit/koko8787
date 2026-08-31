@@ -21,6 +21,7 @@ import com.sentinel.tablet.logging.LogRepository
 import com.sentinel.tablet.logging.ScreenReceiver
 import com.sentinel.tablet.logging.UsageCollector
 import com.sentinel.tablet.session.SessionEngine
+import com.sentinel.tablet.sync.TabletSync
 import com.sentinel.tablet.ui.MainActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -41,6 +42,7 @@ class LockService : LifecycleService(), SessionEngine.Listener {
     private lateinit var logRepo: LogRepository
     private lateinit var usage: UsageCollector
     private lateinit var labels: AppLabelResolver
+    private lateinit var cloud: TabletSync
 
     @Volatile
     private var activeSessionId: String? = null
@@ -53,6 +55,7 @@ class LockService : LifecycleService(), SessionEngine.Listener {
         logRepo = LogRepository.get(this)
         usage = UsageCollector(this)
         labels = AppLabelResolver(this)
+        cloud = TabletSync.get(this)
         SessionEngine.setListener(this)
 
         startForeground(NOTIF_ID, buildNotification(TabletState.LOCKED, 0L))
@@ -102,16 +105,17 @@ class LockService : LifecycleService(), SessionEngine.Listener {
         activeSessionId = session.id
         usage.reset(session.startedAt)
         logRepo.onSessionStarted(session)
+        cloud.sessionStarted(session)
         registerScreenReceiver()
     }
 
     override fun onSessionEnded(session: Session) {
         logRepo.onSessionEnded(session)
+        cloud.sessionEnded(session)
         val reason = session.endReason ?: EndReason.EXPIRED
         android.util.Log.i(TAG, "session ${session.id} ended: $reason")
         unregisterScreenReceiver()
         activeSessionId = null
-        // TODO(M3): Firestore 동기화
     }
 
     // ---- 수집 배선 ----
@@ -122,7 +126,9 @@ class LockService : LifecycleService(), SessionEngine.Listener {
         // 로그 수집 실패가 만료·재잠금 틱(핵심 통제 루프)을 절대 죽이지 않도록 격리.
         runCatching {
             val change = usage.poll() ?: return
-            logRepo.logAppForeground(sid, change.ts, change.pkg, labels.label(change.pkg))
+            val label = labels.label(change.pkg)
+            logRepo.logAppForeground(sid, change.ts, change.pkg, label)
+            cloud.appForeground(sid, change.ts, change.pkg, label)
         }.onFailure { android.util.Log.w(TAG, "foreground collection failed", it) }
     }
 
@@ -130,7 +136,9 @@ class LockService : LifecycleService(), SessionEngine.Listener {
         if (screenReceiver != null) return
         val receiver = ScreenReceiver { type ->
             val sid = activeSessionId ?: return@ScreenReceiver
-            logRepo.logEvent(sid, System.currentTimeMillis(), type)
+            val ts = System.currentTimeMillis()
+            logRepo.logEvent(sid, ts, type)
+            cloud.screenEvent(sid, ts, type.name)
         }
         ContextCompat.registerReceiver(
             this, receiver, ScreenReceiver.filter(), ContextCompat.RECEIVER_NOT_EXPORTED,

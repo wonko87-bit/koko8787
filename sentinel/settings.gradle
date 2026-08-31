@@ -15,5 +15,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "sentinel"
 include ':core'
+include ':sync'
 include ':app-tablet'
 include ':app-phone'
