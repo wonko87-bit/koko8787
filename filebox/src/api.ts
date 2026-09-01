@@ -65,7 +65,8 @@ export const api = {
     invoke<FileEntry>("set_pinned", { entryId, pinned }),
 
   listUncollected: () => invoke<Candidate[]>("list_uncollected"),
-  collectPaths: (paths: string[]) => invoke<number>("collect_paths", { paths }),
+  collectPaths: (paths: string[]) =>
+    invoke<BatchResult>("collect_paths", { paths }),
 
   openEntry: (entryId: string) => invoke<void>("open_entry", { entryId }),
   openFolder: (path: string) => invoke<void>("open_folder", { path }),

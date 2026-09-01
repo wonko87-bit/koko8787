@@ -63,10 +63,16 @@ export default function App() {
         if (paths.length > 0) {
           api
             .collectPaths(paths)
-            .then((count) => {
-              if (count === 0) {
-                alert("수집할 수 있는 파일이 없어요. (폴더는 수집되지 않습니다)");
-              }
+            .then((result) => {
+              if (result.errors.length === 0) return;
+              // "수집할 수 있는 파일이 없다"고만 하면, 실은 다른 프로그램이
+              // 붙잡고 있어서 못 옮긴 경우와 구분이 안 된다.
+              alert(
+                (result.moved > 0 ? `${result.moved}개 수집. ` : "") +
+                  `${result.errors.length}개는 가져오지 못했어요.\n\n` +
+                  result.errors.slice(0, 10).join("\n") +
+                  "\n\n파일을 열어 둔 프로그램이 있으면 닫고 다시 시도해 보세요.",
+              );
             })
             .catch((e) => alert(String(e)));
         }

@@ -28,7 +28,16 @@ export default function CollectModal({ onClose }: { onClose: () => void }) {
   const collect = async () => {
     setBusy(true);
     try {
-      await api.collectPaths([...selected]);
+      const result = await api.collectPaths([...selected]);
+      if (result.errors.length > 0) {
+        // 조용히 닫히면 왜 안 들어왔는지 알 수가 없다. 대개는 다른 프로그램이
+        // 파일을 붙잡고 있는 경우고, 그 프로그램을 닫으면 해결된다.
+        alert(
+          `${result.moved}개 수집, ${result.errors.length}개 실패\n\n` +
+            result.errors.slice(0, 10).join("\n") +
+            `\n\n파일을 열어 둔 프로그램이 있으면 닫고 다시 시도해 보세요.`,
+        );
+      }
       onClose();
     } catch (e) {
       alert(String(e));

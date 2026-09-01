@@ -620,17 +620,25 @@ pub fn list_uncollected(store: State<Store>) -> Vec<Candidate> {
 }
 
 #[tauri::command]
-pub fn collect_paths(app: AppHandle, paths: Vec<String>) -> usize {
-    let mut count = 0;
+pub fn collect_paths(app: AppHandle, paths: Vec<String>) -> BatchResult {
+    use crate::watcher::Collected;
+
+    let mut moved = 0;
+    let mut errors = Vec::new();
     for p in paths {
-        if matches!(
-            crate::watcher::collect_path(&app, std::path::Path::new(&p)),
-            crate::watcher::Collected::Ok(_)
-        ) {
-            count += 1;
+        let path = std::path::PathBuf::from(&p);
+        match crate::watcher::collect_path(&app, &path) {
+            Collected::Ok(_) => moved += 1,
+            // 손으로 고른 파일이 조용히 안 들어오면 왜인지 알 길이 없다.
+            // 다른 프로그램이 붙잡고 있는 경우가 대부분이라 그 사실 자체가 답이다.
+            Collected::Failed(reason) => errors.push(reason),
+            Collected::Skipped => errors.push(format!(
+                "{}: 수집할 수 없는 항목입니다",
+                path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or(p)
+            )),
         }
     }
-    count
+    BatchResult { moved, errors }
 }
 
 // ---------- 열기 / 표시 ----------
