@@ -68,6 +68,52 @@ public sealed class NaturalLanguageParser
     public ContactBook Contacts { get; set; } = new();
 
     /// <summary>
+    /// Folds a block of text down to the single line the parser reads.
+    ///
+    /// Line breaks, tabs and runs of spaces all become one space. So does the non-breaking
+    /// space, which is not decoration but the thing text copied out of a mail or a web page
+    /// is full of. The zero-width ones go altogether: they are invisible, so a title holding
+    /// one looks right and matches nothing.
+    ///
+    /// Public because the capture screens seed their box with it as well: what is shown
+    /// before the entry is saved should be what will be read from it.
+    /// </summary>
+    public static string OneLine(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+
+        var folded = new StringBuilder(text.Length);
+        var pendingGap = false;
+
+        foreach (var c in text)
+        {
+            // The non-breaking space and its relatives count here. char.IsWhiteSpace
+            // knows all of them, which the usual list of four escapes does not.
+            if (char.IsWhiteSpace(c))
+            {
+                // Held rather than written, so a run cannot leave a run behind, and a
+                // string ending in one does not end in a space.
+                pendingGap = folded.Length > 0;
+                continue;
+            }
+
+            // Zero-width space, the two joiners, and a byte-order mark that came along
+            // for the ride. None of them is whitespace and none of them is a letter.
+            if (c is '\u200B' or '\u200C' or '\u200D' or '\uFEFF') continue;
+
+            if (pendingGap)
+            {
+                folded.Append(' ');
+                pendingGap = false;
+            }
+
+            folded.Append(c);
+        }
+
+        return folded.ToString();
+    }
+
+    /// <summary>
     /// Reads one line.
     ///
     /// <paramref name="forceTeams"/> stands in for the <c>!TM</c> marker when the flag was
@@ -93,6 +139,13 @@ public sealed class NaturalLanguageParser
         // inside it — "지난주에 얘기한 대로" — is a description, not a schedule.
         body = SplitNote(body, out var note);
         entry.Notes = note;
+
+        // Only now, once the note is safely out. Everything the scanner reads is one line
+        // from here on, whatever shape it arrived in — text lifted out of a mail or a web
+        // page carries the line breaks of the column it was set in, and "다음주 화요일" split
+        // across two of them is still next Tuesday. The note keeps the breaks it was given:
+        // it is prose, and prose is where a line break means something.
+        body = OneLine(body);
 
         var tokens = TemporalScanner.Scan(body, now, FirstDayOfWeek);
 

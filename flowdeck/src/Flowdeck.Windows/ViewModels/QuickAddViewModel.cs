@@ -160,8 +160,9 @@ public sealed class QuickAddViewModel : ObservableObject
     /// Clears the overlay, optionally starting it off with text taken from somewhere else.
     ///
     /// Text picked up from another window is a starting point rather than an entry: a date or
-    /// a !TD is usually still wanted, and line breaks inside a selection mean nothing to the
-    /// parser, so they become the spaces they stood in for.
+    /// a !TD is usually still wanted. It is folded to one line here as well as in the parser
+    /// so that the box shows what will be read from it, rather than a shape that changes on
+    /// the way through.
     /// </summary>
     public void Reset(string? seed)
     {
@@ -169,11 +170,7 @@ public sealed class QuickAddViewModel : ObservableObject
         _forcedExternal = null;
         _forcedTeams = null;
 
-        Input = string.IsNullOrWhiteSpace(seed)
-            ? string.Empty
-            : string.Join(" ", seed.Split('\n', '\r', StringSplitOptions.RemoveEmptyEntries))
-                .Replace("  ", " ", StringComparison.Ordinal)
-                .Trim();
+        Input = NaturalLanguageParser.OneLine(seed);
     }
 
     public async Task<bool> SubmitAsync()

@@ -108,7 +108,8 @@ public sealed class QuickCaptureActivity : AppCompatActivity
     /// saved. Selected text is rarely a finished todo — a date or a !TD is usually wanted —
     /// and saving it outright would take away the one moment to add them.
     ///
-    /// The cursor goes to the end rather than selecting the whole thing: the next keystroke
+    /// Folded to one line by the same call the parser makes, so the box shows what will be
+    /// read from it. The cursor goes to the end rather than over the text: the next keystroke
     /// should add to what arrived, not replace it.
     /// </summary>
     private void Fill(Android.Content.Intent? intent)
@@ -126,12 +127,7 @@ public sealed class QuickCaptureActivity : AppCompatActivity
 
         if (string.IsNullOrWhiteSpace(text)) return;
 
-        // A selection spanning several lines is still one entry. The line breaks would be
-        // read as nothing in particular, so they become the spaces they stand in for.
-        _input.Text = string.Join(" ", text.Split('\n', '\r'))
-            .Replace("  ", " ", StringComparison.Ordinal)
-            .Trim();
-
+        _input.Text = NaturalLanguageParser.OneLine(text);
         _input.SetSelection(_input.Text!.Length);
     }
 
