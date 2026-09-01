@@ -295,6 +295,7 @@ public partial class App : Application, IAppShell
         Claim(_settings.ToggleWidgetHotkey, "위젯 표시/숨기기", ToggleWidget);
         Claim(_settings.AgendaEventsHotkey, "일정 목록", ToggleEventsAgenda);
         Claim(_settings.AgendaTodosHotkey, "할일 목록", ToggleTodosAgenda);
+        Claim(_settings.CaptureSelectionHotkey, "선택한 글자 담기", CaptureSelection);
         return problems.ToString().TrimEnd();
 
         void Claim(string gesture, string label, Action action)
@@ -341,6 +342,26 @@ public partial class App : Application, IAppShell
     }
 
     public void ShowQuickAdd() => _quickAdd?.Summon();
+
+    /// <summary>
+    /// Opens the overlay on whatever is selected in the window in front.
+    ///
+    /// The reading is asynchronous — it is another application being asked to copy, and how
+    /// long that takes is up to it — so the overlay is not summoned until the text is in
+    /// hand. Coming up empty is not a failure worth a message: it opens blank, which is the
+    /// plain quick-add and exactly what is wanted when there was nothing selected.
+    /// </summary>
+    private void CaptureSelection() =>
+        CrashReporter.Observe(ReadSelectionAsync(), "App.CaptureSelection");
+
+    private async Task ReadSelectionAsync()
+    {
+        // Read before summoning: our own window taking the foreground would leave the copy
+        // to be sent to a window that no longer has the selection in it.
+        var selected = await SelectionReader.ReadAsync();
+
+        _quickAdd?.Summon(selected);
+    }
 
     public void ToggleEventsAgenda() => _eventsAgenda?.Toggle();
 

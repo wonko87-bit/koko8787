@@ -314,6 +314,33 @@
             </Border>
           </Grid>
 
+          <Grid Style="{StaticResource Row}">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource RowLabel}">
+              <TextBlock Style="{StaticResource Text.RowTitle}" Text="선택한 글자 담기" />
+              <TextBlock Style="{StaticResource Text.Meta}"
+                         Text="다른 창에서 글자를 선택한 채 누르면 그 글자로 빠른 입력이 열립니다"
+                         TextWrapping="Wrap" />
+            </StackPanel>
+            <Border Grid.Column="1"
+                    Width="150"
+                    Padding="10,6"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource Brush.Surface}"
+                    BorderBrush="{DynamicResource Brush.Border}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Corner.Small}">
+              <TextBox x:Name="CaptureSelectionHotkey"
+                       IsReadOnly="True"
+                       PreviewKeyDown="OnHotkeyCapture"
+                       Style="{StaticResource TextBox.Flat}"
+                       ToolTip="이 칸을 클릭한 뒤 원하는 조합을 누르세요" />
+            </Border>
+          </Grid>
+
           <TextBlock x:Name="HotkeyWarning"
                      Margin="0,-6,0,14"
                      Style="{StaticResource Text.Meta}"

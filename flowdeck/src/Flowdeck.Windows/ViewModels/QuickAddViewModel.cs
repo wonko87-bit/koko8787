@@ -154,12 +154,26 @@ public sealed class QuickAddViewModel : ObservableObject
 
     public bool HasAttendees => Effective().Attendees.Count > 0;
 
-    public void Reset()
+    public void Reset() => Reset(null);
+
+    /// <summary>
+    /// Clears the overlay, optionally starting it off with text taken from somewhere else.
+    ///
+    /// Text picked up from another window is a starting point rather than an entry: a date or
+    /// a !TD is usually still wanted, and line breaks inside a selection mean nothing to the
+    /// parser, so they become the spaces they stood in for.
+    /// </summary>
+    public void Reset(string? seed)
     {
         _forcedTarget = null;
         _forcedExternal = null;
         _forcedTeams = null;
-        Input = string.Empty;
+
+        Input = string.IsNullOrWhiteSpace(seed)
+            ? string.Empty
+            : string.Join(" ", seed.Split('\n', '\r', StringSplitOptions.RemoveEmptyEntries))
+                .Replace("  ", " ", StringComparison.Ordinal)
+                .Trim();
     }
 
     public async Task<bool> SubmitAsync()

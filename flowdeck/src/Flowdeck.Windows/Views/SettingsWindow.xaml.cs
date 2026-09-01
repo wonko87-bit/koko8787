@@ -52,6 +52,7 @@ public partial class SettingsWindow : Window
         ToggleWidgetHotkey.Text = Settings.ToggleWidgetHotkey;
         AgendaEventsHotkey.Text = Settings.AgendaEventsHotkey;
         AgendaTodosHotkey.Text = Settings.AgendaTodosHotkey;
+        CaptureSelectionHotkey.Text = Settings.CaptureSelectionHotkey;
 
         LoadDefaultTarget();
 
@@ -447,6 +448,11 @@ public partial class SettingsWindow : Window
         {
             AgendaTodosHotkey.Text = gesture;
             Settings.AgendaTodosHotkey = gesture;
+        }
+        else if (ReferenceEquals(sender, CaptureSelectionHotkey))
+        {
+            CaptureSelectionHotkey.Text = gesture;
+            Settings.CaptureSelectionHotkey = gesture;
         }
         else
         {

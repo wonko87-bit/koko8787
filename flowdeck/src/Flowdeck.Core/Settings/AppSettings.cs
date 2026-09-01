@@ -40,6 +40,12 @@ public sealed class AppSettings
     /// <summary>Opens or closes the full todo list.</summary>
     public string AgendaTodosHotkey { get; set; } = "Ctrl+Alt+T";
 
+    /// <summary>
+    /// Opens the input overlay filled with whatever text is selected in the window in front.
+    /// V because it is the paste key, and this arrives at the same place a paste would.
+    /// </summary>
+    public string CaptureSelectionHotkey { get; set; } = "Ctrl+Alt+V";
+
     /// <summary>Whether the todo list window includes items that are already done.</summary>
     public bool AgendaShowCompleted { get; set; }
 

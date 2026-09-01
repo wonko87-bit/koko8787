@@ -23,15 +23,23 @@ public partial class QuickAddWindow : Window
     }
 
     /// <summary>Brings the window up centred near the top of the active screen, ready to type.</summary>
-    public void Summon()
+    public void Summon() => Summon(null);
+
+    /// <summary>
+    /// The same, started off with text lifted from another window. The caret goes to the end
+    /// rather than over the text: what comes next is meant to be added to it, most often a
+    /// date, and a selection would have the first keystroke wipe what was just picked up.
+    /// </summary>
+    public void Summon(string? seed)
     {
-        _viewModel.Reset();
+        _viewModel.Reset(seed);
         PositionOnActiveScreen();
 
         Show();
         Activate();
         Input.Focus();
         Keyboard.Focus(Input);
+        Input.CaretIndex = Input.Text.Length;
     }
 
     public void Dismiss()

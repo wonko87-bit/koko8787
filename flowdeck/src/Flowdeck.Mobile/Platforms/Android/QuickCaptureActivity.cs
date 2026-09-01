@@ -25,11 +25,27 @@ namespace Flowdeck.Mobile;
 /// that time on a splash screen, and the idea this exists to catch would be gone.
 /// </summary>
 [Activity(
+    Label = "Flowdeck",
     Theme = "@style/Flowdeck.QuickCapture",
     Exported = true,
     LaunchMode = LaunchMode.SingleTop,
     ExcludeFromRecents = true,
     ConfigurationChanges = ConfigChanges.ScreenSize | ConfigChanges.Orientation | ConfigChanges.UiMode)]
+
+// Puts Flowdeck in the popup that comes up over selected text, next to copy and share. The
+// label above is what that entry reads, and the menu is narrow, so it is the app's name and
+// nothing else.
+[IntentFilter(
+    new[] { "android.intent.action.PROCESS_TEXT" },
+    Categories = new[] { Android.Content.Intent.CategoryDefault },
+    DataMimeType = "text/plain")]
+
+// And in the share sheet, which is the way back in from an app whose selection popup does
+// not show us — either because it draws its own, or because the menu ran out of room.
+[IntentFilter(
+    new[] { Android.Content.Intent.ActionSend },
+    Categories = new[] { Android.Content.Intent.CategoryDefault },
+    DataMimeType = "text/plain")]
 public sealed class QuickCaptureActivity : AppCompatActivity
 {
     private EditText? _input;
@@ -70,7 +86,53 @@ public sealed class QuickCaptureActivity : AppCompatActivity
         };
 
         _save.Enabled = false;
+        Fill(Intent);
         Prepare();
+    }
+
+    /// <summary>
+    /// A second selection sent over while the popup is already up. SingleTop means the
+    /// activity is reused rather than stacked, so without this the new text never arrives.
+    /// </summary>
+    protected override void OnNewIntent(Android.Content.Intent? intent)
+    {
+        base.OnNewIntent(intent);
+
+        Intent = intent;
+        Fill(intent);
+        Reparse();
+    }
+
+    /// <summary>
+    /// Puts text handed over by another app into the box, ready to be edited before it is
+    /// saved. Selected text is rarely a finished todo — a date or a !TD is usually wanted —
+    /// and saving it outright would take away the one moment to add them.
+    ///
+    /// The cursor goes to the end rather than selecting the whole thing: the next keystroke
+    /// should add to what arrived, not replace it.
+    /// </summary>
+    private void Fill(Android.Content.Intent? intent)
+    {
+        if (intent is null || _input is null) return;
+
+        var text = intent.Action switch
+        {
+            "android.intent.action.PROCESS_TEXT" =>
+                intent.GetStringExtra("android.intent.extra.PROCESS_TEXT"),
+            Android.Content.Intent.ActionSend =>
+                intent.GetStringExtra(Android.Content.Intent.ExtraText),
+            _ => null,
+        };
+
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        // A selection spanning several lines is still one entry. The line breaks would be
+        // read as nothing in particular, so they become the spaces they stand in for.
+        _input.Text = string.Join(" ", text.Split('\n', '\r'))
+            .Replace("  ", " ", StringComparison.Ordinal)
+            .Trim();
+
+        _input.SetSelection(_input.Text!.Length);
     }
 
     /// <summary>
