@@ -35,6 +35,9 @@ public interface IAppShell
     /// </summary>
     void ApplyInboxWatch();
 
+    /// <summary>Starts or stops the prompt for a note when a meeting ends.</summary>
+    void ApplyMeetingNudge();
+
     /// <summary>The folder being watched for hand-overs, whether or not watching is on.</summary>
     string InboxFolder { get; }
 

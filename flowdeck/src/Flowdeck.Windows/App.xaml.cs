@@ -34,6 +34,7 @@ public partial class App : Application, IAppShell
     private ExternalCalendarFeed? _calendar;
     private DispatcherTimer? _calendarTimer;
     private InboxWatcher? _inbox;
+    private MeetingNoteNudge? _nudge;
     private AppSettings _settings = new();
 
     private WidgetWindow? _widget;
@@ -153,6 +154,7 @@ public partial class App : Application, IAppShell
 
         ApplyCalendarOverlay();
         ApplyInboxWatch();
+        ApplyMeetingNudge();
 
         if (_settings.ShowWidgetOnStart) ShowWidget();
         _tray.SetWidgetVisible(_widget.IsVisible);
@@ -265,6 +267,49 @@ public partial class App : Application, IAppShell
             CrashReporter.ReportRecovered("InboxWatcher.Start", ex);
             _tray?.Notify("Flowdeck", "받는 폴더를 열지 못했습니다. 설정에서 경로를 확인해 주세요.");
         }
+    }
+
+    /// <summary>
+    /// Starts or stops the after-meeting prompt. The scope is read live, so switching
+    /// between "all" and "taken in" needs no restart; only off and on do.
+    /// </summary>
+    public void ApplyMeetingNudge()
+    {
+        _nudge?.Dispose();
+        _nudge = null;
+
+        if (_repository is null || _calendar is null) return;
+        if (_settings.MeetingNudge == MeetingNudgeScope.Off) return;
+
+        _nudge = new MeetingNoteNudge(
+            _repository,
+            _calendar,
+            () => _settings.MeetingNudge,
+            (title, message, onClick) => _tray?.Notify(title, message, onClick),
+            occurrence => CrashReporter.Observe(TakeInAndOpenAsync(occurrence), "App.TakeInMeeting"),
+            OpenEvent);
+        _nudge.Start();
+    }
+
+    private async Task TakeInAndOpenAsync(Flowdeck.Core.Integration.ExternalOccurrence occurrence)
+    {
+        var copy = await Repository.AdoptAsync(occurrence, DateTime.Now);
+        OpenEvent(copy.Id);
+    }
+
+    /// <summary>
+    /// Opens the edit window on an event from nowhere in particular — a balloon was clicked,
+    /// and there is no list window to own the editor. Topmost and in the task bar, so it
+    /// cannot come up behind whatever the person was looking at.
+    /// </summary>
+    private void OpenEvent(string id)
+    {
+        var editor = EditViewModel.For(Repository, id, isTodo: false);
+        if (editor is null) return;
+
+        var window = new EditWindow(editor) { Topmost = true, ShowInTaskbar = true };
+        window.Show();
+        window.Activate();
     }
 
     /// <summary>The folder another application drops files into. Overridable in settings.json.</summary>
@@ -403,6 +448,7 @@ public partial class App : Application, IAppShell
         if (_widget is not null) SaveSettings();
 
         _calendarTimer?.Stop();
+        _nudge?.Dispose();
         _inbox?.Dispose();
         _reminders?.Dispose();
         _hotKeys?.Dispose();

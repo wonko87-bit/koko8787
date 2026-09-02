@@ -23,6 +23,18 @@ public enum WidgetPinMode
     Normal = 2,
 }
 
+/// <summary>Which meetings get a "want to write a line?" prompt when they end.</summary>
+public enum MeetingNudgeScope
+{
+    /// <summary>Every meeting on the Outlook overlay, and every copy taken. The default.</summary>
+    All = 0,
+
+    /// <summary>Only meetings the user has already taken a copy of.</summary>
+    Adopted = 1,
+
+    Off = 2,
+}
+
 /// <summary>User preferences. Serialised next to the workspace file.</summary>
 public sealed class AppSettings
 {
@@ -125,6 +137,13 @@ public sealed class AppSettings
     /// interval on a machine where Outlook is closed means waking it that often.
     /// </summary>
     public int OutlookCalendarRefreshMinutes { get; set; } = 10;
+
+    /// <summary>
+    /// A prompt when a meeting ends, asking for a line on it. On for every meeting by
+    /// default: a note is worth most on the meeting nobody planned to take one on, and a
+    /// balloon that goes away by itself is a small price for catching it.
+    /// </summary>
+    public MeetingNudgeScope MeetingNudge { get; set; } = MeetingNudgeScope.All;
 
     /// <summary>The interval as it will actually be used, whatever was typed into the box.</summary>
     [JsonIgnore]

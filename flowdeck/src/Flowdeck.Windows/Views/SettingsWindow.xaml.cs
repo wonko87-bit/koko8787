@@ -67,6 +67,7 @@ public partial class SettingsWindow : Window
         ShowOutlookCalendar.IsChecked = Settings.ShowOutlookCalendar;
         ShowOutlookCalendar.IsEnabled = Settings.EnableOutlook;
         LoadRefreshInterval();
+        LoadNudge();
 
         AfternoonBias.IsChecked = Settings.AssumeAfternoonForBareHours;
 
@@ -243,12 +244,49 @@ public partial class SettingsWindow : Window
             : $"{minutes}분마다 다시 읽습니다";
     }
 
+    private void LoadNudge()
+    {
+        NudgeAll.IsChecked = Settings.MeetingNudge == MeetingNudgeScope.All;
+        NudgeAdopted.IsChecked = Settings.MeetingNudge == MeetingNudgeScope.Adopted;
+        NudgeOff.IsChecked = Settings.MeetingNudge == MeetingNudgeScope.Off;
+        NudgeRow.IsEnabled = Settings.EnableOutlook;
+        DescribeNudge();
+    }
+
+    private void OnNudgeChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        Settings.MeetingNudge = NudgeAdopted.IsChecked == true ? MeetingNudgeScope.Adopted
+            : NudgeOff.IsChecked == true ? MeetingNudgeScope.Off
+            : MeetingNudgeScope.All;
+
+        DescribeNudge();
+        _shell.ApplyMeetingNudge();
+        _shell.SaveSettings();
+    }
+
+    /// <summary>
+    /// Says what will happen, including the one thing that is easy to miss: with the overlay
+    /// off, Outlook is not being read, so "every meeting" can only mean the ones taken in.
+    /// </summary>
+    private void DescribeNudge() =>
+        NudgeHint.Text = Settings.MeetingNudge switch
+        {
+            MeetingNudgeScope.Off => "회의가 끝나도 알리지 않습니다",
+            MeetingNudgeScope.Adopted => "더블클릭해 가져온 회의만, 끝날 때 한 줄 남길지 물어봅니다",
+            _ when Settings.ShowOutlookCalendar =>
+                "회의가 끝나면 알림이 뜹니다. 누르면 그 회의를 가져와 메모창이 열립니다",
+            _ => "'Outlook 일정 같이 보기'가 꺼져 있어, 지금은 가져온 회의만 해당됩니다",
+        };
+
     private void OnCalendarOverlayChanged(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
 
         Settings.ShowOutlookCalendar = ShowOutlookCalendar.IsChecked == true;
         DescribeRefresh();
+        DescribeNudge();
 
         _shell.ApplyCalendarOverlay();
         _shell.SaveSettings();

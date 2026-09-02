@@ -55,7 +55,18 @@ public sealed class TrayIconController : IDisposable
         };
 
         _icon.DoubleClick += (_, _) => WidgetToggleRequested?.Invoke(this, EventArgs.Empty);
+
+        // The icon has one click event for whatever balloon is up, so the action rides
+        // along with the latest balloon and is spent on the first click.
+        _icon.BalloonTipClicked += (_, _) =>
+        {
+            var action = _onBalloonClick;
+            _onBalloonClick = null;
+            action?.Invoke();
+        };
     }
+
+    private Action? _onBalloonClick;
 
     public event EventHandler? QuickAddRequested;
 
@@ -72,8 +83,17 @@ public sealed class TrayIconController : IDisposable
     /// <summary>Keeps the menu label matching the widget's actual state.</summary>
     public void SetWidgetVisible(bool visible) => _widgetItem.Text = visible ? "위젯 숨기기" : "위젯 표시";
 
-    public void Notify(string title, string message) =>
-        _icon.ShowBalloonTip(6000, title, message, WinForms.ToolTipIcon.None);
+    public void Notify(string title, string message) => Notify(title, message, null);
+
+    /// <summary>
+    /// A balloon that does something when clicked. Left up longer than a plain one, since
+    /// it is asking for a response rather than reporting.
+    /// </summary>
+    public void Notify(string title, string message, Action? onClick)
+    {
+        _onBalloonClick = onClick;
+        _icon.ShowBalloonTip(onClick is null ? 6000 : 15000, title, message, WinForms.ToolTipIcon.None);
+    }
 
     private static Drawing.Icon LoadIcon()
     {

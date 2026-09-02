@@ -470,6 +470,43 @@
                         Style="{StaticResource CheckBox.Setting}" />
             </Grid>
 
+            <!-- Three segments and a long label: the label goes above, as with the default target. -->
+            <Grid x:Name="NudgeRow" Style="{StaticResource Row}">
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+              <StackPanel>
+                <TextBlock Style="{StaticResource Text.RowTitle}" Text="회의 끝나면 메모 물어보기" />
+                <TextBlock x:Name="NudgeHint"
+                           Style="{StaticResource Text.Meta}"
+                           TextWrapping="Wrap" />
+              </StackPanel>
+              <Border Grid.Row="1"
+                      Margin="0,8,0,0"
+                      HorizontalAlignment="Left"
+                      Background="{DynamicResource Brush.SurfaceAlt}"
+                      CornerRadius="{StaticResource Corner.Small}">
+                <StackPanel Orientation="Horizontal">
+                  <RadioButton x:Name="NudgeAll"
+                               Checked="OnNudgeChanged"
+                               Content="모든 회의"
+                               GroupName="Nudge"
+                               Style="{StaticResource RadioButton.Segment}" />
+                  <RadioButton x:Name="NudgeAdopted"
+                               Checked="OnNudgeChanged"
+                               Content="가져온 회의만"
+                               GroupName="Nudge"
+                               Style="{StaticResource RadioButton.Segment}" />
+                  <RadioButton x:Name="NudgeOff"
+                               Checked="OnNudgeChanged"
+                               Content="안 함"
+                               GroupName="Nudge"
+                               Style="{StaticResource RadioButton.Segment}" />
+                </StackPanel>
+              </Border>
+            </Grid>
+
             <!-- Five segments plus the minutes box need the whole width to themselves. -->
             <Grid x:Name="RefreshRow" Style="{StaticResource Row}">
               <Grid.RowDefinitions>
