@@ -51,22 +51,33 @@ public sealed class ExternalCalendarFeed
     /// Without that subtraction every entry sent with <c>!OL</c> would come straight back
     /// and appear twice — once as the user's own row, once as a meeting read from Outlook.
     /// </summary>
-    public IReadOnlyList<ExternalOccurrence> On(DateTime day, IReadOnlySet<string> exclude)
+    public IReadOnlyList<ExternalOccurrence> On(DateTime day, IReadOnlySet<string> exclude) =>
+        On(day, o => exclude.Contains(o.EntryId));
+
+    /// <summary>
+    /// The same, with the caller deciding what is hidden. The repository hides two kinds of
+    /// thing: whole appointments it put there, and single occurrences the user took a copy
+    /// of — and only it knows which are which.
+    /// </summary>
+    public IReadOnlyList<ExternalOccurrence> On(DateTime day, Func<ExternalOccurrence, bool> hidden)
     {
         if (!IsEnabled || !_byDay.TryGetValue(day.Date, out var found)) return Array.Empty<ExternalOccurrence>();
 
-        return found.Where(o => !exclude.Contains(o.EntryId)).ToList();
+        return found.Where(o => !hidden(o)).ToList();
     }
 
     /// <summary>Days in the window carrying at least one meeting of their own, for the month dots.</summary>
-    public HashSet<DateTime> DaysWith(IReadOnlySet<string> exclude)
+    public HashSet<DateTime> DaysWith(IReadOnlySet<string> exclude) =>
+        DaysWith(o => exclude.Contains(o.EntryId));
+
+    public HashSet<DateTime> DaysWith(Func<ExternalOccurrence, bool> hidden)
     {
         var days = new HashSet<DateTime>();
         if (!IsEnabled) return days;
 
         foreach (var occurrence in _occurrences)
         {
-            if (exclude.Contains(occurrence.EntryId)) continue;
+            if (hidden(occurrence)) continue;
             foreach (var day in occurrence.Days()) days.Add(day);
         }
 

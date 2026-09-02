@@ -280,7 +280,7 @@ public sealed class WidgetViewModel : ObservableObject
         // the dot has to account for them or the month reads as free when it is not.
         if (_calendar is not null)
         {
-            foreach (var day in _calendar.DaysWith(_repository.LinkedEntryIds)) eventDays.Add(day);
+            foreach (var day in _calendar.DaysWith(_repository.Hides)) eventDays.Add(day);
         }
         var todoDays = _repository.OpenTodos()
             .Where(t => t.DueAt.HasValue)
@@ -323,9 +323,9 @@ public sealed class WidgetViewModel : ObservableObject
         ExternalEvents.Clear();
         if (_calendar is not null)
         {
-            foreach (var occurrence in _calendar.On(_selectedDate, _repository.LinkedEntryIds))
+            foreach (var occurrence in _calendar.On(_selectedDate, _repository.Hides))
             {
-                ExternalEvents.Add(new ExternalRow(occurrence));
+                ExternalEvents.Add(new ExternalRow(occurrence, AdoptAsync));
             }
         }
 
@@ -394,6 +394,18 @@ public sealed class WidgetViewModel : ObservableObject
     private Task DeleteTodoAsync(TodoRow row) => _repository.DeleteTodoAsync(row.Id);
 
     private Task DeleteEventAsync(EventRow row) => _repository.DeleteEventAsync(row.Id);
+
+    /// <summary>
+    /// Takes a copy of somebody else's meeting and opens it straight away: the reason to take
+    /// one is to write something on it, and that is what the window that opens is for. The
+    /// repository's Changed event has already swapped the dimmed row for the user's own by
+    /// the time the window is up.
+    /// </summary>
+    private async Task AdoptAsync(ExternalRow row)
+    {
+        var copy = await _repository.AdoptAsync(row.Occurrence, _clock());
+        RequestEdit(copy.Id, isTodo: false);
+    }
 
     private int WeekIndex(DayOfWeek day) => ((int)day - (int)_firstDayOfWeek + 7) % 7;
 }

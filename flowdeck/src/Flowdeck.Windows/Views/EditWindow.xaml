@@ -72,6 +72,12 @@
                 Style="{StaticResource Button.Icon}" />
       </Grid>
 
+      <TextBlock Margin="2,10,0,0"
+                 Style="{StaticResource Text.Meta}"
+                 Text="{Binding AdoptedNote}"
+                 TextWrapping="Wrap"
+                 Visibility="{Binding IsAdopted, Converter={StaticResource BoolToVisibility}}" />
+
       <!-- ============ title ============ -->
       <TextBlock Margin="2,16,0,5" Style="{StaticResource Text.Meta}" Text="제목" />
       <Border Style="{StaticResource Field}">

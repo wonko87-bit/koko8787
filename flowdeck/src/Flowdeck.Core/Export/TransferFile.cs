@@ -169,6 +169,7 @@ public static class TransferFile
     {
         var copy = calendarEvent.Clone();
         copy.ExternalLink = null;
+        copy.Origin = null;
         return copy;
     }
 }

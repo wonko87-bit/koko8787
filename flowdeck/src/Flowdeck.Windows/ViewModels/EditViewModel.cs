@@ -101,6 +101,16 @@ public sealed class EditViewModel : ObservableObject
 
     public string HeaderLabel => IsTodo ? "할일 편집" : "일정 편집";
 
+    /// <summary>
+    /// A meeting taken in from Outlook. Said on the window because the one thing a person
+    /// will wonder, with the cursor in the note box, is whether what they type ends up in
+    /// the meeting everybody else can see. It does not.
+    /// </summary>
+    public bool IsAdopted => _event?.Origin is not null;
+
+    public string AdoptedNote =>
+        $"{_repository.External?.DisplayName ?? "Outlook"} 에서 가져온 회의입니다. 여기 적는 메모는 이 PC에만 남고 회의 쪽으로 보내지 않습니다.";
+
     /// <summary>Priority belongs to todos; an event has no such field to edit.</summary>
     public bool ShowPriority => IsTodo;
 

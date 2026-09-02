@@ -98,13 +98,17 @@ public sealed class CalendarDay : ObservableObject
 
 /// <summary>
 /// A meeting read out of Outlook that Flowdeck did not put there — someone else's booking,
-/// a room, a leave day. Read-only by construction: it carries no commands, because there is
-/// nothing here that may be ticked, edited or deleted.
+/// a room, a leave day. Read-only: nothing here may be ticked, edited or deleted. The one
+/// thing it can do is be taken in — a double-click makes a local copy to keep a note on,
+/// and from then on the copy is the row that shows.
 /// </summary>
 public sealed class ExternalRow
 {
-    public ExternalRow(ExternalOccurrence occurrence)
+    public ExternalRow(ExternalOccurrence occurrence, Func<ExternalRow, Task>? adopt = null)
     {
+        Occurrence = occurrence;
+        AdoptCommand = new AsyncRelayCommand(() => adopt?.Invoke(this) ?? Task.CompletedTask);
+
         Title = string.IsNullOrWhiteSpace(occurrence.Title) ? "(제목 없음)" : occurrence.Title;
         Location = occurrence.Location;
         HasLocation = !string.IsNullOrWhiteSpace(occurrence.Location);
@@ -127,6 +131,11 @@ public sealed class ExternalRow
     public string Location { get; }
 
     public bool HasLocation { get; }
+
+    public ExternalOccurrence Occurrence { get; }
+
+    /// <summary>Takes a copy of the meeting and opens it. Bound to a double-click, like the editable rows.</summary>
+    public ICommand AdoptCommand { get; }
 }
 
 /// <summary>A todo in the widget list.</summary>

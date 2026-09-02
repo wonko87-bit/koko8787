@@ -126,6 +126,54 @@ public sealed class WorkspaceRepository
     public IReadOnlyList<CalendarEvent> Events => _workspace.Events;
 
     /// <summary>
+    /// Whether the overlay should leave this occurrence out: either Flowdeck put the whole
+    /// appointment there itself, or the user has taken a copy of this one occurrence and the
+    /// copy is now the row that shows.
+    /// </summary>
+    public bool Hides(ExternalOccurrence occurrence) =>
+        LinkedEntryIds.Contains(occurrence.EntryId)
+        || _workspace.Events.Any(e =>
+            e.Origin is { } origin
+            && string.Equals(origin.EntryId, occurrence.EntryId, StringComparison.OrdinalIgnoreCase)
+            && origin.Start == occurrence.Start);
+
+    /// <summary>
+    /// Takes a copy of a meeting read from the outside calendar, so the user can keep a note
+    /// on something they did not book. The copy is a plain local event carrying only where it
+    /// came from: no link, so nothing about it is ever written back to the meeting, which is
+    /// somebody else's.
+    ///
+    /// Asking twice for the same occurrence returns the copy already made. A double-click
+    /// and a notification can both land on the same meeting, and neither should make a second.
+    /// </summary>
+    public async Task<CalendarEvent> AdoptAsync(ExternalOccurrence occurrence, DateTime now)
+    {
+        var existing = _workspace.Events.FirstOrDefault(e =>
+            e.Origin is { } origin
+            && string.Equals(origin.EntryId, occurrence.EntryId, StringComparison.OrdinalIgnoreCase)
+            && origin.Start == occurrence.Start);
+        if (existing is not null) return existing;
+
+        var copy = new CalendarEvent
+        {
+            Title = string.IsNullOrWhiteSpace(occurrence.Title) ? "(제목 없음)" : occurrence.Title,
+            Location = occurrence.Location ?? string.Empty,
+            Start = occurrence.Start,
+            End = occurrence.End,
+            IsAllDay = occurrence.IsAllDay,
+            Origin = new ExternalOrigin(occurrence.EntryId, occurrence.Start),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+
+        _workspace.Events.Add(copy);
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
+
+        return copy;
+    }
+
+    /// <summary>
     /// Note the deliberate absence of ConfigureAwait(false) here and in every mutation:
     /// <see cref="Changed"/> has to reach the caller's context, because on the desktop the
     /// handler updates collections that are bound to the UI and may only be touched there.
@@ -595,6 +643,10 @@ public sealed class WorkspaceRepository
             if (string.IsNullOrEmpty(calendarEvent.Id) || !eventIds.Add(calendarEvent.Id)) { skipped++; continue; }
 
             calendarEvent.ExternalLink = null;
+
+            // Named an occurrence in the other machine's Outlook. Here it would hide nothing
+            // — or, worse, the wrong thing.
+            calendarEvent.Origin = null;
             _workspace.Events.Add(calendarEvent);
             eventsAdded++;
         }
