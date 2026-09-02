@@ -8,6 +8,7 @@ import type {
   Rule,
   Settings,
   Suggestion,
+  WaitingFile,
 } from "./types";
 
 export const api = {
@@ -63,6 +64,8 @@ export const api = {
     invoke<void>("clear_recent", { entryIds }),
   setPinned: (entryId: string, pinned: boolean) =>
     invoke<FileEntry>("set_pinned", { entryId, pinned }),
+
+  listWaiting: () => invoke<WaitingFile[]>("list_waiting"),
 
   listUncollected: () => invoke<Candidate[]>("list_uncollected"),
   collectPaths: (paths: string[]) =>

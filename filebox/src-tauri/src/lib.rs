@@ -50,6 +50,7 @@ pub fn run() {
             // ---- 감시 스레드 ----
             let tx = watcher::spawn(app.handle().clone());
             app.manage(watcher::WatcherCtl(Mutex::new(tx)));
+            app.manage(watcher::Waiting::default());
 
             // ---- 토스트 창 (숨김 상태로 준비) ----
             tauri::WebviewWindowBuilder::new(
@@ -153,6 +154,7 @@ pub fn run() {
             commands::set_flowdeck_pending,
             commands::clear_recent,
             commands::set_pinned,
+            commands::list_waiting,
             commands::list_uncollected,
             commands::collect_paths,
             commands::open_entry,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { api } from "../api";
 import {
@@ -7,7 +8,13 @@ import {
   formatDate,
   humanSize,
 } from "../types";
-import type { BatchResult, FileEntry, Favorite, Suggestion } from "../types";
+import type {
+  BatchResult,
+  FileEntry,
+  Favorite,
+  Suggestion,
+  WaitingFile,
+} from "../types";
 
 function reportBatch(result: BatchResult) {
   if (result.errors.length > 0) {
@@ -308,6 +315,20 @@ export default function InboxView({
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [waiting, setWaiting] = useState<WaitingFile[]>([]);
+
+  // 다른 프로그램이 붙잡고 있어 아직 못 가져온 파일. 조용히 기다리면 사용자는
+  // 파일이 유실됐다고 생각한다.
+  useEffect(() => {
+    const load = () => api.listWaiting().then(setWaiting).catch(() => {});
+    load();
+    const unlisten = listen("waiting-changed", load);
+    const timer = setInterval(load, 5000);
+    return () => {
+      clearInterval(timer);
+      unlisten.then((f) => f());
+    };
+  }, []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
@@ -414,6 +435,23 @@ export default function InboxView({
     });
 
 
+  const waitingNotice = waiting.length > 0 && (
+    <div className="waiting-notice">
+      <div className="waiting-head">
+        ⏳ {waiting.length}개를 기다리는 중
+      </div>
+      <div className="waiting-body">
+        다른 프로그램이 파일을 열어 두고 있어 아직 가져오지 못했어요. 그 프로그램을
+        닫으면 자동으로 들어옵니다 — 계속 확인하고 있으니 그냥 두셔도 됩니다.
+      </div>
+      {waiting.map((w) => (
+        <div className="waiting-item" key={w.path} title={w.path}>
+          {w.name}
+        </div>
+      ))}
+    </div>
+  );
+
   const doneSection = done.length > 0 && (
     <div className="category-group done-group">
       <h2>
@@ -444,6 +482,7 @@ export default function InboxView({
   if (inbox.length === 0) {
     return (
       <>
+        {waitingNotice}
         <div className="empty">
           <div className="big">📭</div>
           관리함이 비어 있어요.
@@ -457,6 +496,7 @@ export default function InboxView({
 
   return (
     <>
+      {waitingNotice}
       <div className="toolbar">
         <input
           className="search"

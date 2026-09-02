@@ -468,6 +468,12 @@ pub fn clear_recent(app: AppHandle, store: State<Store>, entry_ids: Vec<String>)
     let _ = app.emit("entries-changed", ());
 }
 
+/// 다른 프로그램이 붙잡고 있어 아직 못 가져온 파일들.
+#[tauri::command]
+pub fn list_waiting(waiting: State<crate::watcher::Waiting>) -> Vec<crate::watcher::WaitingFile> {
+    waiting.0.lock().map(|w| w.clone()).unwrap_or_default()
+}
+
 /// 관리함에 붙잡아 두거나 놓아준다.
 #[tauri::command]
 pub fn set_pinned(

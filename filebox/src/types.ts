@@ -95,6 +95,12 @@ export interface Suggestion {
   score: number;
 }
 
+export interface WaitingFile {
+  path: string;
+  name: string;
+  reason: string;
+}
+
 export interface Candidate {
   path: string;
   name: string;

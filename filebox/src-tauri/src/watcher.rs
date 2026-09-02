@@ -20,15 +20,28 @@ pub enum Msg {
 /// 파일 크기가 이만큼 유지되면 "다운로드 완료"로 간주
 const STABLE_AFTER: Duration = Duration::from_millis(2500);
 
-/// 옮기지 못한 파일을 다시 시도하는 최대 횟수.
-///
-/// 간격이 두 배씩 늘어나 전부 합치면 20분쯤 된다. 저장해 둔 문서를 닫기까지
-/// 그 정도면 대개 충분하고, 그 뒤에도 파일은 감시 폴더에 그대로 있으니
-/// '기존 파일 수집'으로 언제든 가져올 수 있다.
-const MAX_RETRIES: u32 = 9;
-
 /// 첫 재시도까지 기다리는 시간. 시도할 때마다 두 배가 된다.
 const FIRST_RETRY: Duration = Duration::from_secs(2);
+
+/// 재시도 간격의 상한.
+///
+/// 포기하지 않는 이유: 편집 중인 문서를 옮기지 못하는 것은 고장이 아니라 옳은
+/// 동작이다. 파워포인트가 열어 둔 파일을 밀어내면 그쪽의 다음 저장이 엉뚱한 곳으로
+/// 간다. 그러니 프로그램을 닫을 때까지 기다리는 것이 맞고, 하루를 열어 두든 상관없이
+/// 기다린다. 파일이 사라지면 그때 목록에서 빠진다.
+const MAX_RETRY_INTERVAL: Duration = Duration::from_secs(60);
+
+/// 다른 프로그램이 붙잡고 있어 아직 못 가져온 파일.
+#[derive(Clone, serde::Serialize)]
+pub struct WaitingFile {
+    pub path: String,
+    pub name: String,
+    pub reason: String,
+}
+
+/// 기다리는 중인 파일 목록. 감시 스레드가 쓰고 화면이 읽는다.
+#[derive(Default)]
+pub struct Waiting(pub Mutex<Vec<WaitingFile>>);
 
 pub fn spawn(app: AppHandle) -> Sender<Msg> {
     let (tx, rx) = channel::<Msg>();
@@ -55,6 +68,8 @@ pub fn spawn(app: AppHandle) -> Sender<Msg> {
         let mut pending: HashMap<PathBuf, (u64, Instant)> = HashMap::new();
         // 옮기지 못해 다시 시도할 것들: path -> (시도 횟수, 다음 시도 시각)
         let mut retry: HashMap<PathBuf, (u32, Instant)> = HashMap::new();
+        // 마지막 실패 사유. 화면에 왜 기다리는지 보여주기 위한 것.
+        let mut last_reason: HashMap<PathBuf, String> = HashMap::new();
 
         loop {
             match rx.recv_timeout(Duration::from_millis(800)) {
@@ -107,15 +122,13 @@ pub fn spawn(app: AppHandle) -> Sender<Msg> {
                     Collected::Failed(reason) => {
                         let (attempts, _) = retry.get(&path).copied().unwrap_or((0, now));
                         let attempts = attempts + 1;
-                        if attempts > MAX_RETRIES {
-                            eprintln!("[filebox] 수집 포기 ({attempts}회 시도): {reason}");
-                            known.insert(path.clone());
-                            retry.remove(&path);
-                        } else {
-                            let wait = FIRST_RETRY * 2u32.saturating_pow(attempts - 1);
-                            eprintln!("[filebox] 수집 실패, {wait:?} 뒤 다시 시도: {reason}");
-                            retry.insert(path.clone(), (attempts, now + wait));
+                        let wait = (FIRST_RETRY * 2u32.saturating_pow(attempts.min(6) - 1))
+                            .min(MAX_RETRY_INTERVAL);
+                        if attempts == 1 {
+                            eprintln!("[filebox] 아직 못 가져옴, 계속 다시 시도: {reason}");
                         }
+                        retry.insert(path.clone(), (attempts, now + wait));
+                        last_reason.insert(path.clone(), reason);
                     }
                 }
             }
@@ -134,6 +147,29 @@ pub fn spawn(app: AppHandle) -> Sender<Msg> {
                     }
                 }
             });
+            last_reason.retain(|path, _| retry.contains_key(path));
+
+            // 기다리는 것이 있으면 화면에 알린다. 조용히 기다리면 사용자는
+            // 파일이 유실됐다고 생각한다.
+            let waiting: Vec<WaitingFile> = retry
+                .keys()
+                .map(|path| WaitingFile {
+                    path: path.to_string_lossy().to_string(),
+                    name: path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default(),
+                    reason: last_reason.get(path).cloned().unwrap_or_default(),
+                })
+                .collect();
+            if let Some(state) = app.try_state::<Waiting>() {
+                if let Ok(mut slot) = state.0.lock() {
+                    if slot.len() != waiting.len() {
+                        let _ = app.emit("waiting-changed", ());
+                    }
+                    *slot = waiting;
+                }
+            }
         }
     });
 
