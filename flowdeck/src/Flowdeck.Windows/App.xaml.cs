@@ -40,6 +40,7 @@ public partial class App : Application, IAppShell
     private WidgetWindow? _widget;
     private QuickAddWindow? _quickAdd;
     private SettingsWindow? _settingsWindow;
+    private ReportWindow? _reportWindow;
     private OutlookBridge? _outlook;
     private AgendaWindow? _eventsAgenda;
     private AgendaWindow? _todosAgenda;
@@ -135,6 +136,7 @@ public partial class App : Application, IAppShell
         _tray.WidgetToggleRequested += (_, _) => ToggleWidget();
         _tray.EventsAgendaRequested += (_, _) => ToggleEventsAgenda();
         _tray.TodosAgendaRequested += (_, _) => ToggleTodosAgenda();
+        _tray.ReportRequested += (_, _) => ShowReport();
         _tray.SettingsRequested += (_, _) => ShowSettings();
         _tray.ExitRequested += (_, _) => Shutdown();
 
@@ -426,6 +428,24 @@ public partial class App : Application, IAppShell
         {
             ShowWidget();
         }
+    }
+
+    /// <summary>
+    /// One report window at a time, like settings: a second would only show the same week.
+    /// Built fresh each time it is opened, so it reads the workspace as it is now.
+    /// </summary>
+    private void ShowReport()
+    {
+        if (_reportWindow is { IsVisible: true })
+        {
+            _reportWindow.Activate();
+            return;
+        }
+
+        _reportWindow = new ReportWindow(new ReportViewModel(Repository, _settings.FirstDayOfWeek), DataFolder);
+        _reportWindow.Closed += (_, _) => _reportWindow = null;
+        _reportWindow.Show();
+        _reportWindow.Activate();
     }
 
     private void ShowSettings()

@@ -1,0 +1,172 @@
+<Window x:Class="Flowdeck.Windows.Views.ReportWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:infra="clr-namespace:Flowdeck.Windows.Infrastructure"
+        Title="Flowdeck 주간보고"
+        Width="560"
+        Height="680"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FontFamily="{StaticResource Font.UI}"
+        ResizeMode="NoResize"
+        ShowInTaskbar="True"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None">
+
+  <Window.Resources>
+    <infra:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+
+    <Style x:Key="Field" TargetType="Border">
+      <Setter Property="Padding" Value="10,7" />
+      <Setter Property="Background" Value="{DynamicResource Brush.Surface}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Brush.Border}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{StaticResource Corner.Small}" />
+    </Style>
+
+    <!-- Same as the note box on the edit window: the flat style pins its scrollbar hidden
+         and centres one line, neither of which a page of text can live with. -->
+    <Style x:Key="DraftBox" TargetType="TextBox" BasedOn="{StaticResource TextBox.Flat}">
+      <Setter Property="AcceptsReturn" Value="True" />
+      <Setter Property="AcceptsTab" Value="True" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+      <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+      <Setter Property="FontFamily" Value="Consolas, 'Malgun Gothic', sans-serif" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{StaticResource Corner.Small}"
+                    Padding="{TemplateBinding Padding}">
+              <ScrollViewer x:Name="PART_ContentHost"
+                            Focusable="False"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}" />
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
+  <Border Background="{DynamicResource Brush.Background}"
+          BorderBrush="{DynamicResource Brush.BorderStrong}"
+          BorderThickness="1"
+          CornerRadius="{StaticResource Corner.Large}">
+    <Grid Margin="22,16,22,18">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <!-- ============ title bar ============ -->
+      <Grid Background="Transparent" MouseLeftButtonDown="OnHeaderDrag">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Style="{StaticResource Text.Title}" Text="주간보고 초안" />
+          <TextBlock Margin="10,0,0,0"
+                     VerticalAlignment="Center"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding RangeLabel}" />
+        </StackPanel>
+        <Button HorizontalAlignment="Right"
+                Click="OnCloseClick"
+                Content="&#xE711;"
+                FontFamily="{StaticResource Font.Icon}"
+                FontSize="11"
+                Style="{StaticResource Button.Icon}" />
+      </Grid>
+
+      <!-- ============ which week ============ -->
+      <Grid Grid.Row="1" Margin="0,14,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="{StaticResource Corner.Small}">
+          <StackPanel Orientation="Horizontal">
+            <RadioButton Content="이번 주"
+                         GroupName="Week"
+                         IsChecked="{Binding IsThisWeek, Mode=TwoWay}"
+                         Style="{StaticResource RadioButton.Segment}" />
+            <RadioButton Content="지난주"
+                         GroupName="Week"
+                         IsChecked="{Binding IsLastWeek, Mode=TwoWay}"
+                         Style="{StaticResource RadioButton.Segment}" />
+            <RadioButton Content="직접"
+                         GroupName="Week"
+                         IsChecked="{Binding IsCustom, Mode=TwoWay}"
+                         Style="{StaticResource RadioButton.Segment}" />
+          </StackPanel>
+        </Border>
+
+        <Button Grid.Column="2"
+                Command="{Binding RebuildCommand}"
+                Content="다시 만들기"
+                Style="{StaticResource Button.Ghost}"
+                ToolTip="직접 고친 내용은 사라지고 기록에서 다시 만듭니다" />
+      </Grid>
+
+      <StackPanel Grid.Row="2"
+                  Margin="0,8,0,0"
+                  Orientation="Horizontal"
+                  Visibility="{Binding IsCustom, Converter={StaticResource BoolToVisibility}}">
+        <Border Width="132" Style="{StaticResource Field}">
+          <TextBox Style="{StaticResource TextBox.Flat}"
+                   Text="{Binding FromText, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="2026-08-17" />
+        </Border>
+        <TextBlock Margin="8,0"
+                   VerticalAlignment="Center"
+                   Style="{StaticResource Text.Meta}"
+                   Text="~" />
+        <Border Width="132" Style="{StaticResource Field}">
+          <TextBox Style="{StaticResource TextBox.Flat}"
+                   Text="{Binding ToText, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="2026-08-23" />
+        </Border>
+      </StackPanel>
+
+      <!-- ============ the draft ============ -->
+      <Border Grid.Row="3" Margin="0,12,0,0" Style="{StaticResource Field}">
+        <TextBox x:Name="Draft"
+                 Style="{StaticResource DraftBox}"
+                 Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" />
+      </Border>
+
+      <TextBlock Grid.Row="4"
+                 Margin="2,8,0,0"
+                 Style="{StaticResource Text.Meta}"
+                 Text="{Binding Status}"
+                 TextWrapping="Wrap"
+                 Visibility="{Binding HasStatus, Converter={StaticResource BoolToVisibility}}" />
+
+      <!-- ============ footer ============ -->
+      <Grid Grid.Row="5" Margin="0,14,0,0">
+        <Button HorizontalAlignment="Left"
+                Click="OnSaveClick"
+                Content="파일로 저장"
+                Style="{StaticResource Button.Ghost}" />
+        <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+          <Button Margin="0,0,8,0"
+                  Click="OnCloseClick"
+                  Content="닫기"
+                  Style="{StaticResource Button.Ghost}" />
+          <Button Click="OnCopyClick"
+                  Content="복사"
+                  IsDefault="True"
+                  Style="{StaticResource Button.Primary}"
+                  ToolTip="전체를 클립보드로 복사합니다" />
+        </StackPanel>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>
