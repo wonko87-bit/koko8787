@@ -1,3 +1,5 @@
+using Flowdeck.Core.Parsing;
+
 namespace Flowdeck.Core.Services;
 
 /// <summary>
@@ -16,8 +18,6 @@ namespace Flowdeck.Core.Services;
 /// </summary>
 public static class AttachedFile
 {
-    private const string Prefix = "파일:";
-
     /// <summary>
     /// Extensions Flowdeck will not hand to the shell.
     ///
@@ -36,23 +36,10 @@ public static class AttachedFile
 
     /// <summary>
     /// The path named in the note, or null when it names none. The first such line wins, so
-    /// a sender that puts a header above it still works.
+    /// a sender that puts a header above it still works. Read through the same outline the
+    /// weekly report uses, so what counts as a <c>파일:</c> line is decided in one place.
     /// </summary>
-    public static string? PathIn(string? notes)
-    {
-        if (string.IsNullOrEmpty(notes)) return null;
-
-        foreach (var raw in notes.Split('\n'))
-        {
-            var line = raw.Trim();
-            if (!line.StartsWith(Prefix, StringComparison.Ordinal)) continue;
-
-            var path = line[Prefix.Length..].Trim();
-            if (path.Length > 0) return path;
-        }
-
-        return null;
-    }
+    public static string? PathIn(string? notes) => NoteOutline.Parse(notes).Files.FirstOrDefault();
 
     /// <summary>Whether opening this would be running it rather than reading it.</summary>
     public static bool IsRunnable(string? path) =>
