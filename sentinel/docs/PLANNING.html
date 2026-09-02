@@ -1,0 +1,433 @@
+<title>Sentinel 기획서</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#eceef1; --panel:#f7f8fa; --panel-2:#ffffff;
+    --ink:#1a1e26; --ink-soft:#4b535f; --ink-faint:#7a8494;
+    --line:#d6dae1; --line-soft:#e4e7ec;
+    --accent:#0e7c86; --accent-soft:#d3ebed;
+    --lock:#b5451f; --lock-soft:#f3ddd3;
+    --go:#2e7d4f; --go-soft:#d6eade;
+    --warn:#9a6a12; --warn-soft:#f0e4cb;
+    --shadow:0 1px 2px rgba(20,28,40,.05),0 8px 24px rgba(20,28,40,.06);
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --ground:#0e1116; --panel:#161b22; --panel-2:#1c222b;
+      --ink:#e7ebf0; --ink-soft:#aab3c0; --ink-faint:#6d7686;
+      --line:#2a313c; --line-soft:#232a34;
+      --accent:#3bc0cc; --accent-soft:#123037;
+      --lock:#e2794f; --lock-soft:#331a12;
+      --go:#5fce8a; --go-soft:#13291c;
+      --warn:#e0b45a; --warn-soft:#2c2412;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e1116; --panel:#161b22; --panel-2:#1c222b;
+    --ink:#e7ebf0; --ink-soft:#aab3c0; --ink-faint:#6d7686;
+    --line:#2a313c; --line-soft:#232a34;
+    --accent:#3bc0cc; --accent-soft:#123037;
+    --lock:#e2794f; --lock-soft:#331a12;
+    --go:#5fce8a; --go-soft:#13291c;
+    --warn:#e0b45a; --warn-soft:#2c2412;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.6;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:880px;margin:0 auto;padding:0 24px 120px;}
+  code,.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;}
+
+  /* ---- masthead ---- */
+  header.top{padding:64px 0 40px;border-bottom:1px solid var(--line);}
+  .kicker{font-family:"IBM Plex Mono",monospace;font-size:12px;
+    letter-spacing:.22em;text-transform:uppercase;color:var(--accent);
+    display:flex;align-items:center;gap:12px;margin-bottom:22px;}
+  .kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 4px var(--accent-soft);}
+  h1{font-family:"Archivo",sans-serif;font-weight:800;
+    font-size:clamp(38px,7vw,60px);line-height:1.02;letter-spacing:-.02em;
+    margin:0 0 18px;text-wrap:balance;}
+  h1 .sub{display:block;font-size:clamp(15px,2.6vw,19px);font-weight:600;
+    color:var(--ink-soft);letter-spacing:0;margin-top:14px;
+    font-family:"IBM Plex Sans",sans-serif;}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px;}
+  .tag{font-family:"IBM Plex Mono",monospace;font-size:12.5px;
+    padding:6px 11px;border:1px solid var(--line);border-radius:6px;
+    background:var(--panel);color:var(--ink-soft);}
+  .tag b{color:var(--ink);font-weight:500;}
+
+  /* ---- sections ---- */
+  section{padding:52px 0;border-bottom:1px solid var(--line-soft);}
+  .snum{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--accent);
+    letter-spacing:.15em;}
+  h2{font-family:"Archivo",sans-serif;font-weight:700;
+    font-size:clamp(23px,4vw,30px);letter-spacing:-.015em;margin:6px 0 8px;
+    text-wrap:balance;}
+  .lede{color:var(--ink-soft);font-size:16px;margin:0 0 26px;max-width:64ch;}
+  h3{font-family:"Archivo",sans-serif;font-weight:700;font-size:17px;
+    margin:34px 0 12px;letter-spacing:-.01em;}
+  p{margin:0 0 14px;max-width:66ch;}
+  strong{font-weight:600;}
+  ul{margin:0 0 16px;padding-left:0;list-style:none;}
+  ul li{position:relative;padding-left:22px;margin-bottom:9px;max-width:64ch;}
+  ul li::before{content:"";position:absolute;left:3px;top:11px;width:6px;height:6px;
+    border-radius:1px;background:var(--accent);}
+  a{color:var(--accent);}
+
+  /* ---- panels ---- */
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:22px 24px;margin:22px 0;box-shadow:var(--shadow);}
+  .panel h3{margin-top:0;}
+  .callout{border-left:3px solid var(--accent);border-radius:0 10px 10px 0;
+    background:var(--accent-soft);padding:16px 20px;margin:20px 0;font-size:15px;}
+  .callout.q{border-left-color:var(--warn);background:var(--warn-soft);}
+  .callout.lock{border-left-color:var(--lock);background:var(--lock-soft);}
+  .callout .lbl{font-family:"IBM Plex Mono",monospace;font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;font-weight:500;
+    display:block;margin-bottom:6px;color:var(--ink-soft);}
+
+  /* ---- flow diagram ---- */
+  .flow{display:flex;flex-direction:column;gap:0;margin:8px 0 4px;}
+  .step{display:grid;grid-template-columns:52px 1fr;gap:18px;position:relative;
+    padding-bottom:26px;}
+  .step:not(:last-child)::before{content:"";position:absolute;left:25px;top:44px;
+    bottom:-2px;width:2px;background:var(--line);}
+  .step .idx{width:52px;height:44px;border-radius:10px;display:flex;
+    align-items:center;justify-content:center;font-family:"Archivo",sans-serif;
+    font-weight:800;font-size:18px;background:var(--panel-2);border:1px solid var(--line);
+    color:var(--accent);z-index:1;}
+  .step.s-lock .idx{color:var(--lock);}
+  .step.s-go .idx{color:var(--go);}
+  .step .body{padding-top:1px;}
+  .step .t{font-weight:600;font-family:"Archivo",sans-serif;font-size:16px;margin-bottom:3px;}
+  .step .d{color:var(--ink-soft);font-size:14.5px;max-width:60ch;}
+  .step .d code{font-size:12.5px;background:var(--panel-2);padding:1px 6px;border-radius:4px;
+    border:1px solid var(--line-soft);}
+
+  /* ---- table ---- */
+  .tbl-wrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:10px;}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px;}
+  th,td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--line-soft);
+    vertical-align:top;}
+  th{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-faint);background:var(--panel);font-weight:500;}
+  tr:last-child td{border-bottom:none;}
+  td code{font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--accent);}
+  .pill{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:11px;
+    padding:2px 8px;border-radius:20px;font-weight:500;white-space:nowrap;}
+  .pill.go{background:var(--go-soft);color:var(--go);}
+  .pill.lock{background:var(--lock-soft);color:var(--lock);}
+  .pill.warn{background:var(--warn-soft);color:var(--warn);}
+  .pill.acc{background:var(--accent-soft);color:var(--accent);}
+
+  /* ---- roadmap ---- */
+  .road{display:flex;flex-direction:column;gap:14px;margin-top:8px;}
+  .mile{display:grid;grid-template-columns:64px 1fr;gap:18px;align-items:start;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:16px 20px;}
+  .mile .m{font-family:"Archivo",sans-serif;font-weight:800;font-size:15px;color:var(--accent);
+    padding-top:2px;}
+  .mile .mt{font-weight:600;font-family:"Archivo",sans-serif;margin-bottom:6px;font-size:15.5px;}
+  .mile .md{font-size:14px;color:var(--ink-soft);}
+  .mile .md code{font-size:12px;}
+
+  /* ---- data model ---- */
+  pre.tree{font-family:"IBM Plex Mono",monospace;font-size:13px;line-height:1.7;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    padding:20px 22px;overflow-x:auto;color:var(--ink-soft);margin:20px 0;}
+  pre.tree b{color:var(--accent);font-weight:500;}
+  pre.tree i{color:var(--ink-faint);font-style:normal;}
+
+  footer{padding:40px 0 0;color:var(--ink-faint);font-size:13px;
+    font-family:"IBM Plex Mono",monospace;}
+  @media(max-width:560px){
+    .step{grid-template-columns:44px 1fr;gap:14px;}
+    .step:not(:last-child)::before{left:21px;}
+    .step .idx{width:44px;}
+    .mile{grid-template-columns:1fr;gap:6px;}
+  }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="kicker"><span class="dot"></span>기획서 · Draft v0.2 · 2026-08-30</div>
+  <h1>Sentinel
+    <span class="sub">Galaxy Tab S10 Ultra 전용 · 지문 게이트 기반 태블릿 사용통제 &amp; 사후 모니터링 앱</span>
+  </h1>
+  <div class="meta">
+    <span class="tag">플랫폼 <b>Android only</b></span>
+    <span class="tag">스택 <b>Kotlin 네이티브</b></span>
+    <span class="tag">강제력 <b>Device Owner</b></span>
+    <span class="tag">백엔드 <b>Firebase</b></span>
+    <span class="tag">목표 완성도 <b>flowdeck 수준</b></span>
+  </div>
+</header>
+
+<section>
+  <div class="snum">00 / 한 줄 요약</div>
+  <h2>무엇을 만드는가</h2>
+  <p class="lede">태블릿은 기본적으로 <strong>잠긴 벽돌</strong> 상태다. 관리자(나)가 지문으로 열고 "30분" 같은 사용 시간을 부여할 때만 살아나고, 그 시간 동안 태블릿이 무엇을 했는지 전부 기록한다. 콘텐츠 자체는 막지 않는다 — 통제는 사후에 로그를 보고 내가 한다.</p>
+  <p>두 개의 앱으로 구성된다. <strong>태블릿 앱(Master)</strong>은 모든 설정·잠금·활성화·기록을 담당하고, <strong>휴대폰 앱(Monitor)</strong>은 읽기 전용으로 상태를 보고 로그를 뽑는다. 둘은 내 소유임을 증명하는 방식으로 바인딩된다.</p>
+  <div class="callout">
+    <span class="lbl">설계 철학</span>
+    막는 게 아니라 <strong>기록</strong>한다. 차단 규칙을 끝없이 관리하는 대신, 완전한 사용 로그를 남겨 사후 통제의 근거로 삼는다. 유일하게 강제하는 것은 "언제 얼마나 켤 수 있는가" 하나뿐이다.
+  </div>
+</section>
+
+<section>
+  <div class="snum">01 / 핵심 흐름</div>
+  <h2>실행부터 종료까지</h2>
+  <p class="lede">네가 그린 뼈대를 상태 전이로 다시 정리했어. 태블릿은 항상 세 상태 중 하나에 있어: <span class="pill lock">LOCKED</span> <span class="pill go">ACTIVE</span> <span class="pill warn">EXPIRED</span>.</p>
+
+  <div class="flow">
+    <div class="step s-lock">
+      <div class="idx">1</div>
+      <div class="body">
+        <div class="t">부팅 &amp; 상시 잠금 (LOCKED)</div>
+        <div class="d">태블릿이 켜지면 Sentinel이 자동 실행되어 전체화면 잠금(키오스크)을 건다. 홈·최근앱·상태바가 죽고 다른 앱으로 못 나간다. 이게 기본값 — 아무 부여가 없으면 벽돌.</div>
+      </div>
+    </div>
+    <div class="step s-lock">
+      <div class="idx">2</div>
+      <div class="body">
+        <div class="t">관리자 지문 인증</div>
+        <div class="d">잠금 화면의 "관리자" 버튼 → <strong>지문만</strong> 요구(패턴/PIN 폴백 없음, §2 참고). 통과하면 관리자 콘솔이 열린다. 오직 태블릿에서만 가능.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="idx">3</div>
+      <div class="body">
+        <div class="t">사용 시간 부여</div>
+        <div class="d">콘솔에서 활성화 시간을 입력 <code>예: 30분</code>. (선택) 이번 세션에 허용/차단할 앱 프로필도 고를 수 있게 확장 가능.</div>
+      </div>
+    </div>
+    <div class="step s-go">
+      <div class="idx">4</div>
+      <div class="body">
+        <div class="t">활성화 확정 → 사용 개시 (ACTIVE)</div>
+        <div class="d">지문 재인증 <strong>또는</strong> 안드로이드 잠금과 다른 <strong>별도 앱 PW</strong> 입력으로 확정. 이 순간부터 키오스크가 풀리고 카운트다운 시작. Sentinel은 백그라운드에서 모든 활동을 기록하기 시작한다.</div>
+      </div>
+    </div>
+    <div class="step s-lock">
+      <div class="idx">5</div>
+      <div class="body">
+        <div class="t">시간 만료 → 재잠금 (EXPIRED → LOCKED)</div>
+        <div class="d">타이머 0 → 즉시 키오스크 복귀. 화면 상단에 남은 시간 표시(HUD), 만료 임박 시 경고. 세션 요약 로그가 확정 저장·동기화된다.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="idx">6</div>
+      <div class="body">
+        <div class="t">앱 종료 = 별도 PW</div>
+        <div class="d">Sentinel 자체를 끄거나 설정을 바꾸는 것도 별도 PW를 요구. Device Owner라 강제 종료·삭제·초기화가 막혀 있어서 우회가 어렵다.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="lbl">추가 제안 — 스케줄 &amp; 예산</span>
+    매번 수동 부여가 번거로우면, "평일 저녁 19–20시만 자동 허용", "하루 총 90분 예산" 같은 <strong>규칙 기반 자동 부여</strong>를 나중에 얹을 수 있어(M4). 뼈대엔 없던 거라 옵션으로 남겨둠.
+  </div>
+</section>
+
+<section>
+  <div class="snum">02 / 인증 설계</div>
+  <h2>지문만, 패턴은 배제 — 가능한가?</h2>
+  <p class="lede">결론: <strong>가능하다.</strong> 다만 "지문"과 "얼굴"을 앱이 강제로 구분하는 건 API의 회색지대라 짚고 넘어가자.</p>
+
+  <div class="panel">
+    <h3>패턴/PIN 배제 — 확실히 됨</h3>
+    <p><code>BiometricPrompt</code>를 <code>setAllowedAuthenticators(BIOMETRIC_STRONG)</code>로 호출하면 생체인증만 받고, 안드로이드 잠금(패턴·PIN·비밀번호)으로의 폴백이 <strong>발생하지 않는다.</strong> 즉 네가 원한 "패턴 안 됨"은 API 차원에서 보장돼.</p>
+    <h3>지문 vs 얼굴</h3>
+    <p>안드로이드는 앱에 "지문만"이라고 직접 지정하는 공개 API를 주지 않는다. 대신 생체 등급으로 갈린다: Tab S10 Ultra의 <strong>초음파 지문은 Class 3(STRONG)</strong>, 얼굴 인식은 통상 <strong>Class 2(WEAK)</strong>다. 그래서 <code>BIOMETRIC_STRONG</code>만 허용하면 <strong>얼굴은 자동 배제되고 사실상 지문만</strong> 남을 가능성이 크다. (기기 펌웨어의 등급 분류에 의존하므로 실기로 1회 검증 필요.)</p>
+  </div>
+
+  <h3>3중 인증 게이트</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>관문</th><th>수단</th><th>용도</th></tr></thead>
+    <tbody>
+      <tr><td>콘솔 진입</td><td><span class="pill acc">지문(STRONG)</span></td><td>관리자만 설정 화면 접근</td></tr>
+      <tr><td>활성화 확정</td><td><span class="pill acc">지문</span> 또는 <span class="pill acc">별도 PW</span></td><td>사용 시간 개시 승인</td></tr>
+      <tr><td>종료·설정변경</td><td><span class="pill acc">별도 PW</span></td><td>앱 우회·무력화 방지</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>별도 PW</strong>는 안드로이드 기기 잠금과 완전히 별개다. 앱 내부에서 Argon2/PBKDF2로 해시하여 저장하고, 원문은 어디에도 보관하지 않는다. 지문 하드웨어가 실패할 때의 백업 경로 역할도 겸한다.</p>
+</section>
+
+<section>
+  <div class="snum">03 / 기기 바인딩</div>
+  <h2>내 폰과 태블릿만 연결</h2>
+  <p class="lede">"내 소유"를 증명하는 2단계. soft(계정)로 편의성, hard(기기 지문)로 위조 방지를 병행한다.</p>
+  <ul>
+    <li><strong>Soft — Google 계정:</strong> 폰·태블릿 모두 같은 Google 계정으로 Firebase Auth 로그인. 페어링의 1차 신뢰 축.</li>
+    <li><strong>Hard — 기기 식별자 바인딩:</strong> 최초 페어링 시 태블릿이 QR(일회용 토큰)을 띄우고 폰이 스캔 → 서로의 <strong>기기 지문</strong>을 교환·고정한다. Android 10부터 Wi-Fi MAC이 랜덤화/접근 제한되므로 MAC 대신 <code>Settings.Secure.ANDROID_ID</code> + 앱 설치 인스턴스 ID(FCM 토큰 기반) + Play Integrity 신호를 조합한 지문을 쓴다.</li>
+    <li><strong>화이트리스트:</strong> 태블릿은 바인딩된 폰 인스턴스 ID 목록만 모니터로 인정. 새 기기가 붙으려면 태블릿에서 지문 인증 후 승인해야 한다.</li>
+  </ul>
+  <div class="callout q">
+    <span class="lbl">현실 체크 — MAC 주소</span>
+    네가 언급한 MAC 하드 바인딩은 방향은 맞지만, 최신 안드로이드에선 앱이 하드웨어 MAC을 못 읽어(랜덤화·권한 차단). 그래서 <strong>기능적으로 동등한 기기 지문 조합</strong>으로 대체하자 — 목적(위조 방지)은 그대로 달성돼.
+  </div>
+</section>
+
+<section>
+  <div class="snum">04 / 강제력</div>
+  <h2>Device Owner로 "사용불가"를 진짜로 만든다</h2>
+  <p class="lede">일반 앱 권한으론 사용자가 홈 버튼 한 번으로 빠져나간다. Device Owner(기기 소유자)는 그걸 원천 봉쇄한다 — 통제 목적엔 이게 정답.</p>
+
+  <div class="panel">
+    <h3>세팅 방법 (최초 1회, ADB)</h3>
+    <p>계정이 하나도 없는 상태여야 소유자 지정이 된다. 순서:</p>
+    <ul>
+      <li>태블릿 <strong>공장초기화</strong> → 아무 계정도 추가하지 않고 통과</li>
+      <li>Sentinel APK 설치 후 PC에서<br><code>adb shell dpm set-device-owner com.sentinel/.AdminReceiver</code></li>
+      <li>그 다음 Google 계정 로그인(§3 바인딩용). 소유자 지정은 이미 끝나 영향 없음.</li>
+    </ul>
+    <p style="margin-bottom:0;font-size:14px;color:var(--ink-faint)">한 번 지정되면 앱 삭제·강제종료·데이터 초기화가 막히고, 우회하려면 다시 공장초기화(=모든 데이터 소멸)밖에 없다.</p>
+  </div>
+
+  <h3>Device Owner로 얻는 통제 수단</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>API</th><th>효과</th></tr></thead>
+    <tbody>
+      <tr><td><code>startLockTask()</code></td><td>키오스크 — 홈/최근앱/이탈 차단, LOCKED 상태의 핵심</td></tr>
+      <tr><td><code>setStatusBarDisabled()</code></td><td>상태바·알림 그림자 비활성 (설정 우회 차단)</td></tr>
+      <tr><td><code>setUninstallBlocked()</code></td><td>Sentinel 삭제 불가</td></tr>
+      <tr><td><code>setApplicationHidden()</code> / <code>setPackagesSuspended()</code></td><td>세션별 앱 화이트리스트/블랙리스트(선택)</td></tr>
+      <tr><td><code>addUserRestriction()</code></td><td>안전모드 부팅·앱 설치·개발자옵션 등 제한</td></tr>
+      <tr><td><code>setKeyguardDisabled()</code> · <code>reboot()</code></td><td>잠금화면 제어, 원격 재부팅 등 보조</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="snum">05 / 모니터링 &amp; 로깅</div>
+  <h2>기록은 어디까지 되나 (정직하게)</h2>
+  <p class="lede">"모든 것을 기록"의 현실적 경계를 먼저 못 박자. 앱 단위 활동은 완벽히 잡히지만, 화면 안의 콘텐츠(어떤 영상·어떤 웹페이지)는 기본 API로는 안 잡힌다.</p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>기록 항목</th><th>수단</th><th>가능?</th></tr></thead>
+    <tbody>
+      <tr><td>앱 실행/전환 타임라인</td><td><code>UsageStatsManager</code> · <code>UsageEvents</code></td><td><span class="pill go">완전 가능</span></td></tr>
+      <tr><td>앱별 사용 시간</td><td>UsageStats 집계</td><td><span class="pill go">완전 가능</span></td></tr>
+      <tr><td>잠금해제/화면 on·off 세션</td><td><code>ACTION_USER_PRESENT</code>, <code>SCREEN_ON/OFF</code></td><td><span class="pill go">완전 가능</span></td></tr>
+      <tr><td>활성/유휴, 세션 시작·종료</td><td>Sentinel 자체 상태</td><td><span class="pill go">완전 가능</span></td></tr>
+      <tr><td>웹 URL (Chrome·삼성인터넷)</td><td>Accessibility — 주소창 텍스트</td><td><span class="pill go">가능 · 신뢰도 중상</span></td></tr>
+      <tr><td>유튜브 채널명·영상 제목</td><td>Accessibility — 화면 텍스트 노드</td><td><span class="pill warn">가능 · UI변경에 취약</span></td></tr>
+      <tr><td>로블록스 등 게임 방/맵 이름</td><td>GL 서피스 — 텍스트 노드 없음</td><td><span class="pill lock">a11y 불가</span></td></tr>
+      <tr><td>게임 내부까지 보려면</td><td>주기 스크린샷 + OCR</td><td><span class="pill lock">옵트인 · 무거움</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>콘텐츠 로깅 — 2트랙 전략</h3>
+  <p>"어떤 웹/영상/방인지"는 잡히는 정도가 앱마다 극단적으로 갈린다. 그래서 한 방식으로 뭉뚱그리지 않고 둘로 나눈다.</p>
+  <div class="panel">
+    <h3><span class="pill go">트랙 A</span> 텍스트로 잡히는 것 — Accessibility 콘텐츠 모듈</h3>
+    <p style="margin-bottom:0">네이티브 뷰라 화면에 텍스트가 떠 있는 앱은 a11y 트리에서 긁는다. <strong>웹 URL, 유튜브 채널명·제목</strong>이 여기 해당. 앱별 셀렉터 규칙을 두고, UI가 바뀌면 규칙만 갱신한다. (M3~M4)</p>
+  </div>
+  <div class="panel">
+    <h3><span class="pill lock">트랙 B</span> 게임처럼 안 잡히는 것 — 앱·세션 단위 + 옵트인 캡처</h3>
+    <p style="margin-bottom:0"><strong>로블록스는 화면 전체가 GL 서피스</strong>라 방 이름 같은 내부 텍스트가 a11y에 아예 안 뜬다. 기본은 "로블록스 몇 분 실행"까지만 기록. 정말 안을 봐야 하면, <strong>지정한 앱에 한해서만</strong> N초 간격 스크린샷을 남겨 사후 확인하는 옵트인 옵션을 별도로 둔다(평소엔 OFF, 배터리·저장 부담 인지하고 사용).</p>
+  </div>
+  <div class="callout q">
+    <span class="lbl">신뢰도 주의</span>
+    트랙 A는 대상 앱(유튜브 등)이 레이아웃을 바꾸면 규칙이 깨질 수 있어 유지보수가 따른다. 이건 우리 앱의 한계가 아니라 이 방식 전체의 태생적 제약 — 시중 통제 앱들도 똑같이 겪는다.
+  </div>
+
+  <h3>수집 파이프라인</h3>
+  <ul>
+    <li><strong>Foreground Service</strong>가 ACTIVE 동안 상주하며 이벤트를 폴링·구독한다.</li>
+    <li>로컬 우선: <strong>Room DB</strong>에 먼저 append(오프라인·비행기모드에도 유실 없음).</li>
+    <li>주기적으로 <strong>Firestore</strong>에 배치 업로드. 폰이 실시간 모드면 즉시, 절전 모드면 N분 간격 동기화.</li>
+    <li><strong>로그 추출:</strong> 폰 앱에서 기간 선택 → CSV/JSON 내보내기(공유 시트로 저장·전송).</li>
+  </ul>
+  <div class="callout lock">
+    <span class="lbl">네 방침 — 실시간 차단 안 함</span>
+    성인물 등 이상 콘텐츠를 봐도 <strong>세션 중엔 막지 않는다.</strong> 무한 트래킹·규칙 관리가 비현실적이라는 판단에 동의. Sentinel은 완전한 로그만 남기고, 판단·통제는 사후에 네가 로그를 보고 한다.
+  </div>
+</section>
+
+<section>
+  <div class="snum">06 / 휴대폰 앱 (Monitor)</div>
+  <h2>읽기 전용 관제탑</h2>
+  <p class="lede">설정 권한은 0. 오직 보고 뽑기만 한다.</p>
+  <ul>
+    <li><strong>현재 상태 카드:</strong> 태블릿이 지금 <span class="pill lock">LOCKED</span>인지 <span class="pill go">ACTIVE</span>인지, 화면 켜짐/잠금해제 여부, 남은 시간, 현재 실행 중인 앱.</li>
+    <li><strong>동기화 모드 토글:</strong> 실시간(FCM 푸시 구독) ↔ 절전(주기 폴링). 폰에서 켠다.</li>
+    <li><strong>세션 히스토리:</strong> 지난 세션들의 타임라인·앱별 사용시간·잠금해제 횟수.</li>
+    <li><strong>로그 추출:</strong> 기간 지정 CSV/JSON 다운로드.</li>
+    <li><strong>알림(선택):</strong> "태블릿 활성화됨", "세션 만료", "미등록 기기 페어링 시도" 등 FCM 푸시.</li>
+  </ul>
+</section>
+
+<section>
+  <div class="snum">07 / 데이터 모델</div>
+  <h2>Firestore 구조 (초안)</h2>
+  <pre class="tree">/owners/<b>{uid}</b>
+  ├─ devices/<b>{deviceId}</b>          <i>// 바인딩된 태블릿·폰</i>
+  │    ├─ role: "master" | "monitor"
+  │    ├─ instanceId, fingerprint     <i>// 하드 바인딩 지문</i>
+  │    └─ boundAt, lastSeen
+  │
+  ├─ liveState/<b>{tabletId}</b>        <i>// 실시간 1문서, 계속 덮어씀</i>
+  │    ├─ status: LOCKED|ACTIVE|EXPIRED
+  │    ├─ screenOn, unlocked
+  │    ├─ sessionEndsAt               <i>// 남은시간 계산용</i>
+  │    └─ currentApp, updatedAt
+  │
+  └─ sessions/<b>{sessionId}</b>       <i>// 부여~만료 1세션</i>
+       ├─ grantedMinutes, startedAt, endedAt
+       ├─ approvedBy: "fingerprint"|"password"
+       └─ events/<b>{eventId}</b>       <i>// append-only 로그</i>
+            ├─ ts, type: APP_FG|UNLOCK|SCREEN_OFF|...
+            ├─ package, appLabel
+            └─ durationMs</pre>
+  <p style="font-size:14px;color:var(--ink-faint)">보안 규칙: 문서는 소유자 <code>uid</code> 본인만 read. 쓰기는 태블릿(master)만, 폰(monitor)은 read-only로 규칙에서 강제.</p>
+</section>
+
+<section>
+  <div class="snum">08 / 권한 목록</div>
+  <h2>필요한 안드로이드 권한</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>권한 / 기능</th><th>쓰임</th><th>종류</th></tr></thead>
+    <tbody>
+      <tr><td><code>PACKAGE_USAGE_STATS</code></td><td>앱 사용 통계</td><td>특수접근(설정에서 허용)</td></tr>
+      <tr><td>Device Owner (DPC)</td><td>키오스크·삭제방지 등</td><td>ADB 프로비저닝</td></tr>
+      <tr><td><code>USE_BIOMETRIC</code></td><td>지문 인증</td><td>일반</td></tr>
+      <tr><td><code>FOREGROUND_SERVICE</code> (+dataSync)</td><td>상주 로깅 서비스</td><td>일반</td></tr>
+      <tr><td><code>RECEIVE_BOOT_COMPLETED</code></td><td>부팅 시 자동 잠금</td><td>일반</td></tr>
+      <tr><td><code>POST_NOTIFICATIONS</code></td><td>HUD·서비스 알림</td><td>런타임(13+)</td></tr>
+      <tr><td><code>INTERNET</code> · FCM</td><td>Firebase 동기화·푸시</td><td>일반</td></tr>
+      <tr><td>Accessibility Service</td><td><i>URL/콘텐츠 기록 — 옵션</i></td><td>특수접근</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <div class="snum">09 / 로드맵</div>
+  <h2>단계별 개발 순서</h2>
+  <p class="lede">위험도 높은 코어부터. 실기(Tab S10 Ultra)에서 검증하며 진행.</p>
+  <div class="road">
+    <div class="mile"><div class="m">M0</div><div><div class="mt">스캐폴딩</div><div class="md">프로젝트·모듈 구조, Firebase 연결, CI. 앱 2개(app-tablet, app-phone) + 공용 모듈.</div></div></div>
+    <div class="mile"><div class="m">M1</div><div><div class="mt">코어 잠금 루프 <span class="pill acc">가장 중요</span></div><div class="md">Device Owner 프로비저닝 → 키오스크 LOCKED ↔ 지문 게이트 → 시간부여 → ACTIVE → 만료 재잠금. 별도 PW 종료. <strong>여기가 뼈대의 심장.</strong></div></div></div>
+    <div class="mile"><div class="m">M2</div><div><div class="mt">로깅 엔진</div><div class="md">UsageStats/브로드캐스트 수집 → Room 저장 → 세션 타임라인. 오프라인 유실 0 검증.</div></div></div>
+    <div class="mile"><div class="m">M3</div><div><div class="mt">바인딩 &amp; 폰 모니터</div><div class="md">QR 페어링, 기기지문 하드바인딩, Firestore 동기화, 폰 상태 카드·히스토리·로그 추출.</div></div></div>
+    <div class="mile"><div class="m">M4</div><div><div class="mt">콘텐츠 모듈 &amp; 편의</div><div class="md">Accessibility 콘텐츠 로깅(트랙 A: URL·유튜브), 게임 옵트인 캡처(트랙 B), 자동 스케줄/일일예산, FCM 알림, 세션별 앱 화이트리스트, HUD 개선.</div></div></div>
+  </div>
+</section>
+
+<section style="border-bottom:none">
+  <div class="snum">10 / 확정된 결정</div>
+  <h2>정해진 것 (v0.2)</h2>
+  <div class="callout"><span class="lbl">D1 · 콘텐츠 로깅 — 채택</span> 앱 단위를 넘어 <strong>웹 URL·유튜브 채널명/제목</strong>까지 잡는다(트랙 A). <strong>로블록스 등 게임</strong>은 앱·세션 단위 + 옵트인 캡처(트랙 B). §5 2트랙 전략대로.</div>
+  <div class="callout"><span class="lbl">D2 · ADB 세팅 — 가능(나중)</span> 공장초기화+adb 환경 확보돼 있음. 당장은 아니어도 됨 → 개발은 일반 설치로 진행하고, Device Owner 실기 검증은 준비되는 시점에.</div>
+  <div class="callout"><span class="lbl">D3 · 부여 방식 — 수동 기본 + 자동 구현</span> 실사용은 수동 부여로. 단 자동 스케줄/일일예산 <strong>기능은 구현</strong>해 둔다(기본 비활성, 필요 시 켬).</div>
+  <div class="callout"><span class="lbl">D4 · 이름 — Sentinel 확정 🛡️</span> 패키지 <code>com.sentinel</code> 기준으로 스캐폴딩.</div>
+
+  <h3 style="margin-top:38px">다음 스텝</h3>
+  <p><strong>M0(스캐폴딩) + M1(코어 잠금 루프)</strong> 착수. Firebase 프로젝트의 <code>google-services.json</code>은 네가 콘솔에서 만들어 넣어주면 되고(그 전까진 플레이스홀더로 진행), Device Owner 실기 검증은 D2 시점에 맞춰서.</p>
+</section>
+
+<footer>Sentinel · 태블릿 사용통제 앱 기획서 · Draft v0.1 · 개인 활용 목적</footer>
+</div>
