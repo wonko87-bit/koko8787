@@ -71,23 +71,48 @@ public sealed class ReportViewModel : ObservableObject
         {
             if (Set(ref _isCustom, value) && value)
             {
-                FromText = _from.ToString("yyyy-MM-dd", Ko.Culture);
-                ToText = _to.ToString("yyyy-MM-dd", Ko.Culture);
-                Status = "기간을 고친 뒤 '다시 만들기'를 누르세요";
+                // Set through the fields, not the properties: the boxes are being filled in
+                // with the week already shown, and that is not a reason to build it again.
+                _fromText = _from.ToString("yyyy-MM-dd", Ko.Culture);
+                _toText = _to.ToString("yyyy-MM-dd", Ko.Culture);
+                Raise(nameof(FromText));
+                Raise(nameof(ToText));
+                Status = "날짜를 고치면 바로 다시 만들어집니다";
             }
         }
     }
 
+    /// <summary>
+    /// The boxes rebuild as they are typed in, the moment both hold a date. Typing a date is
+    /// already the request; a button to make it take is a step to forget.
+    /// </summary>
     public string FromText
     {
         get => _fromText;
-        set => Set(ref _fromText, value);
+        set
+        {
+            if (Set(ref _fromText, value)) RebuildIfDatesTyped();
+        }
     }
 
     public string ToText
     {
         get => _toText;
-        set => Set(ref _toText, value);
+        set
+        {
+            if (Set(ref _toText, value)) RebuildIfDatesTyped();
+        }
+    }
+
+    private void RebuildIfDatesTyped()
+    {
+        if (!_isCustom) return;
+
+        if (DateTime.TryParse(_fromText, Ko.Culture, DateTimeStyles.None, out _)
+            && DateTime.TryParse(_toText, Ko.Culture, DateTimeStyles.None, out _))
+        {
+            Rebuild();
+        }
     }
 
     public string RangeLabel =>
