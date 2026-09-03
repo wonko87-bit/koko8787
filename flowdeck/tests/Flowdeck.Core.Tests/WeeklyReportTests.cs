@@ -177,6 +177,39 @@ public class WeeklyReportTests
     }
 
     [Fact]
+    public async Task APlainTodoWithTheOpenersFeedsTheListsAcrossTheWeek()
+    {
+        // A phone call is a todo, not a meeting. What was decided on it is still a decision.
+        var repository = await Repository(
+            Done("협력사 통화", Mon.AddDays(1), "납기 논의\n결정: 납기 2주 연장\n할일: 계약서 수정\n이슈: 단가 미합의\n다음: 8/28 재통화"),
+            Open("이번 주 기한인데 아직", Mon.AddDays(4), "이슈: 자료 미수령"),
+            Open("한참 뒤 기한", Sun.AddDays(30), "결정: 이건 이번 주 것이 아님"));
+
+        var report = WeeklyReport.Build(repository, Mon, Sun);
+
+        // No block of its own: it is neither a meeting nor a run.
+        Assert.Empty(report.Meetings);
+        Assert.Empty(report.Runs);
+
+        Assert.Equal(("협력사 통화", "납기 2주 연장"), (Assert.Single(report.Decisions).Source, report.Decisions[0].Text));
+        Assert.Equal("계약서 수정", Assert.Single(report.Actions).Text);
+        Assert.Equal(new[] { "단가 미합의", "자료 미수령" }, report.Issues.Select(i => i.Text));
+        Assert.Equal("8/28 재통화", Assert.Single(report.NextSteps).Text);
+    }
+
+    [Fact]
+    public async Task MeetingsComeBeforeTodosInTheListsAcrossTheWeek()
+    {
+        var repository = await Repository(
+            Done("월요일 통화", Mon, "결정: 통화에서 정함"),
+            Meeting("금요일 회의", Mon.AddDays(4).AddHours(10), "결정: 회의에서 정함"));
+
+        var report = WeeklyReport.Build(repository, Mon, Sun);
+
+        Assert.Equal(new[] { "금요일 회의", "월요일 통화" }, report.Decisions.Select(d => d.Source));
+    }
+
+    [Fact]
     public async Task AnAdoptedMeetingIsAMeetingEvenIfItsNoteReadsLikeARun()
     {
         var repository = await Repository(

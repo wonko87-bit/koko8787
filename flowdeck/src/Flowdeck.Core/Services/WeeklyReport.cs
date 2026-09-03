@@ -57,10 +57,13 @@ public sealed class WeeklyReport
     /// <summary>Entries whose note describes a run: at least one of 조건/결과/결론.</summary>
     public IReadOnlyList<ReportNote> Runs { get; private init; } = Array.Empty<ReportNote>();
 
-    /// <summary>Every 결정: line across the week's meetings.</summary>
+    /// <summary>
+    /// Every 결정: line across the week — from meetings, from runs, and from any plain todo
+    /// whose note used the openers. Where a line was written does not change what it is.
+    /// </summary>
     public IReadOnlyList<ReportLine> Decisions { get; private init; } = Array.Empty<ReportLine>();
 
-    /// <summary>Every 할일: line across the week's meetings and runs.</summary>
+    /// <summary>Every 할일: line across the week, from the same places.</summary>
     public IReadOnlyList<ReportLine> Actions { get; private init; } = Array.Empty<ReportLine>();
 
     public IReadOnlyList<ReportLine> Issues { get; private init; } = Array.Empty<ReportLine>();
@@ -108,6 +111,11 @@ public sealed class WeeklyReport
         var meetings = new List<ReportNote>();
         var files = new List<string>();
 
+        // Plain todos whose note uses the openers. Not meetings and not runs, so they get
+        // no block of their own — but a decision written on a phone call is still one of
+        // the week's decisions, and goes into the lists across the week with the rest.
+        var asides = new List<ReportNote>();
+
         foreach (var todo in repository.Todos)
         {
             // A todo belongs to the week it was finished in, failing that the week it was
@@ -119,6 +127,10 @@ public sealed class WeeklyReport
             if (thisWeek && outline.IsAnalysis)
             {
                 runs.Add(new ReportNote(todo.Title, anchor, todo.HasTime && todo.DueAt == anchor, outline));
+            }
+            else if (thisWeek && outline.HasStructure)
+            {
+                asides.Add(new ReportNote(todo.Title, anchor, false, outline));
             }
 
             if (InWeek(todo.CreatedAt) || InWeek(todo.CompletedAt) || thisWeek)
@@ -154,8 +166,12 @@ public sealed class WeeklyReport
 
         // ---- across the week ------------------------------------------------------
 
-        var decisions = meetings.SelectMany(m => m.Outline.Decisions.Select(d => new ReportLine(m.Title, d))).ToList();
-        var noted = meetings.Concat(runs).ToList();
+        // Meetings first, then runs, then the rest, each in time order: the lists read in
+        // the order the week's notes were taken, not in the order the entries were stored.
+        asides.Sort((a, b) => a.When.CompareTo(b.When));
+        var noted = meetings.Concat(runs).Concat(asides).ToList();
+
+        var decisions = noted.SelectMany(n => n.Outline.Decisions.Select(d => new ReportLine(n.Title, d))).ToList();
         var actions = noted.SelectMany(n => n.Outline.Actions.Select(a => new ReportLine(n.Title, a))).ToList();
         var issues = noted.SelectMany(n => n.Outline.Issues.Select(i => new ReportLine(n.Title, i))).ToList();
         var next = noted.SelectMany(n => n.Outline.Next.Select(x => new ReportLine(n.Title, x))).ToList();
