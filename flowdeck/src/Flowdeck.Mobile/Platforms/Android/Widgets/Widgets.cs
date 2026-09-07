@@ -2,6 +2,7 @@ using Android.App;
 using Android.Appwidget;
 using Android.Content;
 using Android.Content.Res;
+using Android.OS;
 using Android.Widget;
 using Flowdeck.Mobile.Services;
 
@@ -58,14 +59,21 @@ public sealed class CalendarWidget : AppWidgetProvider
             {
                 await Workspace.EnsureLoadedAsync();
 
-                var views = new RemoteViews(context.PackageName, Resource.Layout.calendar_widget);
-                views.SetImageViewBitmap(
-                    Resource.Id.calendar_image,
-                    MonthBitmap.Render(DateTime.Now, FlowdeckWidgets.IsDark(context)));
+                var dark = FlowdeckWidgets.IsDark(context);
+                var open = OpenApp(context, "calendar");
 
-                views.SetOnClickPendingIntent(Resource.Id.calendar_root, OpenApp(context, "calendar"));
+                // One picture per widget, not one for all: two copies on the home screen can
+                // be different sizes, and each is drawn at its own.
+                foreach (var id in appWidgetIds)
+                {
+                    var (width, height) = SizeOf(context, appWidgetManager, id);
 
-                foreach (var id in appWidgetIds) appWidgetManager.UpdateAppWidget(id, views);
+                    var views = new RemoteViews(context.PackageName, Resource.Layout.calendar_widget);
+                    views.SetImageViewBitmap(Resource.Id.calendar_image, MonthBitmap.Render(width, height, DateTime.Now, dark));
+                    views.SetOnClickPendingIntent(Resource.Id.calendar_root, open);
+
+                    appWidgetManager.UpdateAppWidget(id, views);
+                }
             }
             catch (Exception)
             {
@@ -77,6 +85,61 @@ public sealed class CalendarWidget : AppWidgetProvider
                 pending?.Finish();
             }
         });
+    }
+
+    /// <summary>
+    /// The launcher resized the widget. Nothing about the picture is right for the new
+    /// shape, so it is drawn again for it.
+    /// </summary>
+    public override void OnAppWidgetOptionsChanged(Context? context, AppWidgetManager? appWidgetManager, int appWidgetId, Bundle? newOptions)
+    {
+        base.OnAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions);
+        OnUpdate(context, appWidgetManager, new[] { appWidgetId });
+    }
+
+    /// <summary>
+    /// The widget's size in pixels, as the launcher reports it.
+    ///
+    /// The launcher gives two sizes, one for each way the screen can be held: in portrait
+    /// the widget is at its narrowest and tallest, in landscape at its widest and shortest.
+    /// Those are read off the options as min-width by max-height and max-width by min-height,
+    /// which is how the platform documents them, and turned into pixels with the screen's
+    /// density. A launcher that has not said (a widget that was only just placed) gets the
+    /// square the provider asks for.
+    /// </summary>
+    private static (int Width, int Height) SizeOf(Context context, AppWidgetManager manager, int id)
+    {
+        var options = manager.GetAppWidgetOptions(id);
+        var resources = context.Resources;
+        var density = resources?.DisplayMetrics?.Density ?? 2f;
+        var landscape = resources?.Configuration?.Orientation == Orientation.Landscape;
+
+        var minWidth = options?.GetInt(AppWidgetManager.OptionAppwidgetMinWidth) ?? 0;
+        var maxWidth = options?.GetInt(AppWidgetManager.OptionAppwidgetMaxWidth) ?? 0;
+        var minHeight = options?.GetInt(AppWidgetManager.OptionAppwidgetMinHeight) ?? 0;
+        var maxHeight = options?.GetInt(AppWidgetManager.OptionAppwidgetMaxHeight) ?? 0;
+
+        var widthDp = landscape ? maxWidth : minWidth;
+        var heightDp = landscape ? minHeight : maxHeight;
+        if (widthDp <= 0 || heightDp <= 0)
+        {
+            widthDp = 320;
+            heightDp = 320;
+        }
+
+        var width = (int)Math.Round(widthDp * density);
+        var height = (int)Math.Round(heightDp * density);
+
+        // Kept in proportion when capped, so the shape the launcher reported survives.
+        var longest = Math.Max(width, height);
+        if (longest > MonthBitmap.MaxSide)
+        {
+            var scale = MonthBitmap.MaxSide / (float)longest;
+            width = (int)(width * scale);
+            height = (int)(height * scale);
+        }
+
+        return (width, height);
     }
 
     internal static PendingIntent OpenApp(Context context, string route)
