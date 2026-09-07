@@ -137,6 +137,7 @@ public sealed class OutlookBridge : IExternalStore, IExternalCalendarReader
                             // morning — and ours runs to the last second of the last day.
                             End: isAllDay ? end.AddTicks(-1) : end,
                             IsAllDay: isAllDay,
+                            IsRecurring: item.IsRecurring is bool repeats && repeats,
                             Location: item.Location as string ?? string.Empty));
                     }
                 }

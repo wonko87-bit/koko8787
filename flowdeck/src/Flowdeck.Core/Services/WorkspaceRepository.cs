@@ -174,6 +174,75 @@ public sealed class WorkspaceRepository
     }
 
     /// <summary>
+    /// Brings a copied-in meeting along when the meeting itself was moved.
+    ///
+    /// A copy is a snapshot of one occurrence, and the organiser is free to reschedule after
+    /// it was taken. Without this the overlay shows the meeting at its new time, the copy
+    /// sits at the old one, and the same meeting is on screen twice. So after each read of
+    /// the calendar: a copy whose occurrence is no longer where it was, but whose appointment
+    /// is now at exactly one other time, moves there — start, end, and the origin it will be
+    /// matched by next time. Open todos attached to it move by the same amount.
+    ///
+    /// Two things are left alone on purpose. An appointment with several occurrences in the
+    /// window is a repeat, and when one of its mornings is missing there is no telling a
+    /// cancelled instance from a moved one — guessing would drag the copy to next week. And
+    /// an occurrence outside what was read has not vanished; it was simply not looked at.
+    /// </summary>
+    public async Task<int> FollowMovedMeetingsAsync(ExternalCalendarFeed feed, DateTime now)
+    {
+        var current = feed.Occurrences;
+        var moved = 0;
+
+        foreach (var copy in _workspace.Events)
+        {
+            if (copy.Origin is not { } origin) continue;
+            if (!feed.Covers(origin.Start.Date, origin.Start.Date)) continue;
+
+            var same = current.Where(o => string.Equals(o.EntryId, origin.EntryId, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (same.Any(o => o.Start == origin.Start)) continue;
+            if (same.Count != 1) continue;
+
+            // One occurrence left of a repeat is not the moved one; it is next week's. The
+            // count alone cannot tell, since the missing morning is exactly what is missing,
+            // so the appointment has to say for itself that it repeats.
+            var target = same[0];
+            if (target.IsRecurring) continue;
+            var delta = target.Start - origin.Start;
+
+            copy.Start += delta;
+            copy.End = target.IsAllDay ? target.End : copy.Start + (target.End - target.Start);
+            copy.IsAllDay = target.IsAllDay;
+            copy.Origin = new ExternalOrigin(origin.EntryId, target.Start);
+            copy.UpdatedAt = now;
+
+            ShiftLinkedTodos(copy, delta);
+            moved++;
+        }
+
+        if (moved == 0) return 0;
+
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
+        return moved;
+    }
+
+    /// <summary>
+    /// Moves the open todos attached to an event by as much as the event moved. A todo
+    /// attached to a meeting is about that meeting — the slides for it, the follow-up from
+    /// it — and its date was only ever relative. A todo already done stays where it was done.
+    /// </summary>
+    private void ShiftLinkedTodos(CalendarEvent calendarEvent, TimeSpan delta)
+    {
+        if (delta == TimeSpan.Zero) return;
+
+        foreach (var todo in _workspace.Todos)
+        {
+            if (todo.IsDone || todo.LinkedEventId != calendarEvent.Id || todo.DueAt is null) continue;
+            todo.DueAt = todo.DueAt.Value + delta;
+        }
+    }
+
+    /// <summary>
     /// Note the deliberate absence of ConfigureAwait(false) here and in every mutation:
     /// <see cref="Changed"/> has to reach the caller's context, because on the desktop the
     /// handler updates collections that are bound to the UI and may only be touched there.
@@ -362,6 +431,7 @@ public sealed class WorkspaceRepository
         // screen keeps the old start rather than inventing one.
         var start = edit.When ?? source.Start;
         var allDay = !edit.HasTime;
+        var wasAt = source.Start;
 
         source.Title = Named(edit.Title);
         source.Notes = edit.Notes ?? string.Empty;
@@ -371,6 +441,8 @@ public sealed class WorkspaceRepository
         source.Tags = new List<string>(edit.Tags ?? new List<string>());
         source.ReminderMinutesBefore = edit.ReminderMinutesBefore;
         source.UpdatedAt = now;
+
+        ShiftLinkedTodos(source, source.Start - wasAt);
 
         var sync = await MirrorAsync(source.ExternalLink, () => External!.UpdateAsync(source), () => source.ExternalLink = null);
 

@@ -45,6 +45,9 @@ public sealed class ExternalCalendarFeed
 
     public int Count => _occurrences.Count;
 
+    /// <summary>Everything in the window as last read, in start order. For reconciling against, not for drawing.</summary>
+    public IReadOnlyList<ExternalOccurrence> Occurrences => _occurrences;
+
     /// <summary>
     /// The occurrences on one day, minus the ones Flowdeck put there itself.
     ///

@@ -108,6 +108,14 @@ public partial class App : Application, IAppShell
 
         _calendar = new ExternalCalendarFeed(_outlook) { IsEnabled = _settings.EnableOutlook && _settings.ShowOutlookCalendar };
 
+        // A meeting taken in and then rescheduled by its organiser would otherwise sit on
+        // screen twice: once where it was, once where it is now.
+        var calendar = _calendar;
+        var repository = _repository;
+        _calendar.Changed += (_, _) => CrashReporter.Observe(
+            repository.FollowMovedMeetingsAsync(calendar, DateTime.Now),
+            "App.FollowMovedMeetings");
+
         var widgetViewModel = new WidgetViewModel(_repository, _parser, clock: null, calendar: _calendar);
         widgetViewModel.Captured += OnCaptured;
 

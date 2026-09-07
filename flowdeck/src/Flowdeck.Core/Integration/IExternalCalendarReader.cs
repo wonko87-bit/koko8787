@@ -14,7 +14,8 @@ public sealed record ExternalOccurrence(
     DateTime Start,
     DateTime End,
     bool IsAllDay,
-    string Location)
+    string Location,
+    bool IsRecurring = false)
 {
     /// <summary>Every date this occurrence touches, so a multi-day meeting shows on each.</summary>
     public IEnumerable<DateTime> Days()
