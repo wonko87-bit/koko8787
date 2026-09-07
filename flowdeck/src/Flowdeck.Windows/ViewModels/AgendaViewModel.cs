@@ -277,14 +277,19 @@ public sealed class AgendaViewModel : ObservableObject
 
     private void LoadEvents(DateTime now)
     {
-        var oneOffs = _repository.OneOffOccurrences().Where(o => MatchesTagFilter(o.Source.Tags));
+        var oneOffs = _repository.OneOffOccurrences().Where(o => MatchesTagFilter(o.Source.Tags)).ToList();
+
+        // One colour per event on this list that has something attached to it.
+        var pairs = Pairing.Assign(oneOffs.Select(o => o.Source).Where(e => _repository.TodosAttachedTo(e.Id).Count > 0));
 
         foreach (var byDay in oneOffs.GroupBy(o => o.Start.Date).OrderBy(g => g.Key))
         {
             var group = CreateGroup(byDay.Key, now);
             foreach (var occurrence in byDay.OrderBy(o => o.IsAllDay ? 0 : 1).ThenBy(o => o.Start))
             {
-                group.Items.Add(new EventRow(occurrence, DeleteEventAsync, RequestEdit));
+                group.Items.Add(new EventRow(
+                    occurrence, DeleteEventAsync, RequestEdit,
+                    _repository.TodosAttachedTo(occurrence.Source.Id), Pairing.IndexOf(pairs, occurrence.Source.Id)));
             }
 
             Groups.Add(group);
@@ -302,6 +307,18 @@ public sealed class AgendaViewModel : ObservableObject
             .Where(t => MatchesTagFilter(t.Tags))
             .ToList();
 
+        // One colour per event that a todo on this list is attached to. The events are not
+        // on this list themselves; the "→ …" line under the todo is what names them.
+        var pairs = Pairing.Assign(todos.Select(LinkedEventOf));
+
+        TodoRow Row(TodoItem todo)
+        {
+            var linked = LinkedEventOf(todo);
+            return new TodoRow(
+                todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit,
+                linked, OpenLinkedEvent, Pairing.IndexOf(pairs, linked?.Id));
+        }
+
         // Undated items have no day to sit under, so they collect in a group of their own
         // at the end rather than being dropped or pinned to today.
         foreach (var byDay in todos
@@ -312,7 +329,7 @@ public sealed class AgendaViewModel : ObservableObject
             var group = CreateGroup(byDay.Key, now);
             foreach (var todo in byDay.OrderBy(t => t.IsDone).ThenBy(t => t.DueAt))
             {
-                group.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
+                group.Items.Add(Row(todo));
             }
 
             Groups.Add(group);
@@ -324,7 +341,7 @@ public sealed class AgendaViewModel : ObservableObject
             var tail = new AgendaGroup("날짜 없음", isToday: false, isPast: false, isUndated: true);
             foreach (var todo in undated)
             {
-                tail.Items.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
+                tail.Items.Add(Row(todo));
             }
 
             Groups.Add(tail);
@@ -393,6 +410,15 @@ public sealed class AgendaViewModel : ObservableObject
     private Task DeleteTodoAsync(TodoRow row) => _repository.DeleteTodoAsync(row.Id);
 
     private Task DeleteEventAsync(EventRow row) => _repository.DeleteEventAsync(row.Id);
+
+    private CalendarEvent? LinkedEventOf(TodoItem todo) =>
+        todo.LinkedEventId is { } id ? _repository.Events.FirstOrDefault(e => e.Id == id) : null;
+
+    /// <summary>Opens the event a todo is attached to, from the "→ …" line under the todo.</summary>
+    private void OpenLinkedEvent(TodoRow row)
+    {
+        if (row.LinkedEventId is { } id) RequestEdit(id, isTodo: false);
+    }
 
     private Task ToggleRecurringTodoAsync(RecurringRow row) => _repository.ToggleTodoAsync(row.Id, _clock());
 

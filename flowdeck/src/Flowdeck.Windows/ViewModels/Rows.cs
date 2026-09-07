@@ -149,16 +149,43 @@ public sealed class TodoRow : ObservableObject
         DateTime now,
         Func<TodoRow, Task> toggle,
         Func<TodoRow, Task> delete,
-        Action<TodoRow>? edit = null)
+        Action<TodoRow>? edit = null,
+        CalendarEvent? linkedEvent = null,
+        Action<TodoRow>? openLinked = null,
+        int pairIndex = -1)
     {
         _item = item;
         _toggle = toggle;
         IsOverdue = item.IsOverdue(now);
         DeleteCommand = new AsyncRelayCommand(() => delete(this));
         EditCommand = new RelayCommand(() => edit?.Invoke(this));
+        OpenLinkedCommand = new RelayCommand(() => openLinked?.Invoke(this));
+
+        LinkedEventId = linkedEvent?.Id;
+        LinkedEventLabel = linkedEvent is null
+            ? string.Empty
+            : "→ " + linkedEvent.Title + " · " + linkedEvent.Start.ToString(linkedEvent.IsAllDay ? "ddd" : "ddd HH:mm", Ko.Culture);
+        PairIndex = pairIndex;
     }
 
     public string Id => _item.Id;
+
+    /// <summary>The event this todo is attached to, when it is and the event is still here.</summary>
+    public string? LinkedEventId { get; }
+
+    public bool HasLinkedEvent => LinkedEventId is not null;
+
+    /// <summary>
+    /// "→ 설계 리뷰 · 목 16:30". Said on the todo because the meeting is usually on another
+    /// day, out of sight, and a bar of colour with nothing else that colour on screen says
+    /// nothing. Clicking it opens the meeting.
+    /// </summary>
+    public string LinkedEventLabel { get; }
+
+    public ICommand OpenLinkedCommand { get; }
+
+    /// <summary>Which colour this todo and its event share on this screen. -1 for none.</summary>
+    public int PairIndex { get; }
 
     public string Title => _item.Title;
 
@@ -330,10 +357,24 @@ public sealed class RecurringRow : ObservableObject
 /// <summary>One occurrence of an event in the day list.</summary>
 public sealed class EventRow : ObservableObject
 {
-    public EventRow(EventOccurrence occurrence, Func<EventRow, Task> delete, Action<EventRow>? edit = null)
+    public EventRow(
+        EventOccurrence occurrence,
+        Func<EventRow, Task> delete,
+        Action<EventRow>? edit = null,
+        IReadOnlyList<TodoItem>? attached = null,
+        int pairIndex = -1)
     {
         EditCommand = new RelayCommand(() => edit?.Invoke(this));
         Id = occurrence.Source.Id;
+
+        var todos = attached ?? Array.Empty<TodoItem>();
+        var open = todos.Count(t => !t.IsDone);
+        HasAttached = todos.Count > 0;
+        AttachedAllDone = HasAttached && open == 0;
+        AttachedSummary = !HasAttached ? string.Empty
+            : open == 0 ? "준비 완료"
+            : $"준비 {open}건 남음";
+        PairIndex = pairIndex;
         Notes = occurrence.Source.Notes;
         NotePreview = TodoRow.FirstLine(occurrence.Source.Notes);
         HasNote = occurrence.Source.Notes.Length > 0;
@@ -383,4 +424,39 @@ public sealed class EventRow : ObservableObject
 
     /// <summary>Opens the detail window. Bound to a double-click, the desktop way to open a row.</summary>
     public ICommand EditCommand { get; }
+
+    /// <summary>Whether any todo is attached to this event.</summary>
+    public bool HasAttached { get; }
+
+    /// <summary>Every attached todo is done: the bar fades, and the row says so.</summary>
+    public bool AttachedAllDone { get; }
+
+    /// <summary>"준비 2건 남음", or "준비 완료" — what is still owed to this event.</summary>
+    public string AttachedSummary { get; }
+
+    /// <summary>Which colour this event and its todos share on this screen. -1 for none.</summary>
+    public int PairIndex { get; }
+}
+
+/// <summary>
+/// Hands out pair colours for one screen. Events are numbered in start order, so the first
+/// pair on a list is always the first colour and a pair keeps its colour for as long as the
+/// same things are on screen together. Nothing is stored: colour is how two rows find each
+/// other in a list, not what either of them is.
+/// </summary>
+internal static class Pairing
+{
+    public static IReadOnlyDictionary<string, int> Assign(IEnumerable<CalendarEvent?> events)
+    {
+        var index = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var calendarEvent in events.OfType<CalendarEvent>().Distinct().OrderBy(e => e.Start).ThenBy(e => e.Title, StringComparer.Ordinal))
+        {
+            if (!index.ContainsKey(calendarEvent.Id)) index[calendarEvent.Id] = index.Count;
+        }
+
+        return index;
+    }
+
+    public static int IndexOf(IReadOnlyDictionary<string, int> pairs, string? eventId) =>
+        eventId is not null && pairs.TryGetValue(eventId, out var i) ? i : -1;
 }

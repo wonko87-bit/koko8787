@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Flowdeck.Core.Parsing;
+using Flowdeck.Core.Models;
 using Flowdeck.Core.Services;
 using Flowdeck.Core.Settings;
 using Flowdeck.Windows.Infrastructure;
@@ -304,20 +305,33 @@ public sealed class WidgetViewModel : ObservableObject
     {
         var now = _clock();
 
-        Events.Clear();
-        foreach (var occurrence in _repository.OccurrencesOn(_selectedDate))
-        {
-            Events.Add(new EventRow(occurrence, DeleteEventAsync, RequestEdit));
-        }
-
+        var occurrences = _repository.OccurrencesOn(_selectedDate);
         var todos = SelectedIsToday
             ? _repository.TodosForToday(now)
             : _repository.TodosOn(_selectedDate);
 
+        // One colour per event that anything on this screen is tied to — the events shown,
+        // and the events the todos shown are attached to, whether or not those are today.
+        var pairs = Pairing.Assign(
+            occurrences.Select(o => o.Source).Where(e => _repository.TodosAttachedTo(e.Id).Count > 0)
+                .Concat(todos.Select(LinkedEventOf).Where(e => e is not null)!));
+
+        Events.Clear();
+        foreach (var occurrence in occurrences)
+        {
+            var attached = _repository.TodosAttachedTo(occurrence.Source.Id);
+            Events.Add(new EventRow(
+                occurrence, DeleteEventAsync, RequestEdit,
+                attached, Pairing.IndexOf(pairs, occurrence.Source.Id)));
+        }
+
         Todos.Clear();
         foreach (var todo in todos)
         {
-            Todos.Add(new TodoRow(todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit));
+            var linked = LinkedEventOf(todo);
+            Todos.Add(new TodoRow(
+                todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit,
+                linked, OpenLinkedEvent, Pairing.IndexOf(pairs, linked?.Id)));
         }
 
         ExternalEvents.Clear();
@@ -394,6 +408,15 @@ public sealed class WidgetViewModel : ObservableObject
     private Task DeleteTodoAsync(TodoRow row) => _repository.DeleteTodoAsync(row.Id);
 
     private Task DeleteEventAsync(EventRow row) => _repository.DeleteEventAsync(row.Id);
+
+    private CalendarEvent? LinkedEventOf(TodoItem todo) =>
+        todo.LinkedEventId is { } id ? _repository.Events.FirstOrDefault(e => e.Id == id) : null;
+
+    /// <summary>Opens the event a todo is attached to, from the "→ …" line under the todo.</summary>
+    private void OpenLinkedEvent(TodoRow row)
+    {
+        if (row.LinkedEventId is { } id) RequestEdit(id, isTodo: false);
+    }
 
     /// <summary>
     /// Takes a copy of somebody else's meeting and opens it straight away: the reason to take

@@ -23,6 +23,7 @@
 
   <Window.Resources>
     <infra:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    <infra:PairIndexToBrushConverter x:Key="PairBrush" />
     <infra:StringToVisibilityConverter x:Key="StringToVisibility" />
 
     <!-- One cell of the month grid. -->
@@ -136,17 +137,27 @@
           <MouseBinding Command="{Binding EditCommand}" Gesture="LeftDoubleClick" />
         </Grid.InputBindings>
         <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="46" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <TextBlock Margin="0,1,8,0"
+        <!-- The pair bar. Always laid out, painted only when the row is tied to something,
+             so a tie appearing never shifts the text beside it. -->
+        <Border x:Name="Pair"
+                Width="3"
+                Margin="0,2,7,2"
+                Background="{Binding PairIndex, Converter={StaticResource PairBrush}}"
+                CornerRadius="1.5" />
+
+        <TextBlock Grid.Column="1"
+                   Margin="0,1,8,0"
                    VerticalAlignment="Top"
                    Style="{StaticResource Text.Meta}"
                    Text="{Binding TimeLabel}" />
 
-        <StackPanel Grid.Column="1">
+        <StackPanel Grid.Column="2">
           <TextBlock Style="{StaticResource Text.Body}"
                      Text="{Binding Title}"
                      TextTrimming="CharacterEllipsis" />
@@ -164,11 +175,15 @@
                        Style="{StaticResource Text.Meta}"
                        Text="{Binding TagLabel}"
                        Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
+            <TextBlock Margin="6,0,0,0"
+                       Style="{StaticResource Text.Meta}"
+                       Text="{Binding AttachedSummary}"
+                       Visibility="{Binding HasAttached, Converter={StaticResource BoolToVisibility}}" />
           </StackPanel>
         </StackPanel>
 
         <Button x:Name="Delete"
-                Grid.Column="2"
+                Grid.Column="3"
                 Command="{Binding DeleteCommand}"
                 Content="&#xE711;"
                 Style="{StaticResource Row.Delete}"
@@ -179,6 +194,9 @@
         <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
           <Setter TargetName="Delete" Property="Opacity" Value="1" />
         </Trigger>
+        <DataTrigger Binding="{Binding AttachedAllDone}" Value="True">
+          <Setter TargetName="Pair" Property="Opacity" Value="0.35" />
+        </DataTrigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -189,16 +207,26 @@
         </Grid.InputBindings>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <CheckBox Margin="0,2,9,0"
+        <!-- The pair bar. Always laid out, painted only when the row is tied to something,
+             so a tie appearing never shifts the text beside it. -->
+        <Border x:Name="Pair"
+                Width="3"
+                Margin="0,2,7,2"
+                Background="{Binding PairIndex, Converter={StaticResource PairBrush}}"
+                CornerRadius="1.5" />
+
+        <CheckBox Grid.Column="1"
+                  Margin="0,2,9,0"
                   VerticalAlignment="Top"
                   IsChecked="{Binding IsDone, Mode=TwoWay}"
                   Style="{StaticResource CheckBox.Todo}" />
 
-        <StackPanel Grid.Column="1">
+        <StackPanel Grid.Column="2">
           <TextBlock x:Name="TitleText"
                      Style="{StaticResource Text.Body}"
                      Text="{Binding Title}"
@@ -223,9 +251,20 @@
                        Text="{Binding TagLabel}"
                        Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
           </StackPanel>
+          <!-- The meeting this todo is for. Clicking it opens the meeting. -->
+          <TextBlock Cursor="Hand"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding LinkedEventLabel}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="연결된 일정 열기"
+                     Visibility="{Binding HasLinkedEvent, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock.InputBindings>
+              <MouseBinding Command="{Binding OpenLinkedCommand}" Gesture="LeftClick" />
+            </TextBlock.InputBindings>
+          </TextBlock>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal">
+        <StackPanel Grid.Column="3" Orientation="Horizontal">
           <TextBlock Margin="4,1,0,0"
                      VerticalAlignment="Top"
                      FontWeight="Bold"
@@ -247,6 +286,7 @@
         <DataTrigger Binding="{Binding IsDone}" Value="True">
           <Setter TargetName="TitleText" Property="TextDecorations" Value="Strikethrough" />
           <Setter TargetName="TitleText" Property="Foreground" Value="{DynamicResource Brush.TextTertiary}" />
+          <Setter TargetName="Pair" Property="Opacity" Value="0.35" />
         </DataTrigger>
         <DataTrigger Binding="{Binding IsOverdue}" Value="True">
           <Setter TargetName="DueText" Property="FontWeight" Value="SemiBold" />
@@ -415,15 +455,20 @@
                     </Grid.InputBindings>
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Margin="0,1,8,0"
+                    <!-- The same slot the user's own rows carry, kept empty so the lists line up. -->
+                    <Border Width="3" Margin="0,2,7,2" />
+
+                    <TextBlock Grid.Column="1"
+                               Margin="0,1,8,0"
                                VerticalAlignment="Top"
                                Style="{StaticResource Text.Meta}"
                                Text="{Binding TimeLabel}" />
 
-                    <StackPanel Grid.Column="1">
+                    <StackPanel Grid.Column="2">
                       <TextBlock Style="{StaticResource Text.Body}"
                                  Text="{Binding Title}"
                                  TextTrimming="CharacterEllipsis" />
