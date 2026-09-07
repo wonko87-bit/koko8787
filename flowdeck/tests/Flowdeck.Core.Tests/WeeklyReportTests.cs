@@ -263,6 +263,47 @@ public class WeeklyReportTests
         Assert.Single(report.Completed);
     }
 
+    [Fact]
+    public async Task WhatWasOwedToAMeetingIsListedUnderItDoneOrNot()
+    {
+        var meeting = Meeting("설계 리뷰", Mon.AddDays(2).AddHours(14), "손실 공유\n결정: B안 확정");
+        var repository = await Repository(meeting);
+        var slides = await repository.AttachTodoAsync(meeting.Id, "발표 자료 작성", Mon);
+        await repository.AttachTodoAsync(meeting.Id, "회의실 예약", Mon);
+        await repository.ToggleTodoAsync(slides.Id, Mon.AddDays(1));
+
+        var report = WeeklyReport.Build(repository, Mon, Sun);
+
+        var noted = Assert.Single(report.Meetings);
+        Assert.Equal(new[] { ("회의실 예약", false), ("발표 자료 작성", true) }, noted.AttachedTodos.Select(t => (t.Title, t.Done)));
+
+        var text = report.Render().Replace("\r\n", "\n");
+        Assert.Contains("    결정: B안 확정\n    준비: 회의실 예약 (미완)\n    준비: 발표 자료 작성 (완료)", text);
+    }
+
+    [Fact]
+    public async Task AMeetingWithNothingWrittenButSomethingAttachedIsStillReported()
+    {
+        // Nothing was said about it, but something was done for it.
+        var meeting = Meeting("빈 회의", Mon.AddHours(10), "");
+        var repository = await Repository(meeting);
+        await repository.AttachTodoAsync(meeting.Id, "자료", Mon);
+
+        var report = WeeklyReport.Build(repository, Mon, Sun);
+
+        Assert.Equal("빈 회의", Assert.Single(report.Meetings).Title);
+    }
+
+    [Fact]
+    public async Task AnOrdinaryEventWithSomethingAttachedCountsAsAMeeting()
+    {
+        var outing = Meeting("협력사 방문", Mon.AddDays(3).AddHours(10), "", adopted: false);
+        var repository = await Repository(outing);
+        await repository.AttachTodoAsync(outing.Id, "샘플 챙기기", Mon);
+
+        Assert.Single(WeeklyReport.Build(repository, Mon, Sun).Meetings);
+    }
+
     // ---- text ----------------------------------------------------------------
 
     [Fact]

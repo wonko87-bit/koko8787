@@ -6,10 +6,16 @@ using Flowdeck.Core.Parsing;
 namespace Flowdeck.Core.Services;
 
 /// <summary>An entry named in the report with, where it has one, the day it belongs to.</summary>
-public sealed record ReportItem(string Title, DateTime? When, bool HasTime, string? File);
+public sealed record ReportItem(string Title, DateTime? When, bool HasTime, string? File, bool Done = false);
 
-/// <summary>An entry whose note is read out in the report: a meeting, or an analysis run.</summary>
-public sealed record ReportNote(string Title, DateTime When, bool HasTime, NoteOutline Outline);
+/// <summary>
+/// An entry whose note is read out in the report: a meeting, or an analysis run. A meeting
+/// also carries the todos attached to it — what was owed to it, and whether it was paid.
+/// </summary>
+public sealed record ReportNote(string Title, DateTime When, bool HasTime, NoteOutline Outline, IReadOnlyList<ReportItem>? Attached = null)
+{
+    public IReadOnlyList<ReportItem> AttachedTodos => Attached ?? Array.Empty<ReportItem>();
+}
 
 /// <summary>One line pulled out of a note, with the entry it came from.</summary>
 public sealed record ReportLine(string Source, string Text);
@@ -145,13 +151,17 @@ public sealed class WeeklyReport
         {
             var source = occurrence.Source;
             var outline = NoteOutline.Parse(source.Notes);
-            var note = new ReportNote(occurrence.Title, occurrence.Start, !occurrence.IsAllDay, outline);
+            var attached = repository.TodosAttachedTo(source.Id)
+                .Select(t => new ReportItem(t.Title, t.DueAt, t.HasTime, AttachedFile.PathIn(t.Notes), t.IsDone))
+                .ToList();
+            var note = new ReportNote(occurrence.Title, occurrence.Start, !occurrence.IsAllDay, outline, attached);
 
             // A copy taken from Outlook is a meeting whatever its note says; anything else
-            // is a meeting if it was written up like one. A run is what is left.
-            if (source.Origin is not null || (outline.HasStructure && !outline.IsAnalysis))
+            // is a meeting if it was written up like one. A run is what is left. A meeting
+            // with nothing written on it and nothing attached to it has nothing to report.
+            if (source.Origin is not null || (outline.HasStructure && !outline.IsAnalysis) || attached.Count > 0)
             {
-                if (outline.Lines.Count > 0) meetings.Add(note);
+                if (outline.Lines.Count > 0 || attached.Count > 0) meetings.Add(note);
             }
             else if (outline.IsAnalysis)
             {
@@ -272,6 +282,12 @@ public sealed class WeeklyReport
                 foreach (var line in note.Outline.Lines)
                 {
                     text.Append("    ").AppendLine(Restore(line));
+                }
+
+                // What was owed to the meeting. Done or not is the whole point of listing it.
+                foreach (var todo in note.AttachedTodos)
+                {
+                    text.Append("    준비: ").Append(todo.Title).AppendLine(todo.Done ? " (완료)" : " (미완)");
                 }
             }
         }
