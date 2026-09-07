@@ -78,6 +78,9 @@ public sealed class AgendaViewModel : ObservableObject
 {
     private readonly WorkspaceRepository _repository;
     private readonly Func<DateTime> _clock;
+
+    /// <summary>The colour a tag wears, kept in settings by the app. Null leaves chips uncoloured.</summary>
+    private readonly Func<string, int>? _tagColor;
     private readonly Dispatcher? _dispatcher;
 
     private readonly HashSet<string> _selectedTags = new(StringComparer.OrdinalIgnoreCase);
@@ -86,11 +89,12 @@ public sealed class AgendaViewModel : ObservableObject
     private bool _isEmpty = true;
     private bool _matchAllTags = true;
 
-    public AgendaViewModel(WorkspaceRepository repository, AgendaMode mode, Func<DateTime>? clock = null)
+    public AgendaViewModel(WorkspaceRepository repository, AgendaMode mode, Func<DateTime>? clock = null, Func<string, int>? tagColor = null)
     {
         _repository = repository;
         Mode = mode;
         _clock = clock ?? (() => DateTime.Now);
+        _tagColor = tagColor;
 
         ClearTagsCommand = new RelayCommand(ClearTags);
         ToggleMatchModeCommand = new RelayCommand(() => MatchAllTags = !MatchAllTags);
@@ -289,7 +293,7 @@ public sealed class AgendaViewModel : ObservableObject
             {
                 group.Items.Add(new EventRow(
                     occurrence, DeleteEventAsync, RequestEdit,
-                    _repository.TodosAttachedTo(occurrence.Source.Id), Pairing.IndexOf(pairs, occurrence.Source.Id)));
+                    _repository.TodosAttachedTo(occurrence.Source.Id), Pairing.IndexOf(pairs, occurrence.Source.Id), _tagColor));
             }
 
             Groups.Add(group);
@@ -297,7 +301,7 @@ public sealed class AgendaViewModel : ObservableObject
 
         foreach (var source in _repository.RepeatingEvents().Where(e => MatchesTagFilter(e.Tags)))
         {
-            Recurring.Add(new RecurringRow(source, now, DeleteRecurringEventAsync));
+            Recurring.Add(new RecurringRow(source, now, DeleteRecurringEventAsync, _tagColor));
         }
     }
 
@@ -316,7 +320,7 @@ public sealed class AgendaViewModel : ObservableObject
             var linked = LinkedEventOf(todo);
             return new TodoRow(
                 todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit,
-                linked, OpenLinkedEvent, Pairing.IndexOf(pairs, linked?.Id));
+                linked, OpenLinkedEvent, Pairing.IndexOf(pairs, linked?.Id), _tagColor);
         }
 
         // Undated items have no day to sit under, so they collect in a group of their own
@@ -349,7 +353,7 @@ public sealed class AgendaViewModel : ObservableObject
 
         foreach (var todo in todos.Where(t => t.Recurrence.IsRepeating))
         {
-            Recurring.Add(new RecurringRow(todo, ToggleRecurringTodoAsync, DeleteRecurringTodoAsync));
+            Recurring.Add(new RecurringRow(todo, ToggleRecurringTodoAsync, DeleteRecurringTodoAsync, _tagColor));
         }
     }
 

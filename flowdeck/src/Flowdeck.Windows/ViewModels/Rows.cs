@@ -8,6 +8,15 @@ using Flowdeck.Windows.Services;
 
 namespace Flowdeck.Windows.ViewModels;
 
+/// <summary>A tag as shown on a row: its name, and the colour it wears (-1 for none). Not the filter chip of the list windows, which is a different thing with a similar name.</summary>
+public sealed record TagBadge(string Name, int Color)
+{
+    public string Label => "#" + Name;
+
+    public static IReadOnlyList<TagBadge> Of(IEnumerable<string> tags, Func<string, int>? color) =>
+        tags.Select(t => new TagBadge(t, color?.Invoke(t) ?? -1)).ToList();
+}
+
 internal static class Ko
 {
     public static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("ko-KR");
@@ -152,10 +161,12 @@ public sealed class TodoRow : ObservableObject
         Action<TodoRow>? edit = null,
         CalendarEvent? linkedEvent = null,
         Action<TodoRow>? openLinked = null,
-        int pairIndex = -1)
+        int pairIndex = -1,
+        Func<string, int>? tagColor = null)
     {
         _item = item;
         _toggle = toggle;
+        TagChips = TagBadge.Of(item.Tags, tagColor);
         IsOverdue = item.IsOverdue(now);
         DeleteCommand = new AsyncRelayCommand(() => delete(this));
         EditCommand = new RelayCommand(() => edit?.Invoke(this));
@@ -186,6 +197,8 @@ public sealed class TodoRow : ObservableObject
 
     /// <summary>Which colour this todo and its event share on this screen. -1 for none.</summary>
     public int PairIndex { get; }
+
+    public IReadOnlyList<TagBadge> TagChips { get; }
 
     public string Title => _item.Title;
 
@@ -282,10 +295,11 @@ public sealed class RecurringRow : ObservableObject
     private readonly Func<RecurringRow, Task>? _toggle;
 
     /// <summary>A repeating todo. Its due date is the occurrence currently pending.</summary>
-    public RecurringRow(TodoItem todo, Func<RecurringRow, Task> toggle, Func<RecurringRow, Task> delete)
+    public RecurringRow(TodoItem todo, Func<RecurringRow, Task> toggle, Func<RecurringRow, Task> delete, Func<string, int>? tagColor = null)
     {
         _todo = todo;
         _toggle = toggle;
+        TagChips = TagBadge.Of(todo.Tags, tagColor);
 
         Id = todo.Id;
         Title = todo.Title;
@@ -298,9 +312,10 @@ public sealed class RecurringRow : ObservableObject
     }
 
     /// <summary>A repeating event. The next occurrence is worked out from the rule.</summary>
-    public RecurringRow(CalendarEvent source, DateTime now, Func<RecurringRow, Task> delete)
+    public RecurringRow(CalendarEvent source, DateTime now, Func<RecurringRow, Task> delete, Func<string, int>? tagColor = null)
     {
         Id = source.Id;
+        TagChips = TagBadge.Of(source.Tags, tagColor);
         Title = source.Title;
         IsTodo = false;
         PatternLabel = Wrap(source.Recurrence.DescribeShort(source.Start));
@@ -316,6 +331,8 @@ public sealed class RecurringRow : ObservableObject
     public string Id { get; }
 
     public string Title { get; }
+
+    public IReadOnlyList<TagBadge> TagChips { get; }
 
     /// <summary>The repeat rule in brackets, e.g. "[매주 월,목]".</summary>
     public string PatternLabel { get; }
@@ -362,10 +379,12 @@ public sealed class EventRow : ObservableObject
         Func<EventRow, Task> delete,
         Action<EventRow>? edit = null,
         IReadOnlyList<TodoItem>? attached = null,
-        int pairIndex = -1)
+        int pairIndex = -1,
+        Func<string, int>? tagColor = null)
     {
         EditCommand = new RelayCommand(() => edit?.Invoke(this));
         Id = occurrence.Source.Id;
+        TagChips = TagBadge.Of(occurrence.Source.Tags, tagColor);
 
         var todos = attached ?? Array.Empty<TodoItem>();
         var open = todos.Count(t => !t.IsDone);
@@ -436,6 +455,8 @@ public sealed class EventRow : ObservableObject
 
     /// <summary>Which colour this event and its todos share on this screen. -1 for none.</summary>
     public int PairIndex { get; }
+
+    public IReadOnlyList<TagBadge> TagChips { get; }
 }
 
 /// <summary>

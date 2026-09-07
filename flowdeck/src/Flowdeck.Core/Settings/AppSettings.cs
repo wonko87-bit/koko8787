@@ -166,6 +166,43 @@ public sealed class AppSettings
     /// </summary>
     public string? InboxFolder { get; set; }
 
+    /// <summary>How many tag colours there are before they come round again.</summary>
+    public const int TagColorCount = 10;
+
+    /// <summary>
+    /// The colour each tag wears, as an index into the palette. Filled in as tags are first
+    /// seen, in that order, and kept — a tag's colour has to mean the same thing tomorrow,
+    /// which is the one thing the pair bars deliberately do not promise. Editable here by
+    /// hand for a tag that has to be a particular colour.
+    /// </summary>
+    public Dictionary<string, int> TagColors { get; set; } = new();
+
+    /// <summary>
+    /// The colour for a tag, assigning the next one when the tag is new. The caller saves
+    /// when <paramref name="assigned"/> comes back true; an assignment that is not written
+    /// down would be a different colour next time, which defeats the purpose.
+    /// </summary>
+    public int TagColor(string tag, out bool assigned)
+    {
+        assigned = false;
+        if (string.IsNullOrWhiteSpace(tag)) return -1;
+
+        // The dictionary comes back from JSON with the default comparer, so the match is
+        // done by hand: "#Motor" and "#motor" are one tag here as everywhere else.
+        foreach (var (name, index) in TagColors)
+        {
+            if (string.Equals(name, tag, StringComparison.OrdinalIgnoreCase))
+            {
+                return ((index % TagColorCount) + TagColorCount) % TagColorCount;
+            }
+        }
+
+        var next = TagColors.Count % TagColorCount;
+        TagColors[tag] = next;
+        assigned = true;
+        return next;
+    }
+
     /// <summary>Editable so the routing vocabulary can be tuned without a rebuild.</summary>
     public RoutingRules Routing { get; set; } = new();
 

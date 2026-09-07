@@ -19,6 +19,9 @@ public sealed class WidgetViewModel : ObservableObject
     private readonly WorkspaceRepository _repository;
     private readonly NaturalLanguageParser _parser;
     private readonly Func<DateTime> _clock;
+
+    /// <summary>The colour a tag wears, kept in settings by the app. Null leaves chips uncoloured.</summary>
+    private readonly Func<string, int>? _tagColor;
     private readonly Dispatcher? _dispatcher;
     private readonly ExternalCalendarFeed? _calendar;
 
@@ -38,11 +41,13 @@ public sealed class WidgetViewModel : ObservableObject
         WorkspaceRepository repository,
         NaturalLanguageParser parser,
         Func<DateTime>? clock = null,
-        ExternalCalendarFeed? calendar = null)
+        ExternalCalendarFeed? calendar = null,
+        Func<string, int>? tagColor = null)
     {
         _repository = repository;
         _parser = parser;
         _clock = clock ?? (() => DateTime.Now);
+        _tagColor = tagColor;
         _calendar = calendar;
 
         var today = _clock().Date;
@@ -322,7 +327,7 @@ public sealed class WidgetViewModel : ObservableObject
             var attached = _repository.TodosAttachedTo(occurrence.Source.Id);
             Events.Add(new EventRow(
                 occurrence, DeleteEventAsync, RequestEdit,
-                attached, Pairing.IndexOf(pairs, occurrence.Source.Id)));
+                attached, Pairing.IndexOf(pairs, occurrence.Source.Id), _tagColor));
         }
 
         Todos.Clear();
@@ -331,7 +336,7 @@ public sealed class WidgetViewModel : ObservableObject
             var linked = LinkedEventOf(todo);
             Todos.Add(new TodoRow(
                 todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit,
-                linked, OpenLinkedEvent, Pairing.IndexOf(pairs, linked?.Id)));
+                linked, OpenLinkedEvent, Pairing.IndexOf(pairs, linked?.Id), _tagColor));
         }
 
         ExternalEvents.Clear();

@@ -39,18 +39,41 @@ public static class PairColors
         .Select(c => { var b = new SolidColorBrush(c); b.Freeze(); return (Brush)b; })
         .ToArray();
 
+    /// <summary>
+    /// The same colours at a fifth of their strength, for the ground behind a tag chip. A
+    /// chip and a bar can share a colour without being read as the same thing: one is a
+    /// solid line, the other a pale field with a word on it.
+    /// </summary>
+    private static readonly Brush[] Tints = Colors
+        .Select(c => { var b = new SolidColorBrush(Color.FromArgb(0x38, c.R, c.G, c.B)); b.Freeze(); return (Brush)b; })
+        .ToArray();
+
     public static int Count => Colors.Length;
 
-    /// <summary>The brush for a pair index, or nothing for a row that is in no pair.</summary>
-    public static Brush For(int index) =>
-        index < 0 ? System.Windows.Media.Brushes.Transparent : Brushes[index % Brushes.Length];
+    /// <summary>The brush for an index, or null for -1 — which leaves the property at its default.</summary>
+    public static Brush? For(int index) => index < 0 ? null : Brushes[index % Brushes.Length];
+
+    public static Brush? TintFor(int index) => index < 0 ? null : Tints[index % Tints.Length];
 }
 
-/// <summary>Turns a row's pair index into the brush for its bar. -1 is no bar, as an invisible one.</summary>
+/// <summary>
+/// Turns a pair or tag index into a brush. -1 leaves the target property unset: a bar with
+/// no background is invisible, and a chip with no foreground inherits its text colour.
+/// </summary>
 public sealed class PairIndexToBrushConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
-        PairColors.For(value is int index ? index : -1);
+        PairColors.For(value is int index ? index : -1) ?? System.Windows.DependencyProperty.UnsetValue;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>The pale version, for the ground behind a tag chip.</summary>
+public sealed class PairIndexToTintBrushConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        PairColors.TintFor(value is int index ? index : -1) ?? System.Windows.DependencyProperty.UnsetValue;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();

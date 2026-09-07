@@ -116,7 +116,7 @@ public partial class App : Application, IAppShell
             repository.FollowMovedMeetingsAsync(calendar, DateTime.Now),
             "App.FollowMovedMeetings");
 
-        var widgetViewModel = new WidgetViewModel(_repository, _parser, clock: null, calendar: _calendar);
+        var widgetViewModel = new WidgetViewModel(_repository, _parser, clock: null, calendar: _calendar, tagColor: TagColor);
         widgetViewModel.Captured += OnCaptured;
 
         _widget = new WidgetWindow(widgetViewModel, _settings);
@@ -130,12 +130,12 @@ public partial class App : Application, IAppShell
         _quickAdd = new QuickAddWindow(quickAddViewModel);
 
         _eventsAgenda = new AgendaWindow(
-            new AgendaViewModel(_repository, AgendaMode.Events),
+            new AgendaViewModel(_repository, AgendaMode.Events, tagColor: TagColor),
             _settings.AgendaEventsPlacement,
             _settings);
 
         _todosAgenda = new AgendaWindow(
-            new AgendaViewModel(_repository, AgendaMode.Todos),
+            new AgendaViewModel(_repository, AgendaMode.Todos, tagColor: TagColor),
             _settings.AgendaTodosPlacement,
             _settings);
 
@@ -367,6 +367,17 @@ public partial class App : Application, IAppShell
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// The colour a tag wears. A tag seen for the first time is given the next colour and
+    /// the settings are saved on the spot, so it wears the same one after a restart.
+    /// </summary>
+    private int TagColor(string tag)
+    {
+        var index = _settings.TagColor(tag, out var assigned);
+        if (assigned) SaveSettings();
+        return index;
     }
 
     public void SaveSettings()

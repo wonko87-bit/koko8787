@@ -171,10 +171,12 @@
             <TextBlock Style="{StaticResource Text.Meta}"
                        Text="{Binding RecurrenceLabel}"
                        Visibility="{Binding RecurrenceLabel, Converter={StaticResource StringToVisibility}}" />
-            <TextBlock Margin="6,0,0,0"
-                       Style="{StaticResource Text.Meta}"
-                       Text="{Binding TagLabel}"
-                       Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
+            <ItemsControl Margin="6,0,0,0"
+                          VerticalAlignment="Center"
+                          ItemTemplate="{StaticResource TagChip}"
+                          ItemsPanel="{StaticResource TagChipPanel}"
+                          ItemsSource="{Binding TagChips}"
+                          Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
             <TextBlock Margin="6,0,0,0"
                        Style="{StaticResource Text.Meta}"
                        Text="{Binding AttachedSummary}"
@@ -246,10 +248,12 @@
                        Style="{StaticResource Text.Meta}"
                        Text="{Binding RecurrenceLabel}"
                        Visibility="{Binding RecurrenceLabel, Converter={StaticResource StringToVisibility}}" />
-            <TextBlock Margin="6,0,0,0"
-                       Style="{StaticResource Text.Meta}"
-                       Text="{Binding TagLabel}"
-                       Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
+            <ItemsControl Margin="6,0,0,0"
+                          VerticalAlignment="Center"
+                          ItemTemplate="{StaticResource TagChip}"
+                          ItemsPanel="{StaticResource TagChipPanel}"
+                          ItemsSource="{Binding TagChips}"
+                          Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
           </StackPanel>
           <!-- The meeting this todo is for. Clicking it opens the meeting. -->
           <TextBlock Cursor="Hand"
