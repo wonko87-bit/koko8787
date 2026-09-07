@@ -249,6 +249,101 @@
         </Border>
       </Grid>
 
+      <!-- ============ todos attached to this event ============ -->
+      <StackPanel Margin="0,16,0,0" Visibility="{Binding ShowAttached, Converter={StaticResource BoolToVisibility}}">
+        <Grid Margin="0,0,0,6">
+          <TextBlock VerticalAlignment="Center" Style="{StaticResource Text.Meta}" Text="연결된 할일" />
+          <Button HorizontalAlignment="Right"
+                  Padding="8,2"
+                  Command="{Binding RegisterNoteActionsCommand}"
+                  Content="{Binding RegisterNoteActionsLabel}"
+                  FontSize="11"
+                  Style="{StaticResource Button.Ghost}"
+                  ToolTip="메모에 '할일:'로 적은 줄을 이 일정에 붙은 할일로 만듭니다"
+                  Visibility="{Binding HasUnregisteredNoteActions, Converter={StaticResource BoolToVisibility}}" />
+        </Grid>
+
+        <ItemsControl ItemsSource="{Binding AttachedTodos}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Grid x:Name="Row" Margin="0,0,0,4" Background="Transparent">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <CheckBox Margin="0,0,8,0"
+                          VerticalAlignment="Center"
+                          Command="{Binding ToggleCommand}"
+                          IsChecked="{Binding IsDone, Mode=OneWay}"
+                          Style="{StaticResource CheckBox.Setting}" />
+
+                <TextBlock x:Name="Title"
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource Text.Body}"
+                           Text="{Binding Title}"
+                           TextTrimming="CharacterEllipsis" />
+
+                <TextBlock Grid.Column="2"
+                           Margin="8,0"
+                           VerticalAlignment="Center"
+                           Style="{StaticResource Text.Meta}"
+                           Text="{Binding DueLabel}" />
+
+                <Button x:Name="Detach"
+                        Grid.Column="3"
+                        Width="22"
+                        Height="22"
+                        Command="{Binding DetachCommand}"
+                        Content="&#xE711;"
+                        FontFamily="{StaticResource Font.Icon}"
+                        FontSize="9"
+                        Opacity="0.35"
+                        Style="{StaticResource Button.Icon}"
+                        ToolTip="연결만 끊습니다. 할일은 남습니다" />
+              </Grid>
+
+              <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                  <Setter TargetName="Title" Property="Opacity" Value="0.5" />
+                  <Setter TargetName="Title" Property="TextDecorations" Value="Strikethrough" />
+                </DataTrigger>
+                <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Detach" Property="Opacity" Value="1" />
+                </Trigger>
+              </DataTemplate.Triggers>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border Margin="0,2,0,0" Style="{StaticResource Field}">
+          <TextBox KeyDown="OnAttachKeyDown"
+                   Style="{StaticResource TextBox.Flat}"
+                   Text="{Binding NewAttachedTitle, UpdateSourceTrigger=PropertyChanged}"
+                   ToolTip="이 일정을 위해 할 일. Enter로 추가되고, 기한은 일정 시각으로 잡힙니다" />
+        </Border>
+        <TextBlock Margin="2,4,0,0"
+                   Style="{StaticResource Text.Meta}"
+                   Text="Enter로 추가. 기한은 이 일정의 시각이 되고, 일정을 옮기면 같이 옮겨집니다" />
+      </StackPanel>
+
+      <!-- ============ the event this todo is attached to ============ -->
+      <Grid Margin="0,14,0,0" Visibility="{Binding HasLinkedEvent, Converter={StaticResource BoolToVisibility}}">
+        <TextBlock VerticalAlignment="Center"
+                   Style="{StaticResource Text.Meta}"
+                   Text="{Binding LinkedEventLabel}"
+                   TextTrimming="CharacterEllipsis" />
+        <Button HorizontalAlignment="Right"
+                Padding="8,2"
+                Command="{Binding DetachSelfCommand}"
+                Content="연결 끊기"
+                FontSize="11"
+                Style="{StaticResource Button.Ghost}" />
+      </Grid>
+
       <TextBlock Margin="2,14,0,0"
                  Style="{StaticResource Text.Meta}"
                  Text="{Binding Status}"

@@ -242,6 +242,70 @@ public sealed class WorkspaceRepository
         }
     }
 
+    // ---- todos attached to an event -------------------------------------------
+
+    /// <summary>
+    /// Makes a todo that belongs to an event: the slides for a meeting, the room to book,
+    /// the follow-up from it. Due when the event is, unless told otherwise later, and it
+    /// carries the event's tags — it is about the same thing. Moving the event moves it.
+    ///
+    /// Made from the event's own window rather than from a line of text, because the one
+    /// thing a line cannot say cheaply is which event it means.
+    /// </summary>
+    public async Task<TodoItem> AttachTodoAsync(string eventId, string title, DateTime now)
+    {
+        var source = _workspace.Events.FirstOrDefault(e => e.Id == eventId)
+            ?? throw new InvalidOperationException("일정을 찾을 수 없습니다");
+
+        var todo = new TodoItem
+        {
+            Title = Named(title),
+            DueAt = source.Start,
+            HasTime = !source.IsAllDay,
+            Tags = new List<string>(source.Tags),
+            LinkedEventId = source.Id,
+            SourceText = title.Trim(),
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+
+        _workspace.Todos.Add(todo);
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
+
+        return todo;
+    }
+
+    /// <summary>The todos that belong to an event, open ones first and then by when they are due.</summary>
+    public IReadOnlyList<TodoItem> TodosAttachedTo(string eventId) =>
+        _workspace.Todos
+            .Where(t => t.LinkedEventId == eventId)
+            .OrderBy(t => t.IsDone)
+            .ThenBy(t => t.DueAt ?? DateTime.MaxValue)
+            .ThenBy(t => t.CreatedAt)
+            .ToList();
+
+    /// <summary>
+    /// Cuts a todo loose from its event. The todo stays; only the tie goes. Also clears
+    /// the event's own pointer if it was pointing back at this todo.
+    /// </summary>
+    public async Task DetachTodoAsync(string todoId)
+    {
+        var todo = _workspace.Todos.FirstOrDefault(t => t.Id == todoId);
+        if (todo?.LinkedEventId is null) return;
+
+        var eventId = todo.LinkedEventId;
+        todo.LinkedEventId = null;
+
+        foreach (var calendarEvent in _workspace.Events.Where(e => e.Id == eventId && e.LinkedTodoId == todoId))
+        {
+            calendarEvent.LinkedTodoId = null;
+        }
+
+        await SaveAsync();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>
     /// Note the deliberate absence of ConfigureAwait(false) here and in every mutation:
     /// <see cref="Changed"/> has to reach the caller's context, because on the desktop the

@@ -2,9 +2,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Flowdeck.Core.Integration;
 using Flowdeck.Core.Models;
+using Flowdeck.Core.Parsing;
 using Flowdeck.Core.Services;
 using Flowdeck.Windows.Infrastructure;
 
@@ -37,6 +39,8 @@ public sealed class EditViewModel : ObservableObject
 
     /// <summary>The file this entry is about, when it came from an application that named one.</summary>
     private readonly string? _file;
+
+    private string _newAttachedTitle = string.Empty;
 
     private EditViewModel(
         WorkspaceRepository repository,
@@ -72,6 +76,11 @@ public sealed class EditViewModel : ObservableObject
         DeleteCommand = new AsyncRelayCommand(DeleteAsync);
         OpenFileCommand = new RelayCommand(OpenFile, () => CanOpenFile);
         ShowFileCommand = new RelayCommand(ShowFile, () => HasFile);
+        AttachCommand = new AsyncRelayCommand(AttachAsync);
+        RegisterNoteActionsCommand = new AsyncRelayCommand(RegisterNoteActionsAsync);
+        DetachSelfCommand = new AsyncRelayCommand(DetachSelfAsync);
+
+        LoadAttached();
     }
 
     /// <summary>
@@ -125,6 +134,118 @@ public sealed class EditViewModel : ObservableObject
 
     public ICommand ShowFileCommand { get; }
 
+    public ICommand AttachCommand { get; }
+
+    public ICommand RegisterNoteActionsCommand { get; }
+
+    public ICommand DetachSelfCommand { get; }
+
+    // ---- todos attached to this event ----------------------------------------
+
+    /// <summary>Only an event has things attached to it; a todo is one of those things.</summary>
+    public bool ShowAttached => !IsTodo;
+
+    public ObservableCollection<AttachedTodoRow> AttachedTodos { get; } = new();
+
+    public bool HasAttachedTodos => AttachedTodos.Count > 0;
+
+    /// <summary>Typed here and attached with Enter. Due when the event is; the date can be changed on the todo afterwards.</summary>
+    public string NewAttachedTitle
+    {
+        get => _newAttachedTitle;
+        set => Set(ref _newAttachedTitle, value);
+    }
+
+    /// <summary>
+    /// The 할일: lines in the note that are not yet todos. Read from the box as it is now
+    /// rather than as it was saved, because the moment a person wants this is the moment
+    /// after typing them.
+    /// </summary>
+    public IReadOnlyList<string> UnregisteredNoteActions
+    {
+        get
+        {
+            if (IsTodo) return Array.Empty<string>();
+
+            var have = new HashSet<string>(AttachedTodos.Select(t => t.Title), StringComparer.OrdinalIgnoreCase);
+            return NoteOutline.Parse(Notes).Actions.Where(a => !have.Contains(a)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+    }
+
+    public bool HasUnregisteredNoteActions => UnregisteredNoteActions.Count > 0;
+
+    public string RegisterNoteActionsLabel => $"메모의 할일 {UnregisteredNoteActions.Count}건 등록";
+
+    // ---- the event this todo is attached to ------------------------------------
+
+    public bool HasLinkedEvent => _todo?.LinkedEventId is not null && LinkedEvent is not null;
+
+    private CalendarEvent? LinkedEvent =>
+        _todo?.LinkedEventId is { } id ? _repository.Events.FirstOrDefault(e => e.Id == id) : null;
+
+    public string LinkedEventLabel =>
+        LinkedEvent is { } linked
+            ? $"→ {linked.Title} · {linked.Start.ToString(linked.IsAllDay ? "M'/'d (ddd)" : "M'/'d (ddd) HH:mm", Ko.Culture)}"
+            : string.Empty;
+
+    private void LoadAttached()
+    {
+        AttachedTodos.Clear();
+        if (_event is null) return;
+
+        var now = _clock();
+        foreach (var todo in _repository.TodosAttachedTo(_event.Id))
+        {
+            AttachedTodos.Add(new AttachedTodoRow(todo, now, ToggleAttachedAsync, DetachAsync));
+        }
+
+        Raise(nameof(HasAttachedTodos));
+        Raise(nameof(UnregisteredNoteActions));
+        Raise(nameof(HasUnregisteredNoteActions));
+        Raise(nameof(RegisterNoteActionsLabel));
+    }
+
+    private async Task AttachAsync()
+    {
+        if (_event is null || string.IsNullOrWhiteSpace(_newAttachedTitle)) return;
+
+        await _repository.AttachTodoAsync(_event.Id, _newAttachedTitle, _clock());
+        NewAttachedTitle = string.Empty;
+        LoadAttached();
+    }
+
+    private async Task RegisterNoteActionsAsync()
+    {
+        if (_event is null) return;
+
+        var pending = UnregisteredNoteActions;
+        foreach (var title in pending) await _repository.AttachTodoAsync(_event.Id, title, _clock());
+
+        Status = pending.Count == 0 ? string.Empty : $"할일 {pending.Count}건을 이 일정에 붙였습니다";
+        LoadAttached();
+    }
+
+    private async Task ToggleAttachedAsync(AttachedTodoRow row)
+    {
+        await _repository.ToggleTodoAsync(row.Id, _clock());
+        LoadAttached();
+    }
+
+    private async Task DetachAsync(AttachedTodoRow row)
+    {
+        await _repository.DetachTodoAsync(row.Id);
+        LoadAttached();
+    }
+
+    private async Task DetachSelfAsync()
+    {
+        if (_todo is null) return;
+
+        await _repository.DetachTodoAsync(_todo.Id);
+        Raise(nameof(HasLinkedEvent));
+        Raise(nameof(LinkedEventLabel));
+    }
+
     // ---- the file this entry is about ---------------------------------------
 
     /// <summary>
@@ -164,7 +285,14 @@ public sealed class EditViewModel : ObservableObject
     public string Notes
     {
         get => _notes;
-        set => Set(ref _notes, value);
+        set
+        {
+            if (!Set(ref _notes, value)) return;
+
+            Raise(nameof(UnregisteredNoteActions));
+            Raise(nameof(HasUnregisteredNoteActions));
+            Raise(nameof(RegisterNoteActionsLabel));
+        }
     }
 
     public bool HasDate
@@ -480,4 +608,36 @@ public sealed class EditViewModel : ObservableObject
             .Where(t => t.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+}
+
+/// <summary>One todo attached to the event being edited: tick it, or cut it loose.</summary>
+public sealed class AttachedTodoRow
+{
+    public AttachedTodoRow(TodoItem todo, DateTime now, Func<AttachedTodoRow, Task> toggle, Func<AttachedTodoRow, Task> detach)
+    {
+        Id = todo.Id;
+        Title = todo.Title;
+        IsDone = todo.IsDone;
+        IsOverdue = !todo.IsDone && todo.DueAt is { } due && due < now;
+        DueLabel = todo.DueAt is { } at
+            ? at.ToString(todo.HasTime ? "M'/'d (ddd) HH:mm" : "M'/'d (ddd)", Ko.Culture)
+            : string.Empty;
+
+        ToggleCommand = new AsyncRelayCommand(() => toggle(this));
+        DetachCommand = new AsyncRelayCommand(() => detach(this));
+    }
+
+    public string Id { get; }
+
+    public string Title { get; }
+
+    public bool IsDone { get; }
+
+    public bool IsOverdue { get; }
+
+    public string DueLabel { get; }
+
+    public ICommand ToggleCommand { get; }
+
+    public ICommand DetachCommand { get; }
 }

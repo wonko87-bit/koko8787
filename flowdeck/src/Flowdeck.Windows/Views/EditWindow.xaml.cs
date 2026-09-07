@@ -51,6 +51,18 @@ public partial class EditWindow : Window
         }
     }
 
+    /// <summary>
+    /// Enter in the attach box attaches. Without this it would reach the window's default
+    /// button and save-and-close, which is the opposite of what typing a todo here means.
+    /// </summary>
+    private void OnAttachKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || DataContext is not EditViewModel viewModel) return;
+
+        e.Handled = true;
+        if (viewModel.AttachCommand.CanExecute(null)) viewModel.AttachCommand.Execute(null);
+    }
+
     private void OnHeaderDrag(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left) return;
