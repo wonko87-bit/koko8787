@@ -112,7 +112,8 @@ public sealed class CalendarWidget : AppWidgetProvider
         var options = manager.GetAppWidgetOptions(id);
         var resources = context.Resources;
         var density = resources?.DisplayMetrics?.Density ?? 2f;
-        var landscape = resources?.Configuration?.Orientation == Orientation.Landscape;
+        // Spelled out: Android.Widget has an Orientation of its own, and both are in scope here.
+        var landscape = resources?.Configuration?.Orientation == Android.Content.Res.Orientation.Landscape;
 
         var minWidth = options?.GetInt(AppWidgetManager.OptionAppwidgetMinWidth) ?? 0;
         var maxWidth = options?.GetInt(AppWidgetManager.OptionAppwidgetMaxWidth) ?? 0;
