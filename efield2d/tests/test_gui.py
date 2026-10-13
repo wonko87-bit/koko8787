@@ -207,7 +207,8 @@ def test_creepage_path_and_csv(win, app, tmp_path):
     win.side_cb.setCurrentIndex(win.side_cb.findText("air"))
     win.path_n_sp.setValue(120)
     win.on_path()
-    s, d = win.path_data
+    s, d = win.path_data["poly"], win.path_data["data"]
+    s = type("S", (), {"polygon": s})            # the code below reads s.polygon
     assert len(d["s"]) == 120 and not np.isnan(d["Et"]).any()
     # along a surface the tangential field dominates and it is continuous across the interface
     side_air = post.along_path(win.result.sol, s.polygon, 120, region=0)
@@ -253,3 +254,141 @@ def test_run_reports_model_errors_without_crashing(win, app, monkeypatch):
     monkeypatch.setattr(mainwindow.QMessageBox, "warning", lambda *a, **k: shown.append(a[2]))
     win.on_run()                                  # nothing assigned yet
     assert shown and "영역" in shown[0] and win.result is None
+
+
+# ------------------------------------------------------------- picked-segment paths
+def pick(win, app, x, y, key=None):
+    """Click in path mode, like a mouse press on the canvas."""
+    win.canvas._on_press(event(win, "button_press_event", x, y, key))
+    app.processEvents()
+
+
+def run_es(win, app):
+    setup_model(win, app)
+    win.doc.set_settings(symmetry="axisym", mesh_size=2.5, edge_size=0.5, edge_transition=5.0, mode="es")
+    win.on_run()
+    win.side_cb.setCurrentIndex(win.side_cb.findText("air"))
+
+
+def test_pick_single_segments_toggle_and_info(win, app):
+    win.path_mode_chk.setChecked(True)
+    assert win.canvas.path_mode
+    pick(win, app, 12, 25)                                  # spacer's right edge: one straight piece
+    assert win.canvas.path_keys == [(2, 1)]
+    assert "1개" in win.path_info.text() and "40.000" in win.path_info.text()
+    assert win.selected_ids() == []                         # picking does not select shapes
+    pick(win, app, 12, 25)
+    assert win.canvas.path_keys == []
+    pick(win, app, 6, 5)                                    # spacer's bottom edge (line)
+    pick(win, app, 12, 25)
+    assert sorted(win.canvas.path_keys) == [(2, 0), (2, 1)]
+
+
+def test_shift_click_picks_the_tangent_chain(win, app):
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 14, 51, key="shift")                     # straight side of the filleted electrode
+    keys = sorted(win.canvas.path_keys)
+    assert [k[1] for k in keys] == [0, 1, 2, 3, 4]          # line, fillet, line, fillet, line - not the 90 deg corner
+    assert {k[0] for k in keys} == {3}
+    total = 11 + 11 + 6 + 2 * (3 * math.pi / 2)
+    assert f"{total:.3f}" in win.path_info.text()
+    pick(win, app, 14, 51, key="shift")                     # shift-click again removes the whole run
+    assert win.canvas.path_keys == []
+
+
+def test_path_from_picked_segments_with_cumulative_metrics(win, app):
+    run_es(win, app)
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 12, 25)                                  # spacer surface, z = 5 .. 45
+    win.on_path()
+    pd = win.path_data
+    d, m = pd["data"], pd["metrics"]
+    assert pd["label"] == "선택 조각 1개"
+    assert m["length"] == pytest.approx(0.040)
+    # default direction runs from the high-potential end (the electrode, z = 45) down to the plate
+    assert d["xy"][0] == pytest.approx([12, 45]) and d["xy"][-1] == pytest.approx([12, 5])
+    assert m["dV"] == pytest.approx(m["dV_nodal"], rel=0.1)
+    assert np.all(np.diff(m["cum_abs"]) >= 0) and m["cum_abs"][-1] >= m["dV"] * 0.999
+    # the flip option reverses it, and the metrics stay consistent
+    win.flip_chk.setChecked(True)
+    win.on_path()
+    assert win.path_data["data"]["xy"][0] == pytest.approx([12, 5])
+    assert win.path_data["metrics"]["dV"] == pytest.approx(m["dV"], rel=1e-6)
+    assert win.canvas.path_ends is not None
+    assert "누적" in win.path_stats.text() and "평균" in win.path_stats.text()
+
+
+def test_threshold_defaults_to_the_allowable_field_of_the_evaluated_side(win, app):
+    run_es(win, app)
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 12, 25)
+    win.on_path()
+    assert win.path_data["threshold"] == pytest.approx(3e6)          # air allowable 3 kV/mm
+    win.thr_sp.setValue(0.5)
+    win.on_path()
+    assert win.path_data["threshold"] == pytest.approx(0.5e6)
+    m = win.path_data["metrics"]
+    assert 0 < m["len_above"] <= m["length"] and m["cum_len"][-1] == m["len_above"]
+    win.side_cb.setCurrentIndex(0)                                    # side "자동": no allowable known
+    win.thr_sp.setValue(0.0)
+    win.on_path()
+    assert win.path_data["threshold"] == 0.0 and win.path_data["metrics"]["len_above"] == 0.0
+
+
+def test_path_along_an_electrode_surface_is_equipotential(win, app):
+    """Walking along the filleted HV electrode (tangent chain): Et ~ 0, so the
+    cumulative voltage drop is ~0 while the normal field is large."""
+    run_es(win, app)
+    win.side_cb.setCurrentIndex(0)           # side "auto": the bottom face touches the spacer, not air
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 14, 51, key="shift")
+    win.on_path()
+    d, m = win.path_data["data"], win.path_data["metrics"]
+    assert m["n_nan"] == 0
+    assert np.nanmax(np.abs(d["phi"])) <= 100e3 * (1 + 1e-9)          # never above the electrode potential
+    assert m["dV"] < 0.02 * 100e3
+    assert np.nanmax(np.abs(d["En"])) > 10 * m["mean_abs"]
+
+
+def test_path_not_touching_the_chosen_side_is_flagged_not_invented(win, app):
+    """Evaluating the electrode's underside from the *air* side: the air is not there, so
+    those points get no value (and a warning) instead of a neighbouring triangle's field."""
+    run_es(win, app)                         # side = air
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 14, 51, key="shift")
+    win.on_path()
+    d, m = win.path_data["data"], win.path_data["metrics"]
+    assert m["n_nan"] > 0 and "접하지 않음" in win.path_stats.text()
+    assert np.nanmax(np.abs(d["phi"])) <= 100e3 * (1 + 1e-9)
+    bottom = (d["xy"][:, 1] < 45.2) & (d["xy"][:, 0] < 10)             # the part lying on the spacer
+    assert np.isnan(d["Et"][bottom]).all()
+
+
+def test_disconnected_or_missing_path_gives_a_clear_message(win, app, monkeypatch):
+    run_es(win, app)
+    shown = []
+    from efield2d.app import mainwindow
+    monkeypatch.setattr(mainwindow.QMessageBox, "warning", lambda *a, **k: shown.append(a[2]))
+    win.on_path()                                                     # nothing picked or selected
+    assert shown and "경로가 없습니다" in shown[-1]
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 12, 25)                                            # spacer right edge
+    pick(win, app, 14, 51)                                            # a piece of the electrode: not connected
+    win.on_path()
+    assert "이어지지 않습니다" in shown[-1] and "2개 덩어리" in shown[-1]
+
+
+def test_picked_segments_are_dropped_when_their_shape_changes(win, app):
+    win.path_mode_chk.setChecked(True)
+    pick(win, app, 12, 25)
+    assert win.canvas.path_keys
+    win.doc.delete([2])
+    assert win.canvas.path_keys == [] and "없음" in win.path_info.text()
+    pick(win, app, 14, 51)
+    assert win.canvas.path_keys
+    sid = win.canvas.path_keys[0][0]
+    v = list(win.doc.shape(sid).polygon.vertices)
+    win.doc.set_vertices(sid, [(x + 0.0, y, b) for x, y, b in v])     # same vertex count: kept
+    assert win.canvas.path_keys
+    win.doc.set_vertices(sid, v + [(0.0, 50.0, 0.0)])                  # vertex count changed: dropped
+    assert win.canvas.path_keys == []

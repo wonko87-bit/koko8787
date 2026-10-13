@@ -85,28 +85,30 @@ class _Locator:
         l = np.linalg.solve(T, [x - p[2, 0], y - p[2, 1]])
         return np.array([l[0], l[1], 1.0 - l.sum()])
 
+    # how far outside a triangle (in barycentric units, 0 = on its edge) a point may be and
+    # still count as belonging to it. Covers points on a curved boundary, which lie a
+    # sagitta outside the straight mesh edges; anything farther is "not in the mesh".
+    BARY_TOL = 0.25
+
     def find(self, x, y, region):
-        """Triangle at (x, y). With `region`, the triangle of that region
-        nearest to the point (so a point on an interface can be evaluated from
-        a chosen side)."""
+        """Triangle at (x, y), or -1. With `region`, only a triangle of that region
+        (so a point on an interface can be evaluated from a chosen side); -1 when the
+        point does not touch that region."""
         mesh = self.sol.mesh
         t = int(self.finder(x, y))
-        if region is None:
+        if t >= 0 and (region is None or mesh.region[t] == region):
             return t
-        if t >= 0 and mesh.region[t] == region:
-            return t
-        cand = np.flatnonzero(mesh.region == region)
+        cand = np.arange(mesh.n_tris) if region is None else np.flatnonzero(mesh.region == region)
         if len(cand) == 0:
             return -1
         d = np.hypot(self.cent[cand, 0] - x, self.cent[cand, 1] - y)
         near = cand[np.argsort(d)[:12]]
         best, best_score = -1, np.inf
         for k in near:
-            lam = self._bary(k, x, y)
-            score = max(0.0, -lam.min())
+            score = max(0.0, -self._bary(k, x, y).min())
             if score < best_score:
                 best, best_score = int(k), score
-        return best
+        return best if best_score <= self.BARY_TOL else -1
 
 
 def path_points(poly: Polygon, n: int = 200, unit: float = 1.0):
@@ -147,7 +149,8 @@ def path_points(poly: Polygon, n: int = 200, unit: float = 1.0):
 
 def sample(sol: Solution, xy: np.ndarray, region: int | None = None):
     """Evaluate phi and E at points `xy` (geometry units). Returns dict with
-    'phi' (K,), 'E' (K,2); points outside the mesh give NaN."""
+    'phi' (K,), 'E' (K,2); points outside the mesh - or, with `region`, not touching
+    that region - give NaN."""
     loc = _Locator(sol)
     u = sol.problem.unit
     mesh = sol.mesh
@@ -158,7 +161,8 @@ def sample(sol: Solution, xy: np.ndarray, region: int | None = None):
         t = loc.find(xm, ym, region)
         if t < 0:
             continue
-        lam = loc._bary(t, xm, ym)
+        lam = np.clip(loc._bary(t, xm, ym), 0.0, 1.0)      # never extrapolate the potential
+        lam /= lam.sum()
         phi[i] = (lam * sol.phi[mesh.tris[t]]).sum()
         E[i] = loc.E[t]
     return {"phi": phi, "E": E}
@@ -177,6 +181,44 @@ def along_path(sol: Solution, poly: Polygon, n: int = 200, region: int | None = 
         "s": s, "xy": xy, "phi": r["phi"],
         "Et": (E * tang).sum(axis=1), "En": (E * nrm).sum(axis=1),
         "Emag": np.sqrt((np.abs(E) ** 2).sum(axis=1)),
+    }
+
+
+def path_metrics(data: dict, threshold: float = 0.0, component: str = "Et") -> dict:
+    """Cumulative / summary quantities along a path from `along_path`.
+
+    component  "Et" (tangential, the creepage field) or "E" (total) decides which
+               field is compared with `threshold` (V/m; 0 = no threshold).
+    Returns, all SI (m, V, V/m):
+      cum_V      cumulative integral of Et ds  (= V(0) - V(s); complex for AC)
+      cum_abs    cumulative integral of |Et| ds
+      cum_len    cumulative path length where the field is >= threshold
+      length, mean_abs (= integral|Et|ds / L), mean_dv (= |V(0)-V(L)| / L),
+      max, s_at_max, dV, dV_nodal (|phi(0)-phi(L)|, a cross-check of dV),
+      len_above, frac_above, n_nan (points that fell outside the mesh, treated as 0).
+    Integrals use the trapezoid rule; the field itself is piecewise constant per
+    element, so refine the mesh near the path for smooth curves."""
+    s = np.asarray(data["s"])
+    et = np.nan_to_num(np.asarray(data["Et"]))
+    n_nan = int(np.isnan(np.asarray(data["Et"])).sum())
+    e = np.abs(et) if component == "Et" else np.nan_to_num(np.asarray(data["Emag"]))
+    ds = np.diff(s)
+    mid = 0.5 * (e[1:] + e[:-1])
+    zero = np.zeros(1, dtype=et.dtype)
+    cum_v = np.concatenate([zero, np.cumsum(0.5 * (et[1:] + et[:-1]) * ds)])
+    cum_abs = np.r_[0.0, np.cumsum(0.5 * (np.abs(et[1:]) + np.abs(et[:-1])) * ds)]
+    above = (mid >= threshold) if threshold > 0 else np.zeros_like(mid, dtype=bool)
+    cum_len = np.r_[0.0, np.cumsum(ds * above)]
+    L = float(s[-1] - s[0])
+    k = int(np.argmax(e))
+    phi = np.asarray(data["phi"])
+    return {
+        "cum_V": cum_v, "cum_abs": cum_abs, "cum_len": cum_len,
+        "length": L, "mean_abs": float(cum_abs[-1] / L), "mean_dv": float(abs(cum_v[-1]) / L),
+        "max": float(e[k]), "s_at_max": float(s[k] - s[0]),
+        "dV": float(abs(cum_v[-1])), "dV_nodal": float(abs(phi[0] - phi[-1])),
+        "len_above": float(cum_len[-1]), "frac_above": float(cum_len[-1] / L),
+        "n_nan": n_nan,
     }
 
 

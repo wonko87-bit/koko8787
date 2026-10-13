@@ -309,6 +309,14 @@ def _chains(prims: list[tuple[str, _Prim]], snap: float):
         yield to_poly(chain, True, prims[i][0])
 
 
+def join_segments(segments, snap: float = 1e-3) -> list[Polygon]:
+    """Join `Segment`s end to end (within `snap`); returns one Polygon per
+    connected chain (open or closed, vertices in travel order)."""
+    prims = [("", (s.p0[0], s.p0[1], s.p1[0], s.p1[1], s.bulge)) for s in segments
+             if s.p0 != s.p1]
+    return [poly for _, poly, _ in _chains(prims, snap)]
+
+
 # ---------------------------------------------------------------- assignment
 @dataclass
 class Assignment:

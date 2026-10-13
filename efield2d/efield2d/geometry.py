@@ -38,6 +38,27 @@ class Segment:
         a_start = math.atan2(sy - cy, sx - cx)
         return (cx, cy), radius, a_start, abs(theta)
 
+    def length(self) -> float:
+        if self.bulge == 0.0:
+            return math.hypot(self.p1[0] - self.p0[0], self.p1[1] - self.p0[1])
+        _, r, _, sweep = self.arc()
+        return r * sweep
+
+    def tangents(self):
+        """Unit tangent vectors at p0 and p1, in the direction of travel p0 -> p1."""
+        (x0, y0), (x1, y1) = self.p0, self.p1
+        dx, dy = x1 - x0, y1 - y0
+        c = math.hypot(dx, dy)
+        ux, uy = dx / c, dy / c
+        if self.bulge == 0.0:
+            return (ux, uy), (ux, uy)
+        h = 2.0 * math.atan(self.bulge)          # half of the signed included angle
+
+        def rot(a):
+            ca, sa = math.cos(a), math.sin(a)
+            return (ux * ca - uy * sa, ux * sa + uy * ca)
+        return rot(-h), rot(h)
+
     def distance(self, x: float, y: float) -> float:
         """Distance from (x, y) to this segment."""
         if self.bulge == 0.0:

@@ -13,7 +13,7 @@ from matplotlib.tri import Triangulation
 from PySide6.QtCore import Signal
 
 from .. import post
-from ..geometry import outline_xy
+from ..geometry import Polygon, outline_xy
 from .document import Document, DocShape
 
 # Korean-capable fonts first (Windows, macOS, Linux), then the matplotlib default
@@ -32,6 +32,7 @@ class Canvas(FigureCanvasQTAgg):
     selectionRequested = Signal(int, bool)   # shape id (-1 = empty space), additive?
     dragFinished = Signal(int)               # shape id whose vertex was dragged
     cursorInfo = Signal(str)
+    segmentClicked = Signal(int, int, bool)  # shape id, segment index, whole tangent run?
 
     def __init__(self, doc: Document):
         fig = Figure(figsize=(7, 6), layout="constrained")
@@ -45,6 +46,10 @@ class Canvas(FigureCanvasQTAgg):
         self.edit_mode = False
         self.snap = 0.0
         self.toolbar = None
+        # creepage path: picked outline segments (shape id, segment index)
+        self.path_mode = False
+        self.path_keys: list[tuple[int, int]] = []
+        self.path_ends = None        # (start xy, end xy) of the analysed path
         # result state
         self.result = None
         self.quantity = "E"          # "E" | "phi"
@@ -111,6 +116,7 @@ class Canvas(FigureCanvasQTAgg):
             self._draw_shape(s, thin=showing)
         if self.doc.settings.symmetry == "axisym" and self.doc.shapes:
             ax.axvline(0, color="gray", lw=0.8, ls="-.")
+        self._draw_path()
 
         if lim is not None:
             ax.set_xlim(*lim[0])
@@ -118,6 +124,24 @@ class Canvas(FigureCanvasQTAgg):
         elif self.doc.shapes:
             self.fit_view()
         self.draw_idle()
+
+    def _draw_path(self):
+        ax = self.ax
+        for sid, idx in self.path_keys:
+            try:
+                seg = self.doc.shape(sid).polygon.segments()[idx]
+            except (KeyError, IndexError):
+                continue
+            xy = np.array(outline_xy(Polygon([(seg.p0[0], seg.p0[1], seg.bulge),
+                                              (seg.p1[0], seg.p1[1], 0.0)], closed=False)))
+            ax.plot(xy[:, 0], xy[:, 1], color="#00a6a6", lw=4.0, alpha=0.9, zorder=7,
+                    solid_capstyle="butt")
+        if self.path_ends is not None:
+            (x0, y0), (x1, y1) = self.path_ends
+            ax.plot([x0], [y0], "o", ms=9, mfc="#2ca02c", mec="k", zorder=10)
+            ax.plot([x1], [y1], "o", ms=9, mfc="#d62728", mec="k", zorder=10)
+            ax.annotate("시작", (x0, y0), xytext=(6, 6), textcoords="offset points", fontsize=8, zorder=10)
+            ax.annotate("끝", (x1, y1), xytext=(6, 6), textcoords="offset points", fontsize=8, zorder=10)
 
     def _draw_shape(self, s: DocShape, thin: bool):
         ax = self.ax
@@ -191,6 +215,17 @@ class Canvas(FigureCanvasQTAgg):
                   if s.closed and MPath(np.array(outline_xy(s.polygon))).contains_point((x, y))]
         return min(inside, key=lambda s: s.area).id if inside else None
 
+    def hit_segment(self, x: float, y: float, tol_px: float = 8.0):
+        """(shape id, segment index) of the outline piece nearest to (x, y), or None."""
+        tol = self._px_to_data(tol_px)
+        best, best_d = None, tol
+        for s in self.doc.shapes:
+            for i, seg in enumerate(s.polygon.segments()):
+                d = seg.distance(x, y)
+                if d <= best_d:
+                    best, best_d = (s.id, i), d
+        return best
+
     def _nearest_vertex(self, sid: int, x: float, y: float, tol_px: float = 9.0):
         s = self.doc.shape(sid)
         tol = self._px_to_data(tol_px)
@@ -214,6 +249,11 @@ class Canvas(FigureCanvasQTAgg):
         if ev.inaxes is not self.ax or ev.button != 1 or self._tool_active():
             return
         x, y = ev.xdata, ev.ydata
+        if self.path_mode:
+            hit = self.hit_segment(x, y)
+            if hit is not None:
+                self.segmentClicked.emit(hit[0], hit[1], ev.key == "shift")
+            return
         if self.edit_mode and len(self.selected) == 1:
             sid = next(iter(self.selected))
             i = self._nearest_vertex(sid, x, y)

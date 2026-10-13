@@ -147,6 +147,36 @@ class Document:
         self._next_id += 1
         return self._next_id - 1
 
+    def tangent_run(self, sid: int, idx: int, tol_deg: float = 15.0) -> list[int]:
+        """Indices of the segments of shape `sid` that continue `idx` smoothly (tangent
+        direction changes by less than `tol_deg` at every joint) - like a CAD
+        'select tangent chain': a line + fillet arc + line, or a flattened spline."""
+        s = self.shape(sid)
+        segs = s.polygon.segments()
+        n = len(segs)
+        cos_tol = math.cos(math.radians(tol_deg))
+
+        def joined(i, j):
+            a, b = segs[i].tangents()[1], segs[j].tangents()[0]
+            return a[0] * b[0] + a[1] * b[1] >= cos_tol
+
+        run = [idx]
+        i = idx
+        while True:
+            j = (i + 1) % n if s.closed else i + 1
+            if j >= n or j in run or not joined(i, j):
+                break
+            run.append(j)
+            i = j
+        i = idx
+        while True:
+            j = (i - 1) % n if s.closed else i - 1
+            if j < 0 or j in run or not joined(j, i):
+                break
+            run.insert(0, j)
+            i = j
+        return run
+
     # ------------------------------------------------------------- shapes
     def load_dxf(self, path: str, *, replace: bool = True, **kw):
         model = import_dxf(path, **kw)

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from .. import post
+from ..dxf_io import join_segments
 from ..geometry import Polygon
 from ..materials import Material
 from .canvas import Canvas
@@ -181,6 +182,7 @@ class MainWindow(QMainWindow):
         self.canvas.toolbar = self.nav
         self.canvas.selectionRequested.connect(self.on_canvas_select)
         self.canvas.dragFinished.connect(self.on_drag_finished)
+        self.canvas.segmentClicked.connect(self.on_segment_clicked)
         self.canvas.cursorInfo.connect(lambda t: self.statusBar().showMessage(t))
 
         self.tabs = QTabWidget()
@@ -194,6 +196,7 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(self.tabs)
         self._build_docks()
+        self._build_path_dock()
         self._build_menu()
         self.doc.listeners.append(self.on_doc_changed)
         self.refresh_all()
@@ -346,31 +349,72 @@ class MainWindow(QMainWindow):
         d.setWidget(w)
         self.addDockWidget(Qt.RightDockWidgetArea, d)
         self.resizeDocks([d], [380], Qt.Horizontal)
+        self.dock_results = d
 
     def _build_path_tab(self):
         w = QWidget()
         lay = QVBoxLayout(w)
-        top = QHBoxLayout()
-        self.side_cb = QComboBox()
-        b_run = QPushButton("선택한 도형의 윤곽을 따라 해석")
-        b_run.clicked.connect(self.on_path)
-        b_csv = QPushButton("CSV 저장")
-        b_csv.clicked.connect(self.on_path_csv)
-        self.path_n_sp = _spin(10, 5000, 300, 0)
-        top.addWidget(QLabel("평가 쪽(영역)"))
-        top.addWidget(self.side_cb)
-        top.addWidget(QLabel("점 수"))
-        top.addWidget(self.path_n_sp)
-        top.addWidget(b_run)
-        top.addWidget(b_csv)
-        top.addStretch()
-        lay.addLayout(top)
-        self.path_fig = Figure(figsize=(7, 5), layout="constrained")
+        self.path_fig = Figure(figsize=(7, 6), layout="constrained")
         self.path_canvas = FigureCanvasQTAgg(self.path_fig)
         lay.addWidget(NavigationToolbar2QT(self.path_canvas, w))
         lay.addWidget(self.path_canvas, 1)
+        self.path_stats = QLabel("")
+        self.path_stats.setWordWrap(True)
+        self.path_stats.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        lay.addWidget(self.path_stats)
         self.path_data = None
+        self.path_vcount: dict[int, int] = {}
         self.tabs.addTab(w, "경로 (연면전계)")
+
+    def _build_path_dock(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        g = QGroupBox("경로 지정")
+        f = QVBoxLayout(g)
+        self.path_mode_chk = QCheckBox("경로 선택 모드 (캔버스에서 선분/곡선 클릭)")
+        self.path_mode_chk.setToolTip("클릭: 윤곽의 한 조각(직선 또는 원호) 추가/해제\n"
+                                      "Shift+클릭: 접선이 이어지는 구간 전체 (직선+필렛+직선, 스플라인 등)")
+        self.path_mode_chk.toggled.connect(self.on_path_mode)
+        self.path_info = QLabel("선택한 조각 없음 — 없으면 선택한 도형의 윤곽을 경로로 사용")
+        self.path_info.setWordWrap(True)
+        b_clear = QPushButton("경로 지우기")
+        b_clear.clicked.connect(self.on_path_clear)
+        f.addWidget(self.path_mode_chk)
+        f.addWidget(self.path_info)
+        f.addWidget(b_clear)
+        lay.addWidget(g)
+
+        g = QGroupBox("평가")
+        f = QFormLayout(g)
+        self.side_cb = QComboBox()
+        self.path_n_sp = _spin(10, 5000, 300, 0)
+        self.flip_chk = QCheckBox("방향 뒤집기")
+        self.flip_chk.setToolTip("기본 방향: 전위가 높은 쪽(시작) → 낮은 쪽(끝)")
+        self.comp_cb = QComboBox()
+        self.comp_cb.addItem("접선 |Et| (연면)", "Et")
+        self.comp_cb.addItem("전체 |E|", "E")
+        self.thr_sp = _spin(0.0, 1e6, 0.0, 3, " kV/mm")
+        self.thr_sp.setToolTip("이 값 이상인 구간의 누적 길이를 셉니다.\n"
+                               "0이면 평가 쪽 영역의 허용전계(재료 설정)를 사용하고, 없으면 사용 안 함")
+        f.addRow("평가 쪽(영역)", self.side_cb)
+        f.addRow("점 수", self.path_n_sp)
+        f.addRow(self.flip_chk)
+        f.addRow("임계 비교 성분", self.comp_cb)
+        f.addRow("임계 전계 (0=허용전계)", self.thr_sp)
+        lay.addWidget(g)
+        b_run = QPushButton("경로 해석")
+        b_run.clicked.connect(self.on_path)
+        b_csv = QPushButton("CSV 저장")
+        b_csv.clicked.connect(self.on_path_csv)
+        lay.addWidget(b_run)
+        lay.addWidget(b_csv)
+        lay.addStretch()
+        d = QDockWidget("연면 경로", self)
+        d.setWidget(w)
+        self.addDockWidget(Qt.RightDockWidgetArea, d)
+        self.tabifyDockWidget(self.dock_results, d)
+        self.dock_results.raise_()
+        self.dock_path = d
 
     def _build_menu(self):
         def act(menu, text, fn, shortcut=None):
@@ -409,6 +453,8 @@ class MainWindow(QMainWindow):
         return sorted(self.canvas.selected)
 
     def on_doc_changed(self, structural: bool):
+        self._prune_path_keys()
+        self._update_path_info()
         self.refresh_all()
         if self.result is not None:
             self.stale = self.doc.signature() != self.result.signature
@@ -646,8 +692,18 @@ class MainWindow(QMainWindow):
         r = QMessageBox.question(self, "저장하지 않은 변경", "변경 사항을 버리고 계속할까요?")
         return r == QMessageBox.Yes
 
+    def _reset_path(self):
+        self.canvas.path_keys = []
+        self.canvas.path_ends = None
+        self.path_data = None
+        self.path_vcount.clear()
+        self.path_stats.setText("")
+        self._update_path_info()
+
     def open_dxf(self, path: str, replace: bool = True):
         model = self.doc.load_dxf(path, replace=replace)
+        if replace:
+            self._reset_path()
         self.canvas._have_view = False
         self.canvas.set_result(None)
         self.result = None
@@ -686,6 +742,7 @@ class MainWindow(QMainWindow):
         self.doc.listeners.remove(self.on_doc_changed)
         self.doc = new
         self.doc.listeners.append(self.on_doc_changed)
+        self._reset_path()
         self.canvas.doc = new
         self.canvas.selected.clear()
         self.canvas._have_view = False
@@ -814,44 +871,163 @@ class MainWindow(QMainWindow):
                 self.util_tbl.setItem(r, c, it)
 
     # ----------------------------------------------------------------- path
+    # ---- path picking
+    def on_path_mode(self, on: bool):
+        self.canvas.path_mode = on
+        self.statusBar().showMessage(
+            "경로 선택 모드: 윤곽 조각을 클릭 (Shift+클릭 = 접선이 이어지는 구간 전체, 다시 클릭하면 해제)" if on else "")
+
+    def _prune_path_keys(self):
+        """Drop picked segments whose shape was deleted or whose vertex count changed."""
+        keep = []
+        for sid, idx in self.canvas.path_keys:
+            try:
+                sh = self.doc.shape(sid)
+            except KeyError:
+                continue
+            if self.path_vcount.get(sid) != len(sh.polygon.vertices):
+                continue
+            keep.append((sid, idx))
+        self.canvas.path_keys = keep
+
+    def on_segment_clicked(self, sid: int, idx: int, whole_run: bool):
+        idxs = self.doc.tangent_run(sid, idx) if whole_run else [idx]
+        keys = [(sid, i) for i in idxs]
+        cur = list(self.canvas.path_keys)
+        if (sid, idx) in cur:
+            cur = [k for k in cur if k not in keys]
+        else:
+            cur += [k for k in keys if k not in cur]
+        self.path_vcount[sid] = len(self.doc.shape(sid).polygon.vertices)
+        self.canvas.path_keys = cur
+        self.canvas.path_ends = None
+        self._update_path_info()
+        self.canvas.redraw()
+
+    def on_path_clear(self):
+        self.canvas.path_keys = []
+        self.canvas.path_ends = None
+        self._update_path_info()
+        self.canvas.redraw()
+
+    def _update_path_info(self):
+        keys = self.canvas.path_keys
+        if not keys:
+            self.path_info.setText("선택한 조각 없음 — 없으면 선택한 도형의 윤곽을 경로로 사용")
+            return
+        total = sum(self.doc.shape(sid).polygon.segments()[i].length() for sid, i in keys)
+        self.path_info.setText(f"선택한 조각 {len(keys)}개, 합계 길이 {total:.3f} mm")
+
+    def current_path(self):
+        """The path to analyse as one connected Polygon, and a description of its source."""
+        segs, src = [], ""
+        if self.canvas.path_keys:
+            for sid, idx in self.canvas.path_keys:
+                segs.append(self.doc.shape(sid).polygon.segments()[idx])
+            src = f"선택 조각 {len(segs)}개"
+        else:
+            ids = self.selected_ids()
+            if not ids:
+                raise DocumentError("경로가 없습니다 — '경로 선택 모드'에서 윤곽 조각을 클릭하거나, "
+                                    "경로로 쓸 도형을 선택하세요")
+            for sid in ids:
+                segs += self.doc.shape(sid).polygon.segments()
+            src = "도형 " + ", ".join(f"[{i}]" for i in ids)
+        chains = join_segments(segs, snap=1e-3)
+        if len(chains) != 1:
+            ends = []
+            for c in chains:
+                v = c.vertices
+                ends.append(f"({v[0][0]:.2f}, {v[0][1]:.2f}) ~ ({v[-1][0]:.2f}, {v[-1][1]:.2f})")
+            raise DocumentError(
+                f"선택한 조각이 하나의 연속된 경로로 이어지지 않습니다 ({len(chains)}개 덩어리).\n"
+                "끊어진 곳이나 갈라지는 곳이 없는지 확인하세요.\n" + "\n".join(f"  · {e}" for e in ends))
+        return chains[0], src
+
+    # ---- path analysis
     def on_path(self):
         if self.result is None:
             QMessageBox.information(self, "경로", "먼저 해석을 실행하세요")
             return
-        ids = self.selected_ids()
-        if len(ids) != 1:
-            QMessageBox.information(self, "경로", "경로로 쓸 도형을 하나 선택하세요 (형상 탭에서 클릭)")
+        try:
+            poly, src = self.current_path()
+        except DocumentError as e:
+            QMessageBox.warning(self, "경로", str(e))
             return
-        s = self.doc.shape(ids[0])
+        res = self.result
         region = self.side_cb.currentData()
         region = None if region in (None, -1) else int(region)
-        res = self.result
-        data = post.along_path(res.sol, s.polygon, n=int(self.path_n_sp.value()), region=region)
-        self.path_data = (s, data)
+        n = int(self.path_n_sp.value())
+        data = post.along_path(res.sol, poly, n=n, region=region)
+        # default direction: from the higher-potential end to the lower one
+        phi = np.abs(np.nan_to_num(data["phi"]))
+        if (phi[0] < phi[-1]) != self.flip_chk.isChecked():
+            poly = poly.reversed()
+            data = post.along_path(res.sol, poly, n=n, region=region)
+
+        comp = self.comp_cb.currentData()
+        thr = self.thr_sp.value() * 1e6
+        if thr <= 0 and region is not None:
+            ea = post.allowable(res.problem.regions[region].material.e_allow, res.settings.curve_x)
+            thr = ea if ea == ea else 0.0
+        m = post.path_metrics(data, thr, comp)
+        self.path_data = {"label": src, "poly": poly, "data": data, "metrics": m, "threshold": thr,
+                          "component": comp}
+        self.canvas.path_ends = (tuple(data["xy"][0]), tuple(data["xy"][-1]))
+        self.canvas.redraw()
+        self._plot_path(res, data, m, thr, comp)
+        self.tabs.setCurrentIndex(1)
+        self.statusBar().showMessage(f"경로 해석 완료: {src}")
+
+    def _plot_path(self, res, data, m, thr, comp):
         k = 1e-6  # V/m -> kV/mm
+        peak = " (peak)" if res.settings.mode == "ac" else ""
         fig = self.path_fig
         fig.clear()
-        a1, a2 = fig.subplots(2, 1, sharex=True)
-        sm = data["s"] * 1e3
-        a1.plot(sm, np.abs(data["Et"]) * k, label="|E_t| 접선")
-        a1.plot(sm, np.abs(data["En"]) * k, label="|E_n| 법선")
+        rows = 3 if thr > 0 else 2
+        axes = fig.subplots(rows, 1, sharex=True)
+        a1, a2 = axes[0], axes[1]
+        sm = (data["s"] - data["s"][0]) * 1e3
+        a1.plot(sm, np.abs(data["Et"]) * k, label="|Et| 접선")
+        a1.plot(sm, np.abs(data["En"]) * k, label="|En| 법선")
         a1.plot(sm, data["Emag"] * k, "k", lw=1.2, label="|E|")
-        if region is not None:
-            ea = post.allowable(res.problem.regions[region].material.e_allow, res.settings.curve_x)
-            if ea == ea:
-                a1.axhline(ea * k, color="r", ls="--", label="허용전계")
-        a1.set_ylabel("전계 [kV/mm]" + (" (peak)" if res.settings.mode == "ac" else ""))
+        if thr > 0:
+            a1.axhline(thr * k, color="r", ls="--", label=f"임계 {thr * k:.3g}")
+        a1.set_ylabel("전계 [kV/mm]" + peak)
         a1.legend(loc="best", fontsize=8)
         a1.grid(alpha=0.3)
-        a2.plot(sm, np.abs(data["phi"]) / 1e3, color="tab:green")
-        a2.set_ylabel("|V| [kV]")
-        a2.set_xlabel(f"경로 길이 [mm]  —  [{s.id}] {s.label()}")
+        a2.plot(sm, np.abs(data["phi"]) / 1e3, color="tab:green", label="전위 |V|")
+        a2.plot(sm, np.abs(m["cum_V"]) / 1e3, "--", color="tab:purple", label="누적 ∫Et·ds (전압 강하)")
+        a2.plot(sm, m["cum_abs"] / 1e3, ":", color="tab:orange", lw=2, label="누적 ∫|Et|·ds")
+        a2.set_ylabel("[kV]" + peak)
+        a2.legend(loc="best", fontsize=8)
         a2.grid(alpha=0.3)
+        if thr > 0:
+            a3 = axes[2]
+            a3.fill_between(sm, m["cum_len"] * 1e3, step="post", color="tab:red", alpha=0.35)
+            a3.plot(sm, m["cum_len"] * 1e3, color="tab:red")
+            a3.set_ylabel(f"누적 길이 [mm]\n(|{'Et' if comp == 'Et' else 'E'}| ≥ {thr * k:.3g} kV/mm)")
+            a3.grid(alpha=0.3)
+        axes[-1].set_xlabel(f"경로 길이 [mm]  —  {self.path_data['label']}  (시작 → 끝)")
         self.path_canvas.draw_idle()
-        bad = int(np.isnan(data["Et"]).sum())
-        self.statusBar().showMessage(f"경로 해석: 최대 |E_t| = {np.nanmax(np.abs(data['Et'])) * k:.4g} kV/mm"
-                                     + (f" ({bad}개 점이 메시 밖)" if bad else ""))
-        self.tabs.setCurrentIndex(1)
+
+        lines = [f"길이 {m['length'] * 1e3:.3f} mm  /  점 {len(data['s'])}개  /  {self.path_data['label']}"]
+        diff = abs(m["dV"] - m["dV_nodal"]) / max(m["dV_nodal"], 1e-30)
+        lines.append(f"|ΔV| = |∫Et·ds| = {m['dV'] / 1e3:.4g} kV   (양 끝 전위차 {m['dV_nodal'] / 1e3:.4g} kV, 차이 {diff * 100:.1f} %)"
+                     f"   평균 |ΔV|/L = {m['mean_dv'] * k:.4g} kV/mm")
+        name = "|Et|" if comp == "Et" else "|E|"
+        lines.append(f"평균 |Et| = {m['mean_abs'] * k:.4g} kV/mm   최대 {name} = {m['max'] * k:.4g} kV/mm"
+                     f" (시작에서 {m['s_at_max'] * 1e3:.3f} mm)")
+        if thr > 0:
+            lines.append(f"{name} ≥ {thr * k:.4g} kV/mm 인 구간의 누적 길이 = {m['len_above'] * 1e3:.3f} mm "
+                         f"({m['frac_above'] * 100:.1f} %)")
+        else:
+            lines.append("임계 전계 없음 — 누적 길이 평가를 하려면 임계값을 입력하거나 평가 쪽 영역에 허용전계를 설정하세요")
+        if m["n_nan"]:
+            lines.append(f"⚠ {m['n_nan']}개 점은 값을 구하지 못해 0으로 처리됨 (메시 밖이거나, 평가 쪽 영역에 접하지 않음) — "
+                         f"경로가 모델 안에 있는지, '평가 쪽(영역)'이 경로가 실제로 접한 영역인지 확인하세요 (자동 = 어느 쪽이든)")
+        lines.append("※ 날카로운 모서리나 삼중점 근처의 최대값은 메시에 따라 계속 커집니다 — 평균값과 누적량을 함께 보세요")
+        self.path_stats.setText("\n".join(lines))
 
     def on_path_csv(self):
         if self.path_data is None:
@@ -862,10 +1038,13 @@ class MainWindow(QMainWindow):
             self.save_path_csv(path)
 
     def save_path_csv(self, path: str):
-        s, d = self.path_data
+        d, m = self.path_data["data"], self.path_data["metrics"]
         with open(path, "w", newline="", encoding="utf-8-sig") as f:
             w = csv.writer(f)
-            w.writerow(["s_mm", "x_mm", "y_mm", "abs_V", "abs_Et_V_per_m", "abs_En_V_per_m", "abs_E_V_per_m"])
+            w.writerow(["s_mm", "x_mm", "y_mm", "abs_V", "abs_Et_V_per_m", "abs_En_V_per_m", "abs_E_V_per_m",
+                        "cum_abs_int_Et_ds_V", "cum_abs_int_absEt_ds_V", "cum_len_above_threshold_mm"])
+            s0 = d["s"][0]
             for i in range(len(d["s"])):
-                w.writerow([d["s"][i] * 1e3, d["xy"][i, 0], d["xy"][i, 1], abs(d["phi"][i]),
-                            abs(d["Et"][i]), abs(d["En"][i]), d["Emag"][i]])
+                w.writerow([(d["s"][i] - s0) * 1e3, d["xy"][i, 0], d["xy"][i, 1], abs(d["phi"][i]),
+                            abs(d["Et"][i]), abs(d["En"][i]), d["Emag"][i],
+                            abs(m["cum_V"][i]), m["cum_abs"][i], m["cum_len"][i] * 1e3])
