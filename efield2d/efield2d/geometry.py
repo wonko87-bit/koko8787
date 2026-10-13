@@ -123,3 +123,20 @@ class Polygon:
 
 def rect(x0: float, y0: float, x1: float, y1: float) -> Polygon:
     return Polygon.from_points([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+
+
+def outline_xy(poly: Polygon, arc_pts: int = 24):
+    """Polyline approximation (list of (x, y)) of the outline, arcs sampled.
+    A closed polygon is returned with its first point repeated at the end."""
+    pts = []
+    for s in poly.segments():
+        if s.bulge == 0.0:
+            seg = [s.p0, s.p1]
+        else:
+            (cx, cy), R, a0, sw = s.arc()
+            ang = [a0 + sw * k / arc_pts for k in range(arc_pts + 1)]
+            seg = [(cx + R * math.cos(a), cy + R * math.sin(a)) for a in ang]
+            if s.bulge < 0:
+                seg = seg[::-1]
+        pts.extend(seg if not pts else seg[1:])
+    return pts

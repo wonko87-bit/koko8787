@@ -4,3 +4,4 @@ gmsh
 ezdxf
 matplotlib
 pytest
+PySide6
