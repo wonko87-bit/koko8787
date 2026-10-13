@@ -4,10 +4,11 @@ from .geometry import Polygon, rect
 from .problem import Problem, Region, Conductor, DirichletLine, Refinement
 from .mesh import Mesh, build_mesh
 from .fem import Solution, solve
+from .dxf_io import import_dxf, build_problem, Assignment, DxfModel, Shape
 from . import post
 
 __all__ = [
     "Material", "EPS0", "Polygon", "rect", "Problem", "Region", "Conductor",
     "DirichletLine", "Refinement", "Mesh", "build_mesh", "Solution", "solve",
-    "post",
+    "import_dxf", "build_problem", "Assignment", "DxfModel", "Shape", "post",
 ]

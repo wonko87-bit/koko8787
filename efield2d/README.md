@@ -34,6 +34,27 @@ post.utilization(sol)                            # 영역별 Emax, 허용전계,
 post.along_path(sol, Polygon.from_points([(0, 3), (60, 3)], closed=False))  # 연면전계
 ```
 
+## DXF 가져오기
+
+```python
+m = import_dxf("model.dxf")           # 단위는 $INSUNITS로 mm 변환 (없으면 mm 가정 + 경고)
+print(m.describe())                    # 도형 목록: id, 레이어, 종류, 면적, bbox
+p = build_problem(m, {
+    3: Assignment("region", air, name="air"),
+    5: Assignment("conductor", voltage=10e3, name="hv"),
+    6: Assignment("conductor", voltage=0.0, name="gnd"),
+}, symmetry="axisym", mesh_size=4.0, edge_size=0.5)
+```
+
+터미널에서 바로 확인: `python -m efield2d.dxf_io model.dxf`
+
+- 지원: LINE, ARC, CIRCLE, LWPOLYLINE, POLYLINE(2D), SPLINE, ELLIPSE, INSERT(블록 분해)
+- **SPLINE/ELLIPSE는 짧은 직선으로 근사** (`flatten_tol`, 기본 0.01 mm = 곡선에서 최대 이탈)
+- 닫힌 폴리라인/원/닫힌 스플라인은 도형 1개. 흩어진 LINE/ARC/열린 폴리라인은 끝점(`snap`, 기본 0.001 mm)으로 이어 붙이며, 3개 이상 만나는 분기점에서 끊김
+- **영역/전극은 각각 닫힌 윤곽으로 그리는 것을 권장** (겹치거나 맞닿아도 됨. 영역은 면적 큰 것부터 깔고 작은 것이 덮어씀)
+- 끝점이 살짝 안 맞아 닫히지 않은 윤곽은 경고로 알려 줌
+- 축대칭 모델은 x(=r) ≥ 0 이어야 함
+
 ## 주의
 
 - 날카로운 전극 모서리의 전계는 이론상 발산합니다. 메시를 줄일수록 Emax가 커지므로
@@ -49,4 +70,4 @@ post.along_path(sol, Polygon.from_points([(0, 3), (60, 3)], closed=False))  # �
 
 ## 로드맵
 
-M1 솔버 코어 (완료) → M2 DXF 가져오기 → M3 후처리/내전압 판정 확장 → M4 GUI (PySide6) → M5 고도화
+M1 솔버 코어 (완료) → M2 DXF 가져오기 (완료) → M3 후처리/내전압 판정 확장 → M4 GUI (PySide6) → M5 고도화

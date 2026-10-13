@@ -78,6 +78,35 @@ class Polygon:
     def distance(self, x: float, y: float) -> float:
         return min(s.distance(x, y) for s in self.segments())
 
+    def signed_area(self) -> float:
+        """Enclosed area, positive for counter-clockwise outlines (arcs included)."""
+        v = self.vertices
+        n = len(v)
+        a = 0.0
+        for i in range(n):
+            x0, y0, b = v[i]
+            x1, y1, _ = v[(i + 1) % n]
+            a += 0.5 * (x0 * y1 - x1 * y0)
+            if b != 0.0:
+                th = 4.0 * math.atan(b)
+                chord = math.hypot(x1 - x0, y1 - y0)
+                r = chord / (2.0 * math.sin(abs(th) / 2.0))
+                a += 0.5 * r * r * (th - math.sin(th))
+        return a
+
+    def reversed(self) -> "Polygon":
+        """Same outline traversed the other way round."""
+        v = self.vertices
+        n = len(v)
+        out = []
+        for k in range(n):
+            j = n - 1 - k
+            b = -v[(j - 1) % n][2]
+            if not self.closed and k == n - 1:
+                b = 0.0
+            out.append((v[j][0], v[j][1], b))
+        return Polygon(out, self.closed)
+
     def bbox(self):
         xs, ys = [], []
         for s in self.segments():
