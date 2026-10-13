@@ -101,6 +101,12 @@ python run_gui.py [model.dxf | project.efp]        # 또는  python -m efield2d.
 2층 유전체(ES: ε비, DC: σ비, AC: 복소 κ비와 ω→0/∞ 극한), 에너지-정전용량 일치.
 추가 검증은 같은 형상을 Maxwell 2D로 풀어 비교합니다.
 
+## 벤치마크 (다른 FEM 도구와 교차 검증)
+
+`benchmarks/BENCHMARKS.md` — Maxwell 2D 등과 비교할 수 있도록 형상 좌표, 재료, 경계조건, 이 프로그램의 결과값과 권장 허용 오차를
+정리했습니다 (모델 A: 해석해가 있는 2층 동축, ES/DC/AC / 모델 B: 필렛 전극 + 스페이서 + 접지판, 연면 경로).
+DXF와 프로젝트 파일은 `benchmarks/models/`, 재생성은 `python benchmarks/bench.py`.
+
 ## 로드맵
 
 M1 솔버 코어 (완료) → M2 DXF 가져오기 (완료) → M4 GUI 1차 (완료) → M3 후처리/내전압 판정 확장 → M5 고도화

@@ -1,0 +1,165 @@
+{
+ "version": 1,
+ "settings": {
+  "mode": "es",
+  "freq": 50.0,
+  "symmetry": "axisym",
+  "mesh_size": 1.0,
+  "edge_size": 0.25,
+  "edge_transition": 5.0,
+  "rms_input": true,
+  "curve_x": 0.0
+ },
+ "materials": {
+  "air": {
+   "eps_r": 1.0,
+   "sigma": 0.0,
+   "e_allow": 3000000.0
+  },
+  "epoxy": {
+   "eps_r": 4.0,
+   "sigma": 0.0,
+   "e_allow": null
+  }
+ },
+ "shapes": [
+  {
+   "id": 0,
+   "layer": "user",
+   "closed": true,
+   "source": "rect",
+   "vertices": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     60.0,
+     0.0,
+     0.0
+    ],
+    [
+     60.0,
+     80.0,
+     0.0
+    ],
+    [
+     0.0,
+     80.0,
+     0.0
+    ]
+   ],
+   "kind": "region",
+   "material": "air",
+   "voltage": 0.0,
+   "name": "air"
+  },
+  {
+   "id": 1,
+   "layer": "user",
+   "closed": true,
+   "source": "rect",
+   "vertices": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     60.0,
+     0.0,
+     0.0
+    ],
+    [
+     60.0,
+     5.0,
+     0.0
+    ],
+    [
+     0.0,
+     5.0,
+     0.0
+    ]
+   ],
+   "kind": "conductor",
+   "material": "",
+   "voltage": 0.0,
+   "name": "gnd"
+  },
+  {
+   "id": 2,
+   "layer": "user",
+   "closed": true,
+   "source": "rect",
+   "vertices": [
+    [
+     0.0,
+     5.0,
+     0.0
+    ],
+    [
+     10.0,
+     5.0,
+     0.0
+    ],
+    [
+     10.0,
+     45.0,
+     0.0
+    ],
+    [
+     0.0,
+     45.0,
+     0.0
+    ]
+   ],
+   "kind": "region",
+   "material": "epoxy",
+   "voltage": 0.0,
+   "name": "epoxy"
+  },
+  {
+   "id": 3,
+   "layer": "HV",
+   "closed": true,
+   "source": "polyline",
+   "vertices": [
+    [
+     0,
+     45,
+     0
+    ],
+    [
+     11,
+     45,
+     0.41421356237309503
+    ],
+    [
+     14,
+     48,
+     0
+    ],
+    [
+     14,
+     54,
+     0.41421356237309503
+    ],
+    [
+     11,
+     57,
+     0
+    ],
+    [
+     0,
+     57,
+     0
+    ]
+   ],
+   "kind": "conductor",
+   "material": "",
+   "voltage": 100000.0,
+   "name": "hv"
+  }
+ ]
+}
