@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from .. import post
+from ..calc import FieldCalculator, FormulaError, parse_constants
 from ..dxf_io import join_segments
 from ..geometry import Polygon
 from ..materials import Material
@@ -193,6 +194,7 @@ class MainWindow(QMainWindow):
         v.addWidget(self.canvas, 1)
         self.tabs.addTab(main, "형상 / 결과")
         self._build_path_tab()
+        self._build_calc_tab()
 
         self.setCentralWidget(self.tabs)
         self._build_docks()
@@ -707,6 +709,7 @@ class MainWindow(QMainWindow):
         self.canvas._have_view = False
         self.canvas.set_result(None)
         self.result = None
+        self._calc_fill_combos()
         self.canvas.selected.clear()
         self.refresh_all()
         self.canvas.fit_view()
@@ -801,12 +804,14 @@ class MainWindow(QMainWindow):
         self.side_cb.addItem("자동", -1)
         for i, r in enumerate(res.problem.regions):
             self.side_cb.addItem(r.name, i)
+        self._calc_fill_combos()
         self.statusBar().showMessage(f"완료: 노드 {res.mesh.n_nodes}, 요소 {res.mesh.n_tris}"
                                      + (f"  / {'; '.join(res.warnings)}" if res.warnings else ""))
         self.tabs.setCurrentIndex(0)
 
     def on_hide_result(self):
         self.result = None
+        self._calc_fill_combos()
         self.canvas.set_result(None)
         self.summary.setText("")
         self.util_tbl.setRowCount(0)
@@ -871,6 +876,296 @@ class MainWindow(QMainWindow):
                 self.util_tbl.setItem(r, c, it)
 
     # ----------------------------------------------------------------- path
+    # ---------------------------------------------------------------- calculator
+    CALC_OPS = [
+        ("point", "한 점의 값"),
+        ("profile", "경로 프로파일 + 선적분"),
+        ("volume", "영역 체적적분 ∫ f dV"),
+        ("flux", "경로 플럭스 ∫ F·n dA (Gauss 등)"),
+        ("electrode", "전극 전하 / 전류 (ΣKφ)"),
+        ("review", "일관성 검토 요약 (에너지·전하·손실)"),
+    ]
+    CALC_PRESETS = {
+        "point": [("전계 크기 |E|", "E"), ("반경 방향 Er", "Er"), ("축 방향 Ez", "Ez"), ("전위 |V|", "abs(V)"),
+                  ("전속밀도 |D|", "D"), ("전류밀도 |J| = |(σ+jωε)E|", "J"), ("에너지 밀도 ½ε|E|²", "0.5*eps*E**2"),
+                  ("손실 밀도 σ|E|²", "sigma*E**2")],
+        "volume": [("저장 에너지 ½∫ε|E|²dV", "0.5*eps*E**2"), ("손실 ∫σ|E|²dV", "sigma*E**2"),
+                   ("AC 평균 저장 에너지 ¼∫ε|E|²dV", "0.25*eps*E**2"), ("AC 평균 손실 ½∫σ|E|²dV", "0.5*sigma*E**2"),
+                   ("체적 (축대칭: 전체)", "1")],
+    }
+    PROFILE_PRESETS = CALC_PRESETS["point"] + [("경로 접선 성분 Et", "Et"), ("경로 법선 성분 En", "En"),
+                                              ("법선 전속밀도 Dn", "Dn")]
+    REF_PRESETS = [
+        ("(없음)", ""),
+        ("동축 단층 |E|(r) = V/(r ln(b/a))", "abs(V_inner)/(r*log(b/a))"),
+        ("2층 동축 |E|(r) — 모델 A (경계 r=10 mm)",
+         "abs(V_inner/(log(2)*(1/kappa_L1+1/kappa_L2)))/(r*abs(where(r < 10*mm, kappa_L1, kappa_L2)))"),
+        ("평행판 |E| = V/d", "abs(V_inner)/d"),
+    ]
+
+    def _build_calc_tab(self):
+        w = QWidget()
+        lay = QHBoxLayout(w)
+        left = QVBoxLayout()
+        g = QGroupBox("수식 계산기")
+        f = QFormLayout(g)
+        self.calc_op_cb = QComboBox()
+        for k, lab in self.CALC_OPS:
+            self.calc_op_cb.addItem(lab, k)
+        self.calc_preset_cb = QComboBox()
+        self.calc_expr = QLineEdit("E")
+        self.calc_expr.setPlaceholderText("예: 0.5*eps*E**2   /   abs(V)   /   Er*r")
+        self.calc_consts = QLineEdit()
+        self.calc_consts.setPlaceholderText("a=5*mm; b=20*mm; V0=1000   (이름=값; …)")
+        self.calc_x, self.calc_y = _spin(-1e6, 1e6, 0.0, 4, " mm"), _spin(-1e6, 1e6, 0.0, 4, " mm")
+        self.calc_n = _spin(10, 20000, 400, 0)
+        self.calc_side_cb = QComboBox()
+        self.calc_region_cb = QComboBox()
+        self.calc_field_cb = QComboBox()
+        for k, lab in (("D", "D 전속밀도 → 전하 [C]"), ("J", "J 전체 전류밀도 → 전류 [A]"),
+                       ("Jc", "Jc 전도 전류밀도 → 전류 [A]"), ("E", "E 전계 → [V·m]")):
+            self.calc_field_cb.addItem(lab, k)
+        self.calc_elec_cb = QComboBox()
+        self.calc_ref = QLineEdit()
+        self.calc_ref.setPlaceholderText("경로 위에서 계산값과 겹쳐 그릴 해석해 식 (선택)")
+        self.calc_ref_cb = QComboBox()
+        for lab, ex in self.REF_PRESETS:
+            self.calc_ref_cb.addItem(lab, ex)
+        self.calc_smooth = QCheckBox("전계 복원(평활) 사용 — 점·경로·플럭스")
+        self.calc_smooth.setChecked(True)
+        self.calc_smooth.setToolTip("끄면 요소별 상수 전계를 그대로 사용 (계단 모양, 위치 편향 ±수 %).\n"
+                                    "체적적분은 항상 요소값을 사용해 에너지/손실 항등식이 정확합니다.")
+        self.calc_flip = QCheckBox("경로 방향 뒤집기 (플럭스 법선 반전)")
+        self.calc_btn = QPushButton("계산")
+        self.calc_btn.clicked.connect(self.on_calc)
+        f.addRow("계산 종류", self.calc_op_cb)
+        f.addRow("예시 수식", self.calc_preset_cb)
+        f.addRow("수식 f", self.calc_expr)
+        f.addRow("상수", self.calc_consts)
+        self.calc_pt_row = (QLabel("점 (x, y)"), QWidget())
+        prow = QHBoxLayout(self.calc_pt_row[1])
+        prow.setContentsMargins(0, 0, 0, 0)
+        prow.addWidget(self.calc_x)
+        prow.addWidget(self.calc_y)
+        f.addRow(*self.calc_pt_row)
+        f.addRow("경로 점 수", self.calc_n)
+        f.addRow("평가 쪽(영역)", self.calc_side_cb)
+        f.addRow("영역", self.calc_region_cb)
+        f.addRow("플럭스 대상", self.calc_field_cb)
+        f.addRow("전극", self.calc_elec_cb)
+        f.addRow("해석해 예시", self.calc_ref_cb)
+        f.addRow("비교식 (해석해)", self.calc_ref)
+        f.addRow(self.calc_smooth)
+        f.addRow(self.calc_flip)
+        f.addRow(self.calc_btn)
+        left.addWidget(g)
+        self.calc_hint = QLabel("")
+        self.calc_hint.setWordWrap(True)
+        self.calc_hint.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        left.addWidget(self.calc_hint)
+        left.addStretch()
+        lw = QWidget()
+        lw.setLayout(left)
+        lw.setMaximumWidth(470)
+        lay.addWidget(lw)
+
+        right = QVBoxLayout()
+        self.calc_out = QPlainTextEdit()
+        self.calc_out.setReadOnly(True)
+        self.calc_out.setMaximumHeight(210)
+        right.addWidget(self.calc_out)
+        self.calc_fig = Figure(figsize=(6, 5), layout="constrained")
+        self.calc_canvas = FigureCanvasQTAgg(self.calc_fig)
+        right.addWidget(NavigationToolbar2QT(self.calc_canvas, w))
+        right.addWidget(self.calc_canvas, 1)
+        lay.addLayout(right, 1)
+        self.tabs.addTab(w, "계산기")
+
+        self._calc = None
+        self._calc_key = None
+        self.calc_op_cb.currentIndexChanged.connect(self._calc_op_changed)
+        self.calc_preset_cb.activated.connect(self._calc_preset_picked)
+        self.calc_ref_cb.activated.connect(lambda i: self.calc_ref.setText(self.calc_ref_cb.itemData(i) or ""))
+        self._calc_op_changed()
+        self._calc_fill_combos()
+
+    def _calc_op_changed(self, *_):
+        op = self.calc_op_cb.currentData()
+        self.calc_preset_cb.clear()
+        presets = self.PROFILE_PRESETS if op == "profile" else self.CALC_PRESETS.get(op, [])
+        self.calc_preset_cb.addItem("— 선택 —", None)
+        for lab, ex in presets:
+            self.calc_preset_cb.addItem(lab, ex)
+        usesexpr = op in ("point", "profile", "volume")
+        for wdg in (self.calc_preset_cb, self.calc_expr, self.calc_consts):
+            wdg.setEnabled(usesexpr)
+        self.calc_pt_row[0].setEnabled(op == "point")
+        self.calc_pt_row[1].setEnabled(op == "point")
+        self.calc_n.setEnabled(op in ("profile", "flux"))
+        self.calc_side_cb.setEnabled(op in ("point", "profile", "flux"))
+        self.calc_region_cb.setEnabled(op == "volume")
+        self.calc_field_cb.setEnabled(op == "flux")
+        self.calc_elec_cb.setEnabled(op == "electrode")
+        self.calc_ref.setEnabled(op == "profile")
+        self.calc_ref_cb.setEnabled(op == "profile")
+        self.calc_flip.setEnabled(op in ("profile", "flux"))
+        hints = {
+            "point": "한 점에서 수식 값을 계산합니다. V는 보간, E·D·J는 복원한 전계입니다.",
+            "profile": "경로(연면 경로 탭에서 고른 조각 또는 선택한 도형)를 따라 f를 계산하고 선적분 ∫f dl, 평균, 최대를 구합니다. "
+                       "비교식을 넣으면 겹쳐 그리고 오차를 표시합니다.",
+            "volume": "모델 전체 또는 한 영역에서 ∫ f dV (평면: 깊이 1 m당, 축대칭: 전체 2πr). 요소별 값을 그대로 합산합니다.",
+            "flux": "경로를 축 둘레로 회전(축대칭, 2πr)하거나 깊이 1 m로 늘린 면을 통과하는 D, J 등의 법선 성분을 적분합니다. "
+                    "법선은 진행 방향의 오른쪽(반시계 윤곽에서는 바깥쪽).",
+            "electrode": "전극 노드의 잔차합 ΣKφ: ES는 전하 [C], DC/AC는 전류 [A]. 요소 상수 전계로 구한 Gauss 적분보다 정확합니다.",
+            "review": "같은 양을 서로 다른 방법으로 계산해 일치하는지 봅니다 (에너지 ∫ε|E|²dV ↔ ΣQ·V 등).",
+        }
+        self.calc_hint.setText(hints[op] + "\n\n변수: x y(=r z) V Ex Ey(=Er Ez) E eps epsr sigma kappa w D Dx Dy J Jx Jy Jc … "
+                               "경로 계산에서는 Et En Dn Jn 등. 함수: abs re im conj angle sqrt exp log log10 sin cos atan2 "
+                               "mag minimum maximum where. 자동 상수: kappa_<영역> eps_<영역> sigma_<영역> V_<전극> f, 그리고 mm, pi, eps0.")
+
+    def _calc_preset_picked(self, i):
+        ex = self.calc_preset_cb.itemData(i)
+        if ex:
+            self.calc_expr.setText(ex)
+
+    def _calc_fill_combos(self):
+        res = self.result
+        for cb in (self.calc_side_cb, self.calc_region_cb, self.calc_elec_cb):
+            cb.clear()
+        self.calc_side_cb.addItem("자동", -1)
+        self.calc_region_cb.addItem("전체", -1)
+        if res is not None:
+            for i, r in enumerate(res.problem.regions):
+                self.calc_side_cb.addItem(r.name, i)
+                self.calc_region_cb.addItem(r.name, i)
+            for name in res.mesh.electrode_nodes:
+                self.calc_elec_cb.addItem(name, name)
+
+    def get_calc(self) -> FieldCalculator:
+        if self.result is None:
+            raise DocumentError("먼저 해석을 실행하세요")
+        key = (id(self.result), self.calc_smooth.isChecked())
+        if self._calc_key != key:
+            self._calc = FieldCalculator(self.result.sol, smooth=self.calc_smooth.isChecked())
+            self._calc_key = key
+        return self._calc
+
+    @staticmethod
+    def fmt_val(v, unit: str = "") -> str:
+        v = complex(v)
+        u = f" {unit}" if unit else ""
+        if v != v:
+            return "계산할 수 없음 (NaN)"
+        if abs(v.imag) <= 1e-12 * max(abs(v.real), 1e-300):
+            return f"{v.real:.6g}{u}"
+        return (f"{v.real:.6g} {'+' if v.imag >= 0 else '-'} j{abs(v.imag):.6g}{u}   "
+                f"(크기 {abs(v):.6g}, 위상 {math.degrees(math.atan2(v.imag, v.real)):.2f}°)")
+
+    def on_calc(self):
+        out = []
+        self.calc_fig.clear()
+        try:
+            calc = self.get_calc()
+            op = self.calc_op_cb.currentData()
+            expr = self.calc_expr.text()
+            consts = parse_constants(self.calc_consts.text())
+            side = self.calc_side_cb.currentData()
+            side = None if side in (None, -1) else int(side)
+            if self.stale:
+                out.append("⚠ 해석 입력이 바뀌었습니다 — 이전 해석 결과에 대한 계산입니다 (F5로 다시 실행)")
+            if op == "point":
+                r = calc.at_point(expr, self.calc_x.value(), self.calc_y.value(), side, consts)
+                out += [f"f = {expr}", f"점 ({self.calc_x.value():g}, {self.calc_y.value():g}) mm",
+                        f"값 = {self.fmt_val(r.value)}"] + ([r.note] if r.note else [])
+            elif op == "volume":
+                reg = self.calc_region_cb.currentData()
+                reg = None if reg in (None, -1) else int(reg)
+                r = calc.volume_integral(expr, reg, consts)
+                out += [f"∫ ({expr}) dV   영역: {self.calc_region_cb.currentText()}",
+                        f"값 = {self.fmt_val(r.value)}", r.note]
+            elif op == "electrode":
+                name = self.calc_elec_cb.currentData()
+                if name is None:
+                    raise FormulaError("전극이 없습니다")
+                rows = []
+                for nm in self.result.mesh.electrode_nodes:
+                    r = calc.electrode_charge(nm)
+                    rows.append(f"  {nm}: {self.fmt_val(r.value, r.unit)}")
+                r = calc.electrode_charge(name)
+                out += [f"선택한 전극 {name}: {self.fmt_val(r.value, r.unit)}", r.note, "", "모든 전극 (들어가고 나간 합은 0):"] + rows
+            elif op == "review":
+                rows = calc.review()
+                out.append("서로 다른 방법으로 계산한 값의 일치 여부 (상대 차이는 작을수록 좋음):")
+                for r in rows:
+                    ok = "✓" if r["rel"] < 1e-6 else ("△" if r["rel"] < 1e-3 else "✗")
+                    out.append(f"{ok} {r['label']}\n     {self.fmt_val(r['a'], r['unit'])}   vs   {self.fmt_val(r['b'], r['unit'])}"
+                               f"   (차이 {r['rel']:.2e}){'  — ' + r['note'] if r['note'] else ''}")
+                cs = self.circuit_summary(self.result)
+                if cs:
+                    out += ["", "참고 — " + cs]
+            else:                                   # profile / flux need a path
+                poly, src = self.current_path()
+                if self.calc_flip.isChecked():
+                    poly = poly.reversed()
+                n = int(self.calc_n.value())
+                if op == "flux":
+                    r = calc.flux(self.calc_field_cb.currentData(), poly, n, side, consts)
+                    out += [f"경로: {src}", f"∫ {self.calc_field_cb.currentData()}·n dA = {self.fmt_val(r.value, r.unit)}", r.note]
+                    if r.n_nan:
+                        out.append(f"⚠ {r.n_nan}개 점은 값을 구하지 못해 0으로 처리됨 (평가 쪽 영역에 접하지 않거나 메시 밖)")
+                    el = self.result.mesh.electrode_nodes
+                    if el and self.result.sol.mode and (self.calc_field_cb.currentData() in ("D", "J", "Jc")):
+                        q = {nm: calc.electrode_charge(nm).value for nm in el}
+                        out.append("참고 — 전극 잔차합: " + ", ".join(f"{k}={self.fmt_val(v)}" for k, v in q.items()))
+                else:
+                    ref = self.calc_ref.text().strip() or None
+                    p = calc.profile(expr, poly, n, side, consts, ref)
+                    out += self._profile_text(expr, src, p, ref)
+                    self._plot_calc_profile(expr, p, ref)
+        except (FormulaError, DocumentError) as e:
+            out = [f"⚠ {e}"]
+        except Exception as e:                       # pragma: no cover - defensive
+            out = [f"⚠ 예기치 않은 오류: {e}"]
+        self.calc_out.setPlainText("\n".join(x for x in out if x is not None))
+        self.calc_canvas.draw_idle()
+
+    def _profile_text(self, expr, src, p, ref):
+        v = p["values"]
+        a = np.abs(np.nan_to_num(v))
+        k = int(np.argmax(a))
+        s0 = p["s"][0]
+        lines = [f"f = {expr}     경로: {src}  (길이 {(p['s'][-1] - s0) * 1e3:.4g} mm, 점 {len(v)}개)",
+                 f"선적분 ∫ f dl = {self.fmt_val(p['integral'])}   [f의 단위 × m]",
+                 f"평균 = {self.fmt_val(p['mean'])}",
+                 f"|f| 최대 = {a[k]:.6g}  (시작에서 {(p['s'][k] - s0) * 1e3:.4g} mm)"]
+        if ref:
+            lines.append(f"비교식 대비: 최대 절대 차이 {p['max_abs_diff']:.4g},  최대 상대 차이 {p['max_rel_diff'] * 100:.3g} % (|비교식| 최대값 기준)")
+        if p["n_nan"]:
+            lines.append(f"⚠ {p['n_nan']}개 점은 값을 구하지 못해 제외/0 처리됨 (평가 쪽 영역에 접하지 않거나 메시 밖)")
+        return lines
+
+    def _plot_calc_profile(self, expr, p, ref):
+        fig = self.calc_fig
+        rows = 2 if ref else 1
+        axes = np.atleast_1d(fig.subplots(rows, 1, sharex=True))
+        sm = (p["s"] - p["s"][0]) * 1e3
+        v = p["values"]
+        cplx = np.iscomplexobj(v) and np.abs(np.imag(v)).max() > 1e-12 * max(np.abs(v).max(), 1e-300)
+        y = np.abs(v) if cplx else np.real(v)
+        axes[0].plot(sm, y, label=f"{'|f|' if cplx else 'f'} = {expr}")
+        if ref:
+            r = p["ref"]
+            axes[0].plot(sm, np.abs(r) if cplx else np.real(r), "--", color="tab:red", label="비교식")
+            with np.errstate(all="ignore"):
+                err = (np.abs(v) - np.abs(r)) / np.abs(r).max() * 100 if cplx else (np.real(v) - np.real(r)) / np.abs(r).max() * 100
+            axes[1].plot(sm, err, color="tab:purple")
+            axes[1].axhline(0, color="k", lw=0.5)
+            axes[1].set_ylabel("차이 [% of max|비교식|]")
+            axes[1].grid(alpha=0.3)
+        axes[0].legend(loc="best", fontsize=8)
+        axes[0].grid(alpha=0.3)
+        axes[-1].set_xlabel("경로 길이 [mm]")
+
     # ---- path picking
     def on_path_mode(self, on: bool):
         self.canvas.path_mode = on
