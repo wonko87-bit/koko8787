@@ -71,3 +71,35 @@ def test_generated_dxf_gives_the_same_answer_as_the_gui_model(tmp_path):
     from efield2d.app.document import Document
     d = Document.load(str(tmp_path / "modelB_es.efp"))
     assert d.run().sol.mode == "es"
+
+
+def test_expected_values_are_consistent_with_each_other():
+    e = bench.a_expected()
+    es, dc, ac = e["es"], e["dc"], e["ac"]
+    V = bench.A["V"]
+    assert es["Q"] == pytest.approx(es["C"] * V)
+    assert es["W1"] + es["W2"] == pytest.approx(es["W"]) and es["W1"] == pytest.approx(2 * es["W2"])
+    assert dc["P"] == pytest.approx(dc["I"] * V) and dc["R"] == pytest.approx(1 / dc["G"])
+    assert ac["C"] == pytest.approx(es["C"], rel=1e-3)               # sigma << omega*eps at 50 Hz
+    assert ac["P"] == pytest.approx(0.5 * ac["G"] * V ** 2)
+    assert dc["E75"] < dc["E15"] and es["E75"] > es["E15"]            # DC: low-sigma layer L2 carries the field
+    # and this program reproduces them (as the guide states) through the calculator
+    from efield2d.calc import FieldCalculator
+    c = FieldCalculator(bench.model_a("es", 0.5).run().sol)
+    assert c.volume_integral("0.5*eps*E**2").value == pytest.approx(es["W"], rel=5e-4)
+    names = [r.name for r in c.problem.regions]
+    assert c.volume_integral("0.5*eps*E**2", region=names.index("L1")).value == pytest.approx(es["W1"], rel=2e-3)
+
+
+def test_profile_csv_files_are_written_and_match_the_closed_form(tmp_path):
+    bench.write_models(str(tmp_path))
+    import csv
+    for mode in ("es", "dc", "ac"):
+        rows = list(csv.reader(open(tmp_path / f"modelA_profile_{mode}.csv", encoding="utf-8-sig")))
+        head, data = rows[0], np.array(rows[1:], dtype=float)
+        assert head[0] == "r_mm" and len(data) == 61
+        assert data[0, 0] == pytest.approx(5.0) and data[-1, 0] == pytest.approx(20.0)
+        assert np.max(np.abs(data[:, 2] / data[:, 1] - 1)) < 0.01      # E: ours vs analytic within 1 %
+        assert np.max(np.abs(data[1:-1, 4] - data[1:-1, 3])) < 0.003 * 1000.0   # V within 0.3 % of 1000 V
+    guide = bench.build_maxwell_guide()
+    assert "2.14" in guide and "Cylindrical about Z" in guide and "modelA_profile" in guide

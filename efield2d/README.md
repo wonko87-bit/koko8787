@@ -139,6 +139,8 @@ python run_gui.py [model.dxf | project.efp]        # 또는  python -m efield2d.
 `benchmarks/BENCHMARKS.md` — Maxwell 2D 등과 비교할 수 있도록 형상 좌표, 재료, 경계조건, 이 프로그램의 결과값과 권장 허용 오차를
 정리했습니다 (모델 A: 해석해가 있는 2층 동축, ES/DC/AC / 모델 B: 필렛 전극 + 스페이서 + 접지판, 연면 경로).
 DXF와 프로젝트 파일은 `benchmarks/models/`, 재생성은 `python benchmarks/bench.py`.
+**Maxwell 2D에서 모델 A를 확인하는 절차**(기대값 표, 계산기 사용 순서, 안 맞을 때 점검)는 `benchmarks/MAXWELL_GUIDE.md`,
+비교용 E(r)/V(r) 표는 `benchmarks/models/modelA_profile_*.csv`.
 
 ## 로드맵
 

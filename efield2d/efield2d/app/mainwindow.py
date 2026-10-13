@@ -938,6 +938,9 @@ class MainWindow(QMainWindow):
         self.calc_flip = QCheckBox("경로 방향 뒤집기 (플럭스 법선 반전)")
         self.calc_btn = QPushButton("계산")
         self.calc_btn.clicked.connect(self.on_calc)
+        self.calc_csv_btn = QPushButton("프로파일 CSV 저장 (Maxwell 내보내기 데이터와 비교용)")
+        self.calc_csv_btn.clicked.connect(self.on_calc_csv)
+        self._calc_last = None
         f.addRow("계산 종류", self.calc_op_cb)
         f.addRow("예시 수식", self.calc_preset_cb)
         f.addRow("수식 f", self.calc_expr)
@@ -958,6 +961,7 @@ class MainWindow(QMainWindow):
         f.addRow(self.calc_smooth)
         f.addRow(self.calc_flip)
         f.addRow(self.calc_btn)
+        f.addRow(self.calc_csv_btn)
         left.addWidget(g)
         self.calc_hint = QLabel("")
         self.calc_hint.setWordWrap(True)
@@ -1064,6 +1068,7 @@ class MainWindow(QMainWindow):
     def on_calc(self):
         out = []
         self.calc_fig.clear()
+        self._calc_last = None
         try:
             calc = self.get_calc()
             op = self.calc_op_cb.currentData()
@@ -1122,12 +1127,41 @@ class MainWindow(QMainWindow):
                     p = calc.profile(expr, poly, n, side, consts, ref)
                     out += self._profile_text(expr, src, p, ref)
                     self._plot_calc_profile(expr, p, ref)
+                    self._calc_last = {"expr": expr, "ref_expr": ref, "p": p}
         except (FormulaError, DocumentError) as e:
             out = [f"⚠ {e}"]
         except Exception as e:                       # pragma: no cover - defensive
             out = [f"⚠ 예기치 않은 오류: {e}"]
         self.calc_out.setPlainText("\n".join(x for x in out if x is not None))
         self.calc_canvas.draw_idle()
+
+    def on_calc_csv(self):
+        if self._calc_last is None:
+            QMessageBox.information(self, "CSV", "먼저 '경로 프로파일'을 계산하세요")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "프로파일 CSV 저장", "", "CSV (*.csv)")
+        if path:
+            self.save_calc_csv(path)
+
+    def save_calc_csv(self, path: str):
+        """s [mm], x, y [mm], f (re/im or abs), and the reference expression if one was given."""
+        p, ref = self._calc_last["p"], self._calc_last["ref_expr"]
+        v = np.asarray(p["values"])
+        cplx = np.iscomplexobj(v) and np.abs(v.imag).max() > 1e-12 * max(np.abs(v).max(), 1e-300)
+        head = ["s_mm", "x_mm", "y_mm"] + (["f_re", "f_im", "f_abs"] if cplx else ["f"])
+        if ref:
+            head += ["ref_abs"] if cplx else ["ref"]
+        with open(path, "w", newline="", encoding="utf-8-sig") as f:
+            w = csv.writer(f)
+            w.writerow([f"# f = {self._calc_last['expr']}"] + ([f"ref = {ref}"] if ref else []))
+            w.writerow(head)
+            s0 = p["s"][0]
+            for i in range(len(v)):
+                row = [(p["s"][i] - s0) * 1e3, p["xy"][i, 0], p["xy"][i, 1]]
+                row += [v[i].real, v[i].imag, abs(v[i])] if cplx else [v[i].real]
+                if ref:
+                    row.append(abs(p["ref"][i]) if cplx else np.real(p["ref"][i]))
+                w.writerow(row)
 
     def _profile_text(self, expr, src, p, ref):
         v = p["values"]

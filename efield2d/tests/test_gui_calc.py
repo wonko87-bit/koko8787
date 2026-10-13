@@ -200,3 +200,16 @@ def test_dc_and_ac_modes_in_the_gui(app, mode):
     assert "A" in out
     w.doc.dirty = False
     w.close()
+
+
+def test_profile_csv_export(win, tmp_path):
+    select_path(win, [(5.0, 10.0), (20.0, 10.0)])
+    win.calc_ref.setText("abs(V_inner/(log(2)*(1/kappa_L1+1/kappa_L2)))/(r*abs(where(r < 10*mm, kappa_L1, kappa_L2)))")
+    calc(win, "profile", "E", calc_n=61)
+    f = str(tmp_path / "p.csv")
+    win.save_calc_csv(f)
+    lines = open(f, encoding="utf-8-sig").read().splitlines()
+    assert lines[0].startswith("# f = E") and lines[1] == "s_mm,x_mm,y_mm,f,ref"
+    assert len(lines) == 2 + 61
+    first = [float(x) for x in lines[2].split(",")]
+    assert first[1] == pytest.approx(5.0) and first[3] == pytest.approx(first[4], rel=0.01)
