@@ -99,3 +99,62 @@ def test_dc_needs_conductive_material():
                 lines=[DirichletLine(Polygon.from_points([(0, 0), (10, 0)], closed=False), 0.0)])
     with pytest.raises(ValueError):
         solve(p, build_mesh(p), "dc")
+
+
+def _line(a, b, v):
+    return DirichletLine(Polygon.from_points([a, b], closed=False), v)
+
+
+def test_open_line_on_part_of_boundary_sets_only_that_part():
+    """An electrode drawn as an open line touching just part of the outline."""
+    p = Problem(regions=[Region(rect(0, 0, 60, 40), AIR)],
+                lines=[_line((0, 0), (60, 0), 0.0), _line((20, 40), (40, 40), 100.0)],
+                mesh_size=3.0)
+    m = build_mesh(p)
+    x, y = (m.nodes * 1e3).T
+    on_hv = np.isclose(y, 40.0) & (x >= 20 - 1e-6) & (x <= 40 + 1e-6)
+    s = solve(p, m, "es")
+    assert on_hv.sum() > 3 and np.allclose(s.phi[on_hv], 100.0)
+    free_top = np.isclose(y, 40.0) & ((x < 20 - 1e-6) | (x > 40 + 1e-6))
+    assert not np.any(np.isin(m.bc_nodes, np.flatnonzero(free_top)))   # rest of the edge is free
+    assert np.all((s.phi[free_top] > 0) & (s.phi[free_top] < 100))
+
+
+def test_open_line_bending_around_a_corner():
+    p = Problem(regions=[Region(rect(0, 0, 60, 40), AIR)],
+                lines=[_line((0, 0), (60, 0), 0.0),
+                       DirichletLine(Polygon.from_points([(30, 40), (60, 40), (60, 20)], closed=False), 100.0)],
+                mesh_size=3.0)
+    m = build_mesh(p)
+    s = solve(p, m, "es")
+    x, y = (m.nodes * 1e3).T
+    corner = np.isclose(x, 60.0) & (y >= 20 - 1e-6)
+    assert np.allclose(s.phi[corner], 100.0)
+
+
+def test_thin_electrode_inside_region():
+    p = Problem(regions=[Region(rect(0, 0, 60, 40), AIR)],
+                lines=[_line((0, 0), (60, 0), 0.0), _line((20, 20), (40, 20), 100.0)],
+                mesh_size=3.0)
+    m = build_mesh(p)
+    s = solve(p, m, "es")
+    assert s.phi.max() <= 100.0 + 1e-9
+    x, y = (m.nodes * 1e3).T
+    assert np.allclose(s.phi[np.isclose(y, 20.0) & (x >= 20 - 1e-6) & (x <= 40 + 1e-6)], 100.0)
+
+
+def test_line_outside_every_region_is_an_error():
+    p = Problem(regions=[Region(rect(0, 0, 60, 40), AIR)],
+                lines=[_line((0, 0), (60, 0), 0.0), _line((20, 50), (40, 50), 100.0)],
+                mesh_size=3.0)
+    with pytest.raises(ValueError, match="does not lie on or inside"):
+        build_mesh(p)
+
+
+def test_conductor_outside_regions_is_reported():
+    p = Problem(regions=[Region(rect(0, 0, 60, 40), AIR)],
+                lines=[_line((0, 0), (60, 0), 0.0)],
+                conductors=[Conductor(rect(100, 100, 110, 110), 5.0, "stray")],
+                mesh_size=3.0)
+    m = build_mesh(p)
+    assert any("stray" in w for w in m.warnings)

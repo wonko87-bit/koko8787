@@ -20,6 +20,7 @@ class Mesh:
     bc_values: np.ndarray        # (K,) complex
     # Per-electrode node sets, for post-processing: name -> node indices
     electrode_nodes: dict[str, np.ndarray] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def n_nodes(self) -> int:
@@ -200,6 +201,20 @@ def build_mesh(problem: Problem) -> Mesh:
             for n in idxs:
                 bc[n] = complex(ent.voltage)
 
+        # an electrode that ended up with no node in the mesh is not attached to anything
+        warns: list[str] = []
+        for i, ln in enumerate(problem.lines):
+            name = ln.name or f"line{i}"
+            if len(electrode_nodes.get(name, ())) == 0:
+                raise ValueError(
+                    f"Dirichlet line {name!r} does not lie on or inside any region - it would be "
+                    f"ignored and the electrode would have no effect. Check that it touches the "
+                    f"region outline (tolerance {tol:.1e} mm).")
+        for i, c in enumerate(problem.conductors):
+            name = c.name or f"conductor{i}"
+            if len(electrode_nodes.get(name, ())) == 0:
+                warns.append(f"conductor {name!r} does not touch any region and is ignored")
+
         # counter-clockwise orientation
         p = node_xy[tris]
         area2 = (p[:, 1, 0] - p[:, 0, 0]) * (p[:, 2, 1] - p[:, 0, 1]) \
@@ -216,6 +231,7 @@ def build_mesh(problem: Problem) -> Mesh:
             bc_nodes=bc_nodes,
             bc_values=bc_values,
             electrode_nodes={k: np.array(sorted(v), dtype=int) for k, v in electrode_nodes.items()},
+            warnings=warns,
         )
     finally:
         gmsh.finalize()
