@@ -23,6 +23,16 @@ public enum Priority
     Urgent = 4,
 }
 
+public static class PriorityExtensions
+{
+    /// <summary>
+    /// High or above: what "중요" means throughout the app. The two top levels and not the
+    /// top one alone, because 중요 as a word in a line sets High, and a thing a person
+    /// called important should count as important.
+    /// </summary>
+    public static bool IsImportant(this Priority priority) => priority >= Priority.High;
+}
+
 /// <summary>How an entry repeats.</summary>
 public enum RecurrenceKind
 {

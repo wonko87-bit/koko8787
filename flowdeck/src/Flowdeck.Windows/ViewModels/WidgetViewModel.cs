@@ -80,6 +80,17 @@ public sealed class WidgetViewModel : ObservableObject
     public ObservableCollection<TodoRow> Todos { get; } = new();
 
     /// <summary>
+    /// What matters most, whichever day is selected: events and todos at High or above,
+    /// with their dates, under the day's own lists. Anything already shown for the day is
+    /// left out here, so a thing is never on the screen twice.
+    /// </summary>
+    public ObservableCollection<EventRow> ImportantEvents { get; } = new();
+
+    public ObservableCollection<TodoRow> ImportantTodos { get; } = new();
+
+    public bool HasImportant => ImportantEvents.Count > 0 || ImportantTodos.Count > 0;
+
+    /// <summary>
     /// The selected day's meetings from Outlook that are not the user's own. Kept in a
     /// collection of its own rather than mixed into <see cref="Events"/>: one list is
     /// editable and the other is a window onto somewhere else, and a row that silently
@@ -348,9 +359,44 @@ public sealed class WidgetViewModel : ObservableObject
             }
         }
 
+        BuildImportant(now, occurrences, todos);
+
         Raise(nameof(HasEvents));
         Raise(nameof(HasTodos));
         Raise(nameof(HasExternalEvents));
+        Raise(nameof(HasImportant));
+    }
+
+    /// <summary>
+    /// The important lists for this screen. An occurrence or todo that the day's own lists
+    /// already show is skipped: the point is to keep what matters in sight, not to say it
+    /// twice. The rows carry their dates, since this list is not about one day.
+    /// </summary>
+    private void BuildImportant(DateTime now, IReadOnlyList<EventOccurrence> shownEvents, IReadOnlyList<TodoItem> shownTodos)
+    {
+        var shownOccurrences = shownEvents.Select(o => (o.Source.Id, o.Start)).ToHashSet();
+        var shownTodoIds = shownTodos.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+
+        ImportantEvents.Clear();
+        foreach (var occurrence in _repository.ImportantOccurrences(now))
+        {
+            if (shownOccurrences.Contains((occurrence.Source.Id, occurrence.Start))) continue;
+
+            ImportantEvents.Add(new EventRow(
+                occurrence, DeleteEventAsync, RequestEdit,
+                _repository.TodosAttachedTo(occurrence.Source.Id), -1, _tagColor));
+        }
+
+        ImportantTodos.Clear();
+        foreach (var todo in _repository.ImportantTodos())
+        {
+            if (shownTodoIds.Contains(todo.Id)) continue;
+
+            var linked = LinkedEventOf(todo);
+            ImportantTodos.Add(new TodoRow(
+                todo, now, ToggleTodoAsync, DeleteTodoAsync, RequestEdit,
+                linked, OpenLinkedEvent, -1, _tagColor, alwaysShowDate: true));
+        }
     }
 
     private void UpdatePreview()

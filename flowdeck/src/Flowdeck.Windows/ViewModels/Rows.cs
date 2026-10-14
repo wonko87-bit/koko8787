@@ -153,6 +153,9 @@ public sealed class TodoRow : ObservableObject
     private readonly TodoItem _item;
     private readonly Func<TodoRow, Task> _toggle;
 
+    /// <summary>Set for a list that is not about one day, where "오후 3:00" alone would not say which.</summary>
+    private readonly bool _alwaysShowDate;
+
     public TodoRow(
         TodoItem item,
         DateTime now,
@@ -162,10 +165,12 @@ public sealed class TodoRow : ObservableObject
         CalendarEvent? linkedEvent = null,
         Action<TodoRow>? openLinked = null,
         int pairIndex = -1,
-        Func<string, int>? tagColor = null)
+        Func<string, int>? tagColor = null,
+        bool alwaysShowDate = false)
     {
         _item = item;
         _toggle = toggle;
+        _alwaysShowDate = alwaysShowDate;
         TagChips = TagBadge.Of(item.Tags, tagColor);
         IsOverdue = item.IsOverdue(now);
         DeleteCommand = new AsyncRelayCommand(() => delete(this));
@@ -251,7 +256,7 @@ public sealed class TodoRow : ObservableObject
 
             // An overdue item carries its date, because it shows up under today: a bare
             // "오후 9:00" there reads as due tonight rather than as left over from before.
-            return IsOverdue
+            return IsOverdue || _alwaysShowDate
                 ? due.ToString("M월 d일 tt h:mm", Ko.Culture)
                 : due.ToString("tt h:mm", Ko.Culture);
         }
@@ -412,12 +417,34 @@ public sealed class EventRow : ObservableObject
             ? string.Empty
             : $"{occurrence.Start:HH:mm} – {occurrence.End:HH:mm}";
 
+        // Day and time together, for a list that is not about one day.
+        WhenLabel = occurrence.IsAllDay
+            ? occurrence.Start.ToString("M'/'d (ddd) 종일", Ko.Culture)
+            : occurrence.Start.ToString("M'/'d (ddd) HH:mm", Ko.Culture);
+
+        Priority = occurrence.Source.Priority;
         DeleteCommand = new AsyncRelayCommand(() => delete(this));
     }
 
     public string Id { get; }
 
     public string Title { get; }
+
+    /// <summary>"10/16 (목) 14:00" — the whole when, for a row shown away from its own day.</summary>
+    public string WhenLabel { get; }
+
+    public Priority Priority { get; }
+
+    /// <summary>The same ticks a todo shows, so an important event reads as one at a glance.</summary>
+    public string PriorityLabel => Priority switch
+    {
+        Priority.Urgent => "!!!",
+        Priority.High => "!!",
+        Priority.Normal => "!",
+        _ => string.Empty,
+    };
+
+    public bool HasPriority => Priority >= Priority.Normal;
 
     public string TimeLabel { get; }
 

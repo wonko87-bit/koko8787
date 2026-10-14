@@ -184,12 +184,19 @@
           </StackPanel>
         </StackPanel>
 
-        <Button x:Name="Delete"
-                Grid.Column="3"
-                Command="{Binding DeleteCommand}"
-                Content="&#xE711;"
-                Style="{StaticResource Row.Delete}"
-                ToolTip="삭제" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal">
+          <TextBlock Margin="4,1,0,0"
+                     VerticalAlignment="Top"
+                     FontWeight="Bold"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding PriorityLabel}"
+                     Visibility="{Binding HasPriority, Converter={StaticResource BoolToVisibility}}" />
+          <Button x:Name="Delete"
+                  Command="{Binding DeleteCommand}"
+                  Content="&#xE711;"
+                  Style="{StaticResource Row.Delete}"
+                  ToolTip="삭제" />
+        </StackPanel>
       </Grid>
 
       <DataTemplate.Triggers>
@@ -199,6 +206,61 @@
         <DataTrigger Binding="{Binding AttachedAllDone}" Value="True">
           <Setter TargetName="Pair" Property="Opacity" Value="0.35" />
         </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+
+    <!-- An important event shown away from its own day: the whole when goes on the meta
+         line, since the narrow time column of the day list has no room for a date. -->
+    <DataTemplate x:Key="ImportantEventTemplate">
+      <Grid x:Name="Row" Margin="0,0,0,3" Background="Transparent">
+        <Grid.InputBindings>
+          <MouseBinding Command="{Binding EditCommand}" Gesture="LeftDoubleClick" />
+        </Grid.InputBindings>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <Border Width="3" Margin="0,2,7,2" />
+
+        <StackPanel Grid.Column="1">
+          <TextBlock Style="{StaticResource Text.Body}"
+                     Text="{Binding Title}"
+                     TextTrimming="CharacterEllipsis" />
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Style="{StaticResource Text.Meta}" Text="{Binding WhenLabel}" />
+            <TextBlock Margin="6,0,0,0"
+                       Style="{StaticResource Text.Meta}"
+                       Text="{Binding RecurrenceLabel}"
+                       Visibility="{Binding RecurrenceLabel, Converter={StaticResource StringToVisibility}}" />
+            <ItemsControl Margin="6,0,0,0"
+                          VerticalAlignment="Center"
+                          ItemTemplate="{StaticResource TagChip}"
+                          ItemsPanel="{StaticResource TagChipPanel}"
+                          ItemsSource="{Binding TagChips}"
+                          Visibility="{Binding HasTags, Converter={StaticResource BoolToVisibility}}" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal">
+          <TextBlock Margin="4,1,0,0"
+                     VerticalAlignment="Top"
+                     FontWeight="Bold"
+                     Style="{StaticResource Text.Meta}"
+                     Text="{Binding PriorityLabel}" />
+          <Button x:Name="Delete"
+                  Command="{Binding DeleteCommand}"
+                  Content="&#xE711;"
+                  Style="{StaticResource Row.Delete}"
+                  ToolTip="삭제" />
+        </StackPanel>
+      </Grid>
+
+      <DataTemplate.Triggers>
+        <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
+          <Setter TargetName="Delete" Property="Opacity" Value="1" />
+        </Trigger>
       </DataTemplate.Triggers>
     </DataTemplate>
 
@@ -501,6 +563,14 @@
           <TextBlock Style="{StaticResource Text.Meta}"
                      Text="할일이 없습니다"
                      Visibility="{Binding HasTodos, Converter={StaticResource BoolToVisibility}, ConverterParameter=Invert}" />
+
+          <!-- What matters most, whichever day is selected: High and above, with dates. Only
+               shown when there is something in it, and never repeating a row from above. -->
+          <StackPanel Visibility="{Binding HasImportant, Converter={StaticResource BoolToVisibility}}">
+            <TextBlock Margin="0,14,0,6" Style="{StaticResource Text.Section}" Text="중요" />
+            <ItemsControl ItemTemplate="{StaticResource ImportantEventTemplate}" ItemsSource="{Binding ImportantEvents}" />
+            <ItemsControl ItemTemplate="{StaticResource TodoTemplate}" ItemsSource="{Binding ImportantTodos}" />
+          </StackPanel>
         </StackPanel>
       </ScrollViewer>
 

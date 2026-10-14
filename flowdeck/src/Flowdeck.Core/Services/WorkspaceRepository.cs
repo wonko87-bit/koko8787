@@ -503,6 +503,7 @@ public sealed class WorkspaceRepository
         source.End = allDay ? start.Date.AddDays(1).AddSeconds(-1) : source.Start + span;
         source.IsAllDay = allDay;
         source.Tags = new List<string>(edit.Tags ?? new List<string>());
+        source.Priority = edit.Priority;
         source.ReminderMinutesBefore = edit.ReminderMinutesBefore;
         source.UpdatedAt = now;
 
@@ -663,6 +664,57 @@ public sealed class WorkspaceRepository
         }
 
         return results.OrderBy(o => o.Start).ToList();
+    }
+
+    // ---- what is important, whatever the day ------------------------------------
+
+    /// <summary>
+    /// Open todos at High or above, soonest due first and undated ones last. Shown under
+    /// every day's list so that the few things that matter most are never a click away,
+    /// whichever day is being looked at.
+    /// </summary>
+    public IReadOnlyList<TodoItem> ImportantTodos() =>
+        _workspace.Todos
+            .Where(t => !t.IsDone && t.Priority.IsImportant())
+            .OrderBy(t => t.DueAt.HasValue ? 0 : 1)
+            .ThenBy(t => t.DueAt ?? DateTime.MaxValue)
+            .ThenByDescending(t => t.Priority)
+            .ToList();
+
+    /// <summary>
+    /// Events at High or above that are still ahead — or under way — as of <paramref name="now"/>,
+    /// soonest first. A repeat contributes its next occurrence only: what matters about a
+    /// standing important meeting is when the next one is, not that it recurs.
+    /// </summary>
+    public IReadOnlyList<EventOccurrence> ImportantOccurrences(DateTime now)
+    {
+        var results = new List<EventOccurrence>();
+
+        foreach (var source in _workspace.Events.Where(e => e.Priority.IsImportant()))
+        {
+            var span = source.End - source.Start;
+            if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+
+            if (!source.Recurrence.IsRepeating)
+            {
+                if (source.Start + span < now) continue;
+                results.Add(new EventOccurrence { Source = source, Start = source.Start, End = source.Start + span });
+                continue;
+            }
+
+            // The occurrence under way right now counts as the next one: a meeting that
+            // started ten minutes ago is still the one that matters.
+            var next = RecurrenceExpander.Next(source.Start, source.Recurrence, now - span);
+            if (next.HasValue)
+            {
+                results.Add(new EventOccurrence { Source = source, Start = next.Value, End = next.Value + span });
+            }
+        }
+
+        return results
+            .OrderBy(o => o.Start)
+            .ThenByDescending(o => o.Source.Priority)
+            .ToList();
     }
 
     /// <summary>The repeat rules themselves, one entry per event, earliest start first.</summary>

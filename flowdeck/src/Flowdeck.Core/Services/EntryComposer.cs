@@ -98,6 +98,7 @@ public static class EntryComposer
             Start = start,
             End = end,
             IsAllDay = !entry.HasTime,
+            Priority = entry.Priority,
             Tags = new List<string>(entry.Tags),
             Recurrence = entry.Recurrence.Clone(),
             ReminderMinutesBefore = entry.ReminderMinutesBefore,

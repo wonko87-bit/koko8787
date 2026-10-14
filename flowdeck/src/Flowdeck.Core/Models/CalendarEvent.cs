@@ -28,6 +28,13 @@ public sealed class CalendarEvent
 
     public List<string> Tags { get; set; } = new();
 
+    /// <summary>
+    /// How much this matters, on the same scale as a todo's. Written the same way too —
+    /// <c>!1</c>, <c>!2</c>, or the word 중요 or 긴급 in the line. An event at High or above
+    /// is kept in sight under every day's list, not only on its own day.
+    /// </summary>
+    public Priority Priority { get; set; } = Priority.None;
+
     public Recurrence Recurrence { get; set; } = Recurrence.None;
 
     public DateTime CreatedAt { get; set; } = DateTime.Now;

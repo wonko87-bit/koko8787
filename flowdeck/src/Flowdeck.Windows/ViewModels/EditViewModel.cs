@@ -63,7 +63,7 @@ public sealed class EditViewModel : ObservableObject
         _date = (when ?? now).ToString("yyyy-MM-dd", Ko.Culture);
         _time = (when ?? now).ToString("HH:mm", Ko.Culture);
         _tags = string.Join(" ", (todo?.Tags ?? source?.Tags ?? new List<string>()).Select(t => "#" + t));
-        _priority = todo?.Priority ?? Priority.None;
+        _priority = todo?.Priority ?? source?.Priority ?? Priority.None;
 
         var minutes = todo?.ReminderMinutesBefore ?? source?.ReminderMinutesBefore;
         _reminder = minutes?.ToString(Ko.Culture) ?? string.Empty;
@@ -120,8 +120,8 @@ public sealed class EditViewModel : ObservableObject
     public string AdoptedNote =>
         $"{_repository.External?.DisplayName ?? "Outlook"} 에서 가져온 회의입니다. 여기 적는 메모는 이 PC에만 남고 회의 쪽으로 보내지 않습니다.";
 
-    /// <summary>Priority belongs to todos; an event has no such field to edit.</summary>
-    public bool ShowPriority => IsTodo;
+    /// <summary>Both kinds carry a priority now; an important meeting is as real as an important todo.</summary>
+    public bool ShowPriority => true;
 
     /// <summary>An event has to sit somewhere on the calendar, so only a todo may lose its date.</summary>
     public bool CanClearDate => IsTodo;
