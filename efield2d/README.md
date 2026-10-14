@@ -3,6 +3,22 @@
 2D 전계 FEM 해석 (평면 / 축대칭, DC · AC). 개인·연구용.
 FEMM 방식(1차 삼각요소, 스칼라 포텐셜)을 참고해 Python으로 새로 구현했습니다.
 
+## 빠른 시작 (Windows)
+
+실행 파일(exe)은 아직 없고, Python 으로 실행합니다 (Python 3.10 이상, 개발은 3.13 에서 검증).
+
+```
+git clone -b claude/dazzling-goldberg-5yuzxt https://github.com/wonko87-bit/koko8787.git
+cd koko8787\efield2d
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python run_gui.py
+```
+
+(git 대신 GitHub 에서 해당 브랜치를 선택하고 *Code ▸ Download ZIP* 으로 받아도 됩니다.) 처음 실행할 때 DXF 열기 → 도형 클릭 → 할당 → F5 순서는 아래 *GUI* 절 참고.
+테스트: `python -m pytest -q` (GUI 테스트는 화면 없이 실행).
+
 ## 지원 해석
 
 모두 `div(kappa grad V) = 0` 을 풀고 kappa만 다릅니다.
