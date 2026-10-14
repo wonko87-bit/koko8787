@@ -682,8 +682,10 @@ public sealed class WorkspaceRepository
             .ToList();
 
     /// <summary>
-    /// Events at High or above that are still ahead — or under way — as of <paramref name="now"/>,
-    /// soonest first. A repeat contributes its next occurrence only: what matters about a
+    /// Events at High or above, soonest first — the ones already over included. An important
+    /// thing does not stop being important because its date went by; the follow-up from it is
+    /// usually still owed, and it is the user's to delete or demote when it is done with, not
+    /// the list's to hide. A repeat contributes its next occurrence only: what matters about a
     /// standing important meeting is when the next one is, not that it recurs.
     /// </summary>
     public IReadOnlyList<EventOccurrence> ImportantOccurrences(DateTime now)
@@ -697,7 +699,6 @@ public sealed class WorkspaceRepository
 
             if (!source.Recurrence.IsRepeating)
             {
-                if (source.Start + span < now) continue;
                 results.Add(new EventOccurrence { Source = source, Start = source.Start, End = source.Start + span });
                 continue;
             }

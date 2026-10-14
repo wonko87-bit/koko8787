@@ -68,8 +68,10 @@ public class ImportantTests
     // ---- events ---------------------------------------------------------------
 
     [Fact]
-    public async Task ImportantEventsAreTheOnesAheadAtHighOrAboveSoonestFirst()
+    public async Task ImportantEventsAreTheOnesAtHighOrAboveSoonestFirstPastOnesIncluded()
     {
+        // An event that has gone by stays: it is the user's to delete or demote when they are
+        // done with it, not the list's to hide.
         var workspace = new Workspace();
         workspace.Events.Add(Event("지난 중요", Priority.High, Now.AddDays(-2)));
         workspace.Events.Add(Event("보통 회의", Priority.Normal, Now.AddDays(1)));
@@ -77,17 +79,7 @@ public class ImportantTests
         workspace.Events.Add(Event("내일 급함", Priority.Urgent, Now.AddDays(1)));
         var repository = await Repository(workspace);
 
-        Assert.Equal(new[] { "내일 급함", "다음주 중요" }, repository.ImportantOccurrences(Now).Select(o => o.Title));
-    }
-
-    [Fact]
-    public async Task AnImportantMeetingUnderWayRightNowStillCounts()
-    {
-        var workspace = new Workspace();
-        workspace.Events.Add(Event("진행 중", Priority.High, Now.AddMinutes(-20)));
-        var repository = await Repository(workspace);
-
-        Assert.Single(repository.ImportantOccurrences(Now));
+        Assert.Equal(new[] { "지난 중요", "내일 급함", "다음주 중요" }, repository.ImportantOccurrences(Now).Select(o => o.Title));
     }
 
     [Fact]
