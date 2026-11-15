@@ -45,6 +45,7 @@ jobs:
           if (!(Test-Path selftest_exe.png)) { throw "no output png" }
 
       - name: Upload exe
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: PostFX2D-windows
@@ -52,5 +53,5 @@ jobs:
             postfx2d/dist/PostFX2D.exe
             postfx2d/tools/sample.png
             postfx2d/selftest_exe.png
-            postfx2d/selftest_exe_summary.csv
-          if-no-files-found: error
+            postfx2d/selftest_*
+          if-no-files-found: warn

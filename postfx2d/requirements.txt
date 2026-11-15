@@ -1,5 +1,5 @@
 numpy
 opencv-python-headless
 pillow
-rapidocr-onnxruntime
+rapidocr-onnxruntime==1.2.3
 pywin32; sys_platform == "win32"

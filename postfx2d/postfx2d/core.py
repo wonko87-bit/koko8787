@@ -119,7 +119,8 @@ def read_numbers(img: np.ndarray) -> list[tuple[float, str, tuple[int, int, int,
     """이미지 안의 숫자 텍스트 → (값, 원문, box). 작은 글씨 대비 2배 확대 후 인식."""
     scale = 2.0 if max(img.shape[:2]) < 2500 else 1.0
     big = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-    res, _ = _get_ocr()(big)
+    res = _get_ocr()(big)
+    res = res[0] if isinstance(res, tuple) else res
     out = []
     for box, text, conf in res or []:
         t = text.replace(" ", "").replace("O", "0").replace("o", "0")

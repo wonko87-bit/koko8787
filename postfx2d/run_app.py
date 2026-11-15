@@ -14,6 +14,16 @@ def selftest(inp, out):
     glob = sum(r["하이라이트"] == "글로벌" for r in res.rows)
     vals = sum(p.value is not None for p in res.points)
     ok = len(res.groups) == 6 and glob == 1 and vals == len(res.points)
+    report = (f"groups={len(res.groups)} global={glob} read={vals}/{len(res.points)} "
+              f"warnings={res.warnings}\n" + "\n".join(map(str, res.rows)))
+    if sys.stdout:                     # 창 모드 exe 에서는 stdout 이 없음
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+            print(report)
+        except Exception:
+            pass
+    with open(out.rsplit(".", 1)[0] + "_report.txt", "w", encoding="utf-8") as f:
+        f.write(report)
     return 0 if ok else 1
 
 
