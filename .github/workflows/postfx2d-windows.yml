@@ -1,0 +1,56 @@
+name: PostFX2D Windows Build
+
+on:
+  push:
+    branches: ["main", "claude/kind-wright-bz2x0w"]
+    paths: ["postfx2d/**", ".github/workflows/postfx2d-windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: postfx2d
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: postfx2d/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Source self-test
+        run: python run_app.py --selftest tools/sample.png selftest_src.png
+
+      - name: Build exe (PyInstaller, onefile)
+        run: >
+          pyinstaller --noconfirm --onefile --windowed --name PostFX2D
+          --collect-all rapidocr_onnxruntime
+          --collect-binaries onnxruntime
+          --add-data "tools/sample.png;."
+          run_app.py
+
+      - name: Exe self-test
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\PostFX2D.exe -ArgumentList "--selftest","tools\sample.png","selftest_exe.png" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "exe self-test failed: $($p.ExitCode)" }
+          if (!(Test-Path selftest_exe.png)) { throw "no output png" }
+
+      - name: Upload exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: PostFX2D-windows
+          path: |
+            postfx2d/dist/PostFX2D.exe
+            postfx2d/tools/sample.png
+            postfx2d/selftest_exe.png
+            postfx2d/selftest_exe_summary.csv
+          if-no-files-found: error

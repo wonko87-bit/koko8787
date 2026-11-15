@@ -1,0 +1,5 @@
+numpy
+opencv-python-headless
+pillow
+rapidocr-onnxruntime
+pywin32; sys_platform == "win32"

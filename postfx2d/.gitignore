@@ -1,0 +1,5 @@
+build/
+dist/
+*.spec
+selftest_*
+__pycache__/
