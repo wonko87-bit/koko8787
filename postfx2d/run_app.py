@@ -13,8 +13,9 @@ def selftest(inp, out):
     core.save_csv(res.rows, out.rsplit(".", 1)[0] + "_summary.csv")
     glob = sum(r["하이라이트"] == "글로벌" for r in res.rows)
     vals = sum(p.value is not None for p in res.points)
-    ok = len(res.groups) == 6 and glob == 1 and vals == len(res.points)
-    report = (f"groups={len(res.groups)} global={glob} read={vals}/{len(res.points)} "
+    idx = sum(p.index is not None for p in res.points)
+    ok = len(res.groups) == 6 and glob == 1 and vals == idx == len(res.points)
+    report = (f"groups={len(res.groups)} global={glob} read={vals}/{len(res.points)} index={idx} "
               f"warnings={res.warnings}\n" + "\n".join(map(str, res.rows)))
     if sys.stdout:                     # 창 모드 exe 에서는 stdout 이 없음
         try:

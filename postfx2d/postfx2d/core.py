@@ -48,7 +48,6 @@ class Settings:
     group_alpha: float = 0.18
     highlight_alpha: float = 0.45
     pad: int = 14
-    clean: bool = False             # True = 최소 지점 외 점/숫자 지우기
 
 
 @dataclass
@@ -58,6 +57,7 @@ class Point:
     y: float
     r: float
     value: float | None = None
+    index: int | None = None
     text: str = ""
     text_box: tuple[int, int, int, int] | None = None  # x0,y0,x1,y1
     group: int = -1
@@ -116,31 +116,71 @@ def _get_ocr():
     return _ocr_engine
 
 
-def read_numbers(img: np.ndarray) -> list[tuple[float, str, tuple[int, int, int, int]]]:
-    """이미지 안의 숫자 텍스트 → (값, 원문, box). 작은 글씨 대비 2배 확대 후 인식."""
+IDX_RE = re.compile(r"[(\[{]\s*(\d+)\s*[)\]}]?|(?:(?<=\s)|^)(\d+)\s*[)\]}]")
+
+
+def parse_label(text: str) -> tuple[float | None, int | None]:
+    """'1.28 (12)' → (1.28, 12). 괄호 안 숫자 = 인덱스, 나머지 숫자 = 안전율."""
+    t = text.strip().replace("O", "0").replace("o", "0")
+    idx = None
+    m = IDX_RE.search(t)
+    if m:
+        idx = int(m.group(1) or m.group(2))
+        t = t[:m.start()] + " " + t[m.end():]
+    t = re.sub(r"(?<=[\d.,])\s+(?=[\d.,])", "", t)   # '1. 28' 처럼 쪼개진 숫자 붙이기
+    val = None
+    for v in NUM_RE.finditer(t):
+        try:
+            val = float(v.group().replace(",", "."))
+            break
+        except ValueError:
+            pass
+    return val, idx
+
+
+def read_numbers(img: np.ndarray) -> list[dict]:
+    """이미지 안의 라벨 → [{value, index, text, box}]. 작은 글씨 대비 2배 확대 후 인식."""
     scale = 2.0 if max(img.shape[:2]) < 2500 else 1.0
     big = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
     res = _get_ocr()(big)
     res = res[0] if isinstance(res, tuple) else res
-    out = []
+    items = []
     for box, text, conf in res or []:
-        t = text.replace(" ", "").replace("O", "0").replace("o", "0")
-        for m in NUM_RE.finditer(t):
-            try:
-                val = float(m.group().replace(",", "."))
-            except ValueError:
+        val, idx = parse_label(text)
+        if val is None and idx is None:
+            continue
+        xs = [p[0] / scale for p in box]
+        ys = [p[1] / scale for p in box]
+        items.append({"value": val, "index": idx, "text": text.strip(),
+                      "box": (int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys)))})
+    # OCR 이 '(12)' 를 따로 떼어 읽은 경우 → 같은 줄의 가장 가까운 값 라벨에 합침
+    vals = [it for it in items if it["value"] is not None]
+    for it in [it for it in items if it["value"] is None]:
+        x0, y0, x1, y1 = it["box"]
+        h = y1 - y0
+        best, bd = None, 3 * max(h, 8)
+        for v in vals:
+            if v["index"] is not None:
                 continue
-            xs = [p[0] / scale for p in box]
-            ys = [p[1] / scale for p in box]
-            out.append((val, m.group(), (int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys)))))
-            break
-    return out
+            vx0, vy0, vx1, vy1 = v["box"]
+            if min(y1, vy1) - max(y0, vy0) < 0.4 * min(h, vy1 - vy0):
+                continue                          # 같은 줄 아님
+            d = max(x0 - vx1, vx0 - x1, 0)
+            if d < bd:
+                best, bd = v, d
+        if best:
+            best["index"] = it["index"]
+            best["text"] += " " + it["text"]
+            bx = best["box"]
+            best["box"] = (min(bx[0], x0), min(bx[1], y0), max(bx[2], x1), max(bx[3], y1))
+    return vals
 
 
-def pair_numbers(points: list[Point], nums) -> None:
-    """각 숫자를 가장 가까운 점에 1:1 매칭(가까운 쌍부터 탐욕적)."""
+def pair_numbers(points: list[Point], nums: list[dict]) -> None:
+    """각 라벨을 가장 가까운 점에 1:1 매칭(가까운 쌍부터 탐욕적)."""
     cands = []
-    for ni, (_, _, (x0, y0, x1, y1)) in enumerate(nums):
+    for ni, it in enumerate(nums):
+        x0, y0, x1, y1 = it["box"]
         # 라벨은 점 옆에 붙으므로, 박스 네 변의 중점까지 거리로 판단
         # (숫자 위에 겹쳐 찍힌 다른 점이 잘못 매칭되는 것 방지)
         cy, cx = (y0 + y1) / 2, (x0 + x1) / 2
@@ -156,8 +196,8 @@ def pair_numbers(points: list[Point], nums) -> None:
         p = points[pi]
         if d > max(70, p.r * 14):
             continue
-        val, text, box = nums[ni]
-        p.value, p.text, p.text_box = val, text, box
+        it = nums[ni]
+        p.value, p.index, p.text, p.text_box = it["value"], it["index"], it["text"], it["box"]
         used_n.add(ni)
         used_p.add(pi)
 
@@ -255,42 +295,7 @@ def _label(img, text, org, color):
     cv2.putText(img, text, (x, y - 1), font, sc, color, th, cv2.LINE_AA)
 
 
-def _targets(g):
-    """그룹의 하이라이트 대상: 빨간 점이 있으면 그것, 없으면 최소값 점(동률 전부)."""
-    glob = [p for p in g if p.cls == "GLOBAL"]
-    if glob:
-        return glob
-    vals = [p.value for p in g if p.value is not None]
-    return [p for p in g if vals and p.value == min(vals)]
-
-
-def _ink_mask(shape, points, grow=3):
-    m = np.zeros(shape[:2], np.uint8)
-    for p in points:
-        cv2.circle(m, (int(p.x), int(p.y)), int(p.r) + grow, 255, -1)
-        if p.text_box:
-            x0, y0, x1, y1 = p.text_box
-            cv2.rectangle(m, (x0 - grow, y0 - grow), (x1 + grow, y1 + grow), 255, -1)
-    return m
-
-
-def erase_points(img, points, keep=()):
-    """점 + 숫자 영역을 주변 배경으로 메움(inpaint). keep 영역은 보호."""
-    m = _ink_mask(img.shape, points, 3)
-    if keep:
-        m[_ink_mask(img.shape, keep, 1) > 0] = 0
-    if not m.any():
-        return img.copy()
-    return cv2.inpaint(img, m, 3, cv2.INPAINT_TELEA)
-
-
 def render(img, groups, s: Settings):
-    keep = [p for g in groups for p in _targets(g)]
-    if s.clean:
-        others = [p for g in groups for p in g if p not in keep]
-        orig, img = img, erase_points(img, others, keep)
-    else:
-        orig = img
     out = img.copy()
     # 그룹 음영
     gmasks = []
@@ -303,7 +308,11 @@ def render(img, groups, s: Settings):
         gmasks.append((m, dark))
     # 하이라이트
     for g in groups:
-        for p in _targets(g):
+        vals = [p.value for p in g if p.value is not None]
+        has_global = any(p.cls == "GLOBAL" for p in g)
+        targets = [p for p in g if p.cls == "GLOBAL"] if has_global else \
+                  ([p for p in g if p.value == min(vals)] if vals else [])
+        for p in targets:
             glob = p.cls == "GLOBAL"
             color = GLOBAL_HL if glob else LOCAL_HL
             m = np.zeros(out.shape[:2], np.uint8)
@@ -315,29 +324,14 @@ def render(img, groups, s: Settings):
             _outline(out, m, color, 3 if glob else 2)
     # 원본 점/숫자(잉크)가 음영에 묻히지 않도록 원본 픽셀 복원
     roi = np.zeros(img.shape[:2], np.uint8)
-    for p in (keep if s.clean else [p for g in groups for p in g]):
-        x0, y0, x1, y1 = p.bbox()
-        cv2.rectangle(roi, (x0 - 2, y0 - 2), (x1 + 2, y1 + 2), 255, -1)
+    for g in groups:
+        for p in g:
+            x0, y0, x1, y1 = p.bbox()
+            cv2.rectangle(roi, (x0 - 2, y0 - 2), (x1 + 2, y1 + 2), 255, -1)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     sat = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)[..., 1]
     ink = (roi > 0) & ((gray < 120) | (sat > 90))
-    if s.clean:   # 남길 점/숫자는 원본에서 그대로 복원 (겹친 다른 점 잔상 방지)
-        km = _ink_mask(img.shape, keep, 1) > 0
-        gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
-        sat = cv2.cvtColor(orig, cv2.COLOR_BGR2HSV)[..., 1]
-        ink = km & ((gray < 120) | (sat > 90))
-        dots = np.zeros(img.shape[:2], np.uint8)
-        for p in keep:
-            cv2.circle(dots, (int(p.x), int(p.y)), int(p.r) + 1, 255, -1)
-        ink &= ~((sat > 90) & (dots == 0))    # 다른 색 점 잔상 제외, 숫자는 유지
-        others = [p for g in groups for p in g if p not in keep]
-        for p in others:                       # 겹친 다른 점 자리는 복원하지 않음
-            oc = np.zeros(img.shape[:2], np.uint8)
-            cv2.circle(oc, (int(p.x), int(p.y)), int(p.r) + 2, 255, -1)
-            ink &= ~((oc > 0) & (dots == 0))
-        out[ink] = orig[ink]
-    else:
-        out[ink] = img[ink]
+    out[ink] = img[ink]
     # 그룹 번호
     for gi, (g, (m, dark)) in enumerate(zip(groups, gmasks), 1):
         ys, xs = np.nonzero(m)
@@ -361,6 +355,9 @@ def process(img: np.ndarray, s: Settings | None = None, ocr=True) -> Result:
     groups = group_points(pts, gap)
     if sum(p.cls == "GLOBAL" for p in pts) == 0:
         warnings.append("빨간 점(Global Minimum)을 찾지 못했습니다.")
+    noidx = sum(p.value is not None and p.index is None for p in pts)
+    if noidx:
+        warnings.append(f"인덱스(괄호 숫자)를 읽지 못한 점 {noidx}개")
     miss = sum(p.value is None for p in pts)
     if miss:
         warnings.append(f"숫자를 읽지 못한 점 {miss}개 (표에서 직접 수정 가능)")
@@ -391,11 +388,11 @@ def summarize(groups) -> list[dict]:
                 "구분": "Global Min" if p.cls == "GLOBAL" else p.cls,
                 "하이라이트": "글로벌" if p.cls == "GLOBAL" else "국소",
                 "X(px)": int(p.x), "Y(px)": int(p.y),
-                "그룹 최대": max(vals) if vals else "",
+                "인덱스": "" if p.index is None else p.index,
             })
         if not mins:
             rows.append({"그룹": f"G{gi}", "점 개수": len(g), "최소 안전율": "",
-                         "구분": "", "하이라이트": "", "X(px)": "", "Y(px)": "", "그룹 최대": ""})
+                         "구분": "", "하이라이트": "", "X(px)": "", "Y(px)": "", "인덱스": ""})
     return rows
 
 

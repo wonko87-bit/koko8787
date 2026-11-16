@@ -85,9 +85,6 @@ class App(tk.Tk):
         st.configure("TNotebook", background=PANEL, borderwidth=0)
         st.configure("TNotebook.Tab", background=PANEL, foreground=MUTED, padding=(14, 6))
         st.map("TNotebook.Tab", background=[("selected", CARD)], foreground=[("selected", FG)])
-        st.configure("TCheckbutton", background=PANEL, foreground=FG, indicatorcolor=CARD)
-        st.map("TCheckbutton", background=[("active", PANEL)],
-               indicatorcolor=[("selected", ACCENT)])
         st.configure("Horizontal.TProgressbar", background=ACCENT, troughcolor=CARD, borderwidth=0)
 
     # ------------------------------------------------------------ layout
@@ -131,9 +128,6 @@ class App(tk.Tk):
         self._slider(side, "하이라이트 농도", self.v_halpha, 0.2, 0.8)
         self.v_pad = tk.IntVar(value=14)
         self._spin(side, "음영 여백 (px)", self.v_pad, 2, 60)
-        self.v_clean = tk.BooleanVar(value=False)
-        ttk.Checkbutton(side, text="최소 지점 외 점·숫자 지우기", variable=self.v_clean,
-                        command=self.redraw).pack(anchor="w", pady=(6, 0))
 
         self.btn_run = ttk.Button(side, text="▶  분석 실행", style="Accent.TButton",
                                   command=self.run)
@@ -180,9 +174,9 @@ class App(tk.Tk):
         tables = ttk.Notebook(main, height=210)
         tables.pack(fill="x", pady=(12, 0))
         self.tree_sum = self._tree(tables, ["그룹", "점 개수", "최소 안전율", "구분",
-                                            "하이라이트", "X(px)", "Y(px)", "그룹 최대"])
+                                            "하이라이트", "X(px)", "Y(px)", "인덱스"])
         tables.add(self.tree_sum.master, text="  요약 (그룹별 최소)  ")
-        self.tree_pts = self._tree(tables, ["#", "그룹", "구분", "안전율", "X(px)", "Y(px)"])
+        self.tree_pts = self._tree(tables, ["#", "그룹", "구분", "안전율", "인덱스", "X(px)", "Y(px)"])
         tables.add(self.tree_pts.master, text="  전체 점  (더블클릭: 값 수정)  ")
         self.tree_pts.bind("<Double-1>", self._edit_value)
 
@@ -261,8 +255,7 @@ class App(tk.Tk):
         return core.Settings(group_count=int(self.v_count.get() or 0),
                              group_alpha=float(self.v_galpha.get()),
                              highlight_alpha=float(self.v_halpha.get()),
-                             pad=int(self.v_pad.get()),
-                             clean=bool(self.v_clean.get()))
+                             pad=int(self.v_pad.get()))
 
     def run(self):
         if self.src is None:
@@ -325,7 +318,8 @@ class App(tk.Tk):
                 self._pt_index.append(p)
                 self.tree_pts.insert("", "end", iid=str(i - 1), values=[
                     i, f"G{p.group}", "Global" if p.cls == "GLOBAL" else p.cls,
-                    "" if p.value is None else p.value, int(p.x), int(p.y)],
+                    "" if p.value is None else p.value,
+                    "" if p.index is None else p.index, int(p.x), int(p.y)],
                     tags=("global",) if p.cls == "GLOBAL" else ())
 
     def _edit_value(self, event):
