@@ -48,6 +48,7 @@ class Settings:
     group_alpha: float = 0.18
     highlight_alpha: float = 0.45
     pad: int = 14
+    clean: bool = False             # True = 최소 지점 외 점/숫자 지우기
 
 
 @dataclass
@@ -140,17 +141,20 @@ def pair_numbers(points: list[Point], nums) -> None:
     """각 숫자를 가장 가까운 점에 1:1 매칭(가까운 쌍부터 탐욕적)."""
     cands = []
     for ni, (_, _, (x0, y0, x1, y1)) in enumerate(nums):
+        # 라벨은 점 옆에 붙으므로, 박스 네 변의 중점까지 거리로 판단
+        # (숫자 위에 겹쳐 찍힌 다른 점이 잘못 매칭되는 것 방지)
+        cy, cx = (y0 + y1) / 2, (x0 + x1) / 2
+        anchors = [(x0, cy), (x1, cy), (cx, y0), (cx, y1)]
         for pi, p in enumerate(points):
-            dx = max(x0 - p.x, 0, p.x - x1)
-            dy = max(y0 - p.y, 0, p.y - y1)
-            cands.append((np.hypot(dx, dy), ni, pi))
+            d = min(np.hypot(p.x - ax, p.y - ay) for ax, ay in anchors)
+            cands.append((d, ni, pi))
     cands.sort()
     used_n, used_p = set(), set()
     for d, ni, pi in cands:
         if ni in used_n or pi in used_p:
             continue
         p = points[pi]
-        if d > max(60, p.r * 12):
+        if d > max(70, p.r * 14):
             continue
         val, text, box = nums[ni]
         p.value, p.text, p.text_box = val, text, box
@@ -251,7 +255,42 @@ def _label(img, text, org, color):
     cv2.putText(img, text, (x, y - 1), font, sc, color, th, cv2.LINE_AA)
 
 
+def _targets(g):
+    """그룹의 하이라이트 대상: 빨간 점이 있으면 그것, 없으면 최소값 점(동률 전부)."""
+    glob = [p for p in g if p.cls == "GLOBAL"]
+    if glob:
+        return glob
+    vals = [p.value for p in g if p.value is not None]
+    return [p for p in g if vals and p.value == min(vals)]
+
+
+def _ink_mask(shape, points, grow=3):
+    m = np.zeros(shape[:2], np.uint8)
+    for p in points:
+        cv2.circle(m, (int(p.x), int(p.y)), int(p.r) + grow, 255, -1)
+        if p.text_box:
+            x0, y0, x1, y1 = p.text_box
+            cv2.rectangle(m, (x0 - grow, y0 - grow), (x1 + grow, y1 + grow), 255, -1)
+    return m
+
+
+def erase_points(img, points, keep=()):
+    """점 + 숫자 영역을 주변 배경으로 메움(inpaint). keep 영역은 보호."""
+    m = _ink_mask(img.shape, points, 3)
+    if keep:
+        m[_ink_mask(img.shape, keep, 1) > 0] = 0
+    if not m.any():
+        return img.copy()
+    return cv2.inpaint(img, m, 3, cv2.INPAINT_TELEA)
+
+
 def render(img, groups, s: Settings):
+    keep = [p for g in groups for p in _targets(g)]
+    if s.clean:
+        others = [p for g in groups for p in g if p not in keep]
+        orig, img = img, erase_points(img, others, keep)
+    else:
+        orig = img
     out = img.copy()
     # 그룹 음영
     gmasks = []
@@ -264,11 +303,7 @@ def render(img, groups, s: Settings):
         gmasks.append((m, dark))
     # 하이라이트
     for g in groups:
-        vals = [p.value for p in g if p.value is not None]
-        has_global = any(p.cls == "GLOBAL" for p in g)
-        targets = [p for p in g if p.cls == "GLOBAL"] if has_global else \
-                  ([p for p in g if p.value == min(vals)] if vals else [])
-        for p in targets:
+        for p in _targets(g):
             glob = p.cls == "GLOBAL"
             color = GLOBAL_HL if glob else LOCAL_HL
             m = np.zeros(out.shape[:2], np.uint8)
@@ -280,14 +315,29 @@ def render(img, groups, s: Settings):
             _outline(out, m, color, 3 if glob else 2)
     # 원본 점/숫자(잉크)가 음영에 묻히지 않도록 원본 픽셀 복원
     roi = np.zeros(img.shape[:2], np.uint8)
-    for g in groups:
-        for p in g:
-            x0, y0, x1, y1 = p.bbox()
-            cv2.rectangle(roi, (x0 - 2, y0 - 2), (x1 + 2, y1 + 2), 255, -1)
+    for p in (keep if s.clean else [p for g in groups for p in g]):
+        x0, y0, x1, y1 = p.bbox()
+        cv2.rectangle(roi, (x0 - 2, y0 - 2), (x1 + 2, y1 + 2), 255, -1)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     sat = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)[..., 1]
     ink = (roi > 0) & ((gray < 120) | (sat > 90))
-    out[ink] = img[ink]
+    if s.clean:   # 남길 점/숫자는 원본에서 그대로 복원 (겹친 다른 점 잔상 방지)
+        km = _ink_mask(img.shape, keep, 1) > 0
+        gray = cv2.cvtColor(orig, cv2.COLOR_BGR2GRAY)
+        sat = cv2.cvtColor(orig, cv2.COLOR_BGR2HSV)[..., 1]
+        ink = km & ((gray < 120) | (sat > 90))
+        dots = np.zeros(img.shape[:2], np.uint8)
+        for p in keep:
+            cv2.circle(dots, (int(p.x), int(p.y)), int(p.r) + 1, 255, -1)
+        ink &= ~((sat > 90) & (dots == 0))    # 다른 색 점 잔상 제외, 숫자는 유지
+        others = [p for g in groups for p in g if p not in keep]
+        for p in others:                       # 겹친 다른 점 자리는 복원하지 않음
+            oc = np.zeros(img.shape[:2], np.uint8)
+            cv2.circle(oc, (int(p.x), int(p.y)), int(p.r) + 2, 255, -1)
+            ink &= ~((oc > 0) & (dots == 0))
+        out[ink] = orig[ink]
+    else:
+        out[ink] = img[ink]
     # 그룹 번호
     for gi, (g, (m, dark)) in enumerate(zip(groups, gmasks), 1):
         ys, xs = np.nonzero(m)

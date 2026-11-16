@@ -22,9 +22,11 @@
 
 출력: `이름_minSF.png` + `이름_minSF_summary.csv` (Excel 호환 UTF-8)
 
-| 원본(합성 샘플) | 결과 |
-|---|---|
-| ![](tools/sample.png) | ![](docs/sample_result.png) |
+| 원본(합성 샘플) | 결과 | 결과 (정리 모드) |
+|---|---|---|
+| ![](tools/sample.png) | ![](docs/sample_result.png) | ![](docs/sample_result_clean.png) |
+
+**정리 모드** (`최소 지점 외 점·숫자 지우기` 체크 / CLI `--clean`): 하이라이트된 최소 지점만 남기고 나머지 점·숫자는 주변 배경으로 지워 음영만 남깁니다.
 
 ## 사용법 (exe)
 

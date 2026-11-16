@@ -85,6 +85,9 @@ class App(tk.Tk):
         st.configure("TNotebook", background=PANEL, borderwidth=0)
         st.configure("TNotebook.Tab", background=PANEL, foreground=MUTED, padding=(14, 6))
         st.map("TNotebook.Tab", background=[("selected", CARD)], foreground=[("selected", FG)])
+        st.configure("TCheckbutton", background=PANEL, foreground=FG, indicatorcolor=CARD)
+        st.map("TCheckbutton", background=[("active", PANEL)],
+               indicatorcolor=[("selected", ACCENT)])
         st.configure("Horizontal.TProgressbar", background=ACCENT, troughcolor=CARD, borderwidth=0)
 
     # ------------------------------------------------------------ layout
@@ -128,6 +131,9 @@ class App(tk.Tk):
         self._slider(side, "하이라이트 농도", self.v_halpha, 0.2, 0.8)
         self.v_pad = tk.IntVar(value=14)
         self._spin(side, "음영 여백 (px)", self.v_pad, 2, 60)
+        self.v_clean = tk.BooleanVar(value=False)
+        ttk.Checkbutton(side, text="최소 지점 외 점·숫자 지우기", variable=self.v_clean,
+                        command=self.redraw).pack(anchor="w", pady=(6, 0))
 
         self.btn_run = ttk.Button(side, text="▶  분석 실행", style="Accent.TButton",
                                   command=self.run)
@@ -255,7 +261,8 @@ class App(tk.Tk):
         return core.Settings(group_count=int(self.v_count.get() or 0),
                              group_alpha=float(self.v_galpha.get()),
                              highlight_alpha=float(self.v_halpha.get()),
-                             pad=int(self.v_pad.get()))
+                             pad=int(self.v_pad.get()),
+                             clean=bool(self.v_clean.get()))
 
     def run(self):
         if self.src is None:

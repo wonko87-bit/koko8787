@@ -8,9 +8,10 @@ ap = argparse.ArgumentParser(description="최소안전율부위 후처리")
 ap.add_argument("input")
 ap.add_argument("output", nargs="?")
 ap.add_argument("--groups", type=int, default=0, help="그룹 수 (0=자동)")
+ap.add_argument("--clean", action="store_true", help="최소 지점 외 점/숫자 지우기")
 a = ap.parse_args()
 out = a.output or os.path.splitext(a.input)[0] + "_minSF.png"
-res = core.process(core.imread(a.input), core.Settings(group_count=a.groups))
+res = core.process(core.imread(a.input), core.Settings(group_count=a.groups, clean=a.clean))
 core.imwrite(out, res.image)
 core.save_csv(res.rows, os.path.splitext(out)[0] + "_summary.csv")
 for r in res.rows:
