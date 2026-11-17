@@ -47,6 +47,10 @@ class App(tk.Tk):
         self._legend_pick = False
         self._drag = None
         self._view = (1.0, 0.0, 0.0)          # scale, offset x, offset y
+        self._zoom = 1.0                       # 1.0 = 화면 맞춤
+        self._pan = [0.0, 0.0]
+        self._pan_start = None                 # (ex, ey, panx, pany)
+        self._panned = False
         self._style()
         self._build()
         self.bind_all("<Control-v>", lambda e: self.paste())
@@ -54,6 +58,11 @@ class App(tk.Tk):
         self.bind_all("<Control-s>", lambda e: self.save())
         self.bind_all("<space>", lambda e: self.toggle_view())
         self.bind_all("<Control-z>", lambda e: self.undo_reading())
+        for k in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
+            self.bind_all(k, lambda e: self.zoom_by(1.25))
+        for k in ("<Control-minus>", "<Control-KP_Subtract>"):
+            self.bind_all(k, lambda e: self.zoom_by(0.8))
+        self.bind_all("<Control-0>", lambda e: self.zoom_fit())
         self.set_status("Ctrl+V 로 클립보드 캡처를 붙여넣거나, 이미지 파일을 여세요.")
 
     # ------------------------------------------------------------ style
@@ -188,6 +197,14 @@ class App(tk.Tk):
         bar.pack(fill="x")
         self.lbl_view = ttk.Label(bar, text="미리보기", style="H.TLabel")
         self.lbl_view.pack(side="left")
+        zbar = ttk.Frame(bar)
+        zbar.pack(side="left", padx=(18, 0))
+        ttk.Button(zbar, text="－", width=3, command=lambda: self.zoom_by(0.8)).pack(side="left")
+        self.lbl_zoom = ttk.Label(zbar, text="맞춤", width=6, anchor="center",
+                                  style="Muted.TLabel")
+        self.lbl_zoom.pack(side="left", padx=2)
+        ttk.Button(zbar, text="＋", width=3, command=lambda: self.zoom_by(1.25)).pack(side="left")
+        ttk.Button(zbar, text="맞춤 (Ctrl+0)", command=self.zoom_fit).pack(side="left", padx=(4, 0))
         self.btn_toggle = ttk.Button(bar, text="원본 / 결과 전환 (Space)",
                                      command=self.toggle_view)
         self.btn_toggle.pack(side="right")
@@ -199,6 +216,12 @@ class App(tk.Tk):
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
         self.canvas.bind("<Button-3>", self._on_right)
         self.canvas.bind("<Motion>", self._on_motion)
+        self.canvas.bind("<MouseWheel>", self._on_wheel)                 # Windows / macOS
+        self.canvas.bind("<Button-4>", lambda e: self._on_wheel(e, 120))  # Linux
+        self.canvas.bind("<Button-5>", lambda e: self._on_wheel(e, -120))
+        self.canvas.bind("<Button-2>", self._pan_begin)                   # 휠 클릭 드래그 = 이동
+        self.canvas.bind("<B2-Motion>", self._pan_move)
+        self.canvas.bind("<ButtonRelease-2>", lambda e: self._pan_end())
 
         tables = self.tables = ttk.Notebook(main, height=210)
         tables.pack(fill="x", pady=(12, 0))
@@ -246,7 +269,7 @@ class App(tk.Tk):
         ttk.Button(row, text="✕ 모두 지우기", command=self.clear_readings).pack(
             side="left", fill="x", expand=True, padx=(3, 0))
         ttk.Label(f, style="Muted.TLabel", justify="left", wraplength=250, text=(
-            "클릭: 측정 · 우클릭: 삭제 · 커서 값은 상태바에 표시\n"
+            "클릭: 측정 · 우클릭: 삭제 · 휠: 확대/축소 · 드래그: 이동\n"
             "정확도↑: 범례 지정 → 컬러바 최소 끝→최대 끝 드래그"
         )).pack(anchor="w", pady=(10, 0))
 
@@ -341,12 +364,72 @@ class App(tk.Tk):
         h, w = self.src.shape[:2]
         return (x, y) if 0 <= x < w and 0 <= y < h else None
 
+    # ------------------------------------------------------------ zoom / pan
+    def _base_scale(self):
+        cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
+        h, w = self.src.shape[:2]
+        return min((cw - 20) / w, (ch - 20) / h, 4.0)
+
+    def zoom_by(self, f, ex=None, ey=None):
+        if self.src is None:
+            return
+        cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
+        ex = cw / 2 if ex is None else ex
+        ey = ch / 2 if ey is None else ey
+        sc, ox, oy = self._view
+        base = self._base_scale()
+        new_zoom = min(max(self._zoom * f, 1.0), max(32.0 / base, 1.0))
+        if abs(new_zoom - self._zoom) < 1e-9:
+            return
+        nsc = base * new_zoom
+        h, w = self.src.shape[:2]
+        # 커서 아래 이미지 지점이 그대로 머물도록 이동량 보정
+        px, py = (ex - ox) / sc, (ey - oy) / sc
+        self._pan = [ex - px * nsc - (cw / 2 - w * nsc / 2),
+                     ey - py * nsc - (ch / 2 - h * nsc / 2)]
+        self._zoom = new_zoom
+        if self._zoom == 1.0:
+            self._pan = [0.0, 0.0]
+        self._show()
+
+    def zoom_fit(self):
+        self._zoom, self._pan = 1.0, [0.0, 0.0]
+        self._show()
+
+    def _on_wheel(self, e, delta=None):
+        d = e.delta if delta is None else delta
+        self.zoom_by(1.25 if d > 0 else 0.8, e.x, e.y)
+
+    def _pan_begin(self, e):
+        self._pan_start = (e.x, e.y, *self._pan)
+        self._panned = False
+
+    def _pan_move(self, e):
+        if not self._pan_start:
+            return
+        sx, sy, px, py = self._pan_start
+        if not self._panned and abs(e.x - sx) + abs(e.y - sy) < 4:
+            return
+        self._panned = True
+        if self._zoom > 1.0:
+            self._pan = [px + e.x - sx, py + e.y - sy]
+            self.canvas.configure(cursor="fleur")
+            self._show()
+
+    def _pan_end(self):
+        self._pan_start = None
+        self.canvas.configure(cursor="crosshair" if self._legend_pick else "")
+
+    # ------------------------------------------------------------ mouse
     def _on_press(self, e):
-        if not self.is_field() or self.src is None:
+        if self.src is None:
             return
         if self._legend_pick:
             self._drag = (e.x, e.y)
             return
+        self._pan_begin(e)
+
+    def _measure(self, e):
         xy = self._img_xy(e.x, e.y)
         if not xy:
             return
@@ -360,14 +443,23 @@ class App(tk.Tk):
         self.set_status(self._reading_text(r, len(self.readings)))
 
     def _on_drag(self, e):
-        if self._legend_pick and self._drag:
+        if not self._legend_pick:
+            self._pan_move(e)
+            return
+        if self._drag:
             self.canvas.delete("drag")
             self.canvas.create_line(*self._drag, e.x, e.y, fill="#ffffff", width=3, tags="drag")
             self.canvas.create_line(*self._drag, e.x, e.y, fill=ACCENT, width=1,
                                     dash=(4, 2), tags="drag")
 
     def _on_release(self, e):
-        if not (self._legend_pick and self._drag):
+        if not self._legend_pick:
+            moved = self._panned
+            self._pan_end()
+            if not moved and self.is_field():
+                self._measure(e)
+            return
+        if not self._drag:
             return
         p0, p1 = self._img_xy(*self._drag), self._img_xy(e.x, e.y)
         self._end_legend_pick()
@@ -497,6 +589,7 @@ class App(tk.Tk):
 
     def _set_source(self, img, name):
         self.src, self.src_name, self.result = img, name, None
+        self._zoom, self._pan = 1.0, [0.0, 0.0]
         self.show_original = True
         self.readings, self._legend_lut = [], None
         self._fill_tables()
@@ -632,15 +725,31 @@ class App(tk.Tk):
             img = self.src if (self.show_original or not self.result) else self.result.image
             self.lbl_view.configure(text="원본" if img is self.src else "결과 · 최소안전율부위")
         h, w = img.shape[:2]
-        sc = min((cw - 20) / w, (ch - 20) / h, 4.0)
-        if sc <= 0:
+        base = min((cw - 20) / w, (ch - 20) / h, 4.0)
+        if base <= 0:
             return
-        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        pil = Image.fromarray(rgb).resize((max(1, int(w * sc)), max(1, int(h * sc))),
-                                          Image.LANCZOS)
-        self._tk_img = ImageTk.PhotoImage(pil)
-        self.canvas.create_image(cw / 2, ch / 2, image=self._tk_img)
-        self._view = (sc, cw / 2 - pil.width / 2, ch / 2 - pil.height / 2)
+        sc = base * self._zoom
+        ox = cw / 2 - w * sc / 2 + self._pan[0]
+        oy = ch / 2 - h * sc / 2 + self._pan[1]
+        # 이미지가 화면 밖으로 완전히 벗어나지 않도록 이동 범위 제한
+        if self._zoom > 1.0:
+            ax, ay = cw - w * sc - 40, ch - h * sc - 40
+            ox = min(max(ox, min(ax, 40)), max(ax, 40))
+            oy = min(max(oy, min(ay, 40)), max(ay, 40))
+            self._pan = [ox - (cw / 2 - w * sc / 2), oy - (ch / 2 - h * sc / 2)]
+        # 보이는 부분만 잘라서 확대 (큰 배율에서도 빠르게)
+        ix0, iy0 = max(int(-ox / sc), 0), max(int(-oy / sc), 0)
+        ix1, iy1 = min(int((cw - ox) / sc) + 2, w), min(int((ch - oy) / sc) + 2, h)
+        self._view = (sc, ox, oy)
+        self.lbl_zoom.configure(text="맞춤" if self._zoom == 1.0 else f"{sc * 100:.0f}%")
+        if ix1 > ix0 and iy1 > iy0:
+            crop = cv2.cvtColor(img[iy0:iy1, ix0:ix1], cv2.COLOR_BGR2RGB)
+            size = (max(1, round((ix1 - ix0) * sc)), max(1, round((iy1 - iy0) * sc)))
+            pil = Image.fromarray(crop).resize(
+                size, Image.NEAREST if sc >= 3 else Image.LANCZOS)
+            self._tk_img = ImageTk.PhotoImage(pil)
+            self.canvas.create_image(ox + ix0 * sc, oy + iy0 * sc, image=self._tk_img,
+                                     anchor="nw")
         if self.is_field():
             self._draw_markers()
 
