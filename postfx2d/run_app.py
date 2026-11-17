@@ -25,7 +25,22 @@ def selftest(inp, out):
             pass
     with open(out.rsplit(".", 1)[0] + "_report.txt", "w", encoding="utf-8") as f:
         f.write(report)
-    return 0 if ok else 1
+    return 0 if (ok and field_selftest(inp)) else 1
+
+
+def field_selftest(inp):
+    """모드 2: 합성 rainbow 맵을 알려진 정답과 비교 (평균 오차 < 1% of range)."""
+    import os
+    from postfx2d import core, fieldmap
+    path = os.path.join(os.path.dirname(os.path.abspath(inp)), "field_sample.png")
+    if not os.path.exists(path):
+        return True
+    img = core.imread(path)
+    fm = fieldmap.FieldMap(fieldmap.builtin_lut("Rainbow"), 0, 5000)
+    # (x, y, 정답) - tools/make_field_sample.py 기준
+    cases = [(273, 240, 4344.7), (537, 350, 3046.3), (405, 262, 1183.3)]
+    err = max(abs(fm.read(img, x, y).value - t) for x, y, t in cases)
+    return err < 50
 
 
 if __name__ == "__main__":

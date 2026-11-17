@@ -26,6 +26,23 @@
 |---|---|
 | ![](tools/sample.png) | ![](docs/sample_result.png) |
 
+## 모드 2 · 전계 값 읽기 (Rainbow map)
+
+전계 분포 rainbow map 이미지를 열고 **최소/최대값** 을 입력하면, 클릭한 지점의 색을 컬러맵에 대응시켜 전계 값을 읽습니다.
+
+- **컬러맵**: Rainbow(파랑→빨강) · Jet · Turbo · **범례에서 추출**
+  - 범례에서 추출: `🎯 범례(컬러바) 지정하기` → 이미지 속 컬러바를 **최소 끝 → 최대 끝** 으로 드래그. 해석 툴마다 색 배치가 달라서 이 방법이 가장 정확합니다.
+- **클릭** 측정 · **우클릭** 삭제 · `Ctrl+Z` 되돌리기 · 마우스를 올리면 상태바에 실시간 값
+- **로그 스케일** 지원
+- 색 오차가 큰 점(배경, 경계선, 범례 밖 색)은 `불확실` 로 빨갛게 표시
+- 출력: 측정점이 표시된 `이름_field.png` + `이름_field_summary.csv` (#, X, Y, 전계, 컬러맵 위치 %, 색 오차, 신뢰)
+
+| 합성 샘플 측정 결과 (범위 0~5000 V/m) |
+|---|
+| ![](docs/field_result.png) |
+
+합성 샘플 300점 검증: 평균 오차 약 11 V/m (범위의 0.2%), 최대 약 140 V/m (메쉬선 근처).
+
 ## 사용법 (exe)
 
 GitHub Actions → **PostFX2D Windows Build** → Artifact `PostFX2D-windows` 에서 `PostFX2D.exe` 다운로드.
@@ -42,4 +59,5 @@ pip install -r requirements.txt
 python run_app.py                       # GUI
 python cli.py 입력.png [출력.png] [--groups 6]
 python tools/make_sample.py tools/sample.png
+python tools/make_field_sample.py tools/field_sample.png
 ```

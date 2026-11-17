@@ -52,6 +52,7 @@ jobs:
           path: |
             postfx2d/dist/PostFX2D.exe
             postfx2d/tools/sample.png
+            postfx2d/tools/field_sample.png
             postfx2d/selftest_exe.png
             postfx2d/selftest_*
           if-no-files-found: warn
