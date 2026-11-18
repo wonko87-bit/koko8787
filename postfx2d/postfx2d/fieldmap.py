@@ -116,20 +116,23 @@ def fmt(v: float) -> str:
     return f"{v:.4g}" if a < 100 else f"{v:,.1f}"
 
 
-def annotate(img: np.ndarray, readings: list[Reading], unit: str = "") -> np.ndarray:
+def annotate(img: np.ndarray, readings: list[Reading], unit: str = "",
+             scale: float = 1.0) -> np.ndarray:
     out = img.copy()
-    font, sc, th = cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+    s = max(scale ** 0.75, 1.0)          # 확대 저장 시 라벨도 비례해서 키움
+    font, sc, th = cv2.FONT_HERSHEY_SIMPLEX, 0.5 * s, max(1, round(s))
+    R, P = round(6 * s), round(4 * s)
     for k, r in enumerate(readings, 1):
         col = (30, 30, 30) if r.reliable else (40, 40, 220)
-        cv2.circle(out, (r.x, r.y), 6, (255, 255, 255), 2, cv2.LINE_AA)
-        cv2.circle(out, (r.x, r.y), 6, col, 1, cv2.LINE_AA)
-        cv2.circle(out, (r.x, r.y), 1, col, -1)
+        cv2.circle(out, (r.x, r.y), R, (255, 255, 255), th + 1, cv2.LINE_AA)
+        cv2.circle(out, (r.x, r.y), R, col, th, cv2.LINE_AA)
+        cv2.circle(out, (r.x, r.y), max(1, round(s)), col, -1)
         text = f"#{k} {fmt(r.value)} {unit}".strip() + ("" if r.reliable else " ?")
         (tw, tht), b = cv2.getTextSize(text, font, sc, th)
-        x = r.x + 10 if r.x + 14 + tw < out.shape[1] else r.x - 10 - tw
-        y = max(r.y - 8, tht + 4)
-        cv2.rectangle(out, (x - 4, y - tht - 4), (x + tw + 4, y + b + 2), (255, 255, 255), -1)
-        cv2.rectangle(out, (x - 4, y - tht - 4), (x + tw + 4, y + b + 2), col, 1)
+        x = r.x + R + P if r.x + R + P + 4 + tw < out.shape[1] else r.x - R - P - tw
+        y = max(r.y - 2 * P, tht + P)
+        cv2.rectangle(out, (x - P, y - tht - P), (x + tw + P, y + b + 2), (255, 255, 255), -1)
+        cv2.rectangle(out, (x - P, y - tht - P), (x + tw + P, y + b + 2), col, th)
         cv2.putText(out, text, (x, y), font, sc, col, th, cv2.LINE_AA)
     return out
 

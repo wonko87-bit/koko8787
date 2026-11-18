@@ -1,6 +1,7 @@
 """PostFX 2D - GUI (Tkinter)."""
 from __future__ import annotations
 
+import dataclasses
 import os
 import threading
 import tkinter as tk
@@ -11,6 +12,7 @@ import numpy as np
 from PIL import Image, ImageGrab, ImageTk
 
 from . import core
+from . import enhance
 from . import fieldmap as fmap
 
 APP = "PostFX 2D"
@@ -205,6 +207,12 @@ class App(tk.Tk):
         self.lbl_zoom.pack(side="left", padx=2)
         ttk.Button(zbar, text="＋", width=3, command=lambda: self.zoom_by(1.25)).pack(side="left")
         ttk.Button(zbar, text="맞춤 (Ctrl+0)", command=self.zoom_fit).pack(side="left", padx=(4, 0))
+        ttk.Label(zbar, text="화질", style="Muted.TLabel").pack(side="left", padx=(14, 4))
+        self.quality = ttk.Combobox(zbar, state="readonly", width=16, values=enhance.OPTIONS)
+        self.quality.current(0)
+        self.quality.pack(side="left")
+        self.quality.bind("<<ComboboxSelected>>", lambda e: self._on_quality())
+        self._enh_cache = (None, None, None, 1)     # (img id, option, enhanced, k)
         self.btn_toggle = ttk.Button(bar, text="원본 / 결과 전환 (Space)",
                                      command=self.toggle_view)
         self.btn_toggle.pack(side="right")
@@ -522,12 +530,44 @@ class App(tk.Tk):
                                          f"{r.dist:.1f}", "OK" if r.reliable else "불확실"],
                       tags=() if r.reliable else ("global",))
 
+    def _on_quality(self):
+        kind, k = enhance.parse(self.quality.get())
+        self._show()
+        if kind == "sharpen":
+            self.set_status(f"화질: 선명 확대 ×{k} 로 표시합니다. 저장할 때도 ×{k} 크기로 저장됩니다. "
+                            "(측정·분석 값은 항상 원본 픽셀 기준)")
+        elif kind == "smooth":
+            self.set_status("화질: 확대 시 부드럽게(bicubic) 표시합니다. 저장 이미지는 원본 크기.")
+        else:
+            self.set_status("화질: 원본 픽셀 그대로 표시합니다.")
+
+    def _enhanced(self, img):
+        """화질 옵션 적용 이미지 (캐시)."""
+        opt = self.quality.get()
+        cid, copt, cimg, ck = self._enh_cache
+        if cid == id(img) and copt == opt:
+            return cimg, ck
+        if enhance.parse(opt)[0] == "sharpen":
+            self.set_status("화질 개선 처리 중…")
+            self.update_idletasks()
+        eimg, k = enhance.enhance(img, opt)
+        self._enh_cache = (id(img), opt, eimg, k)
+        return eimg, k
+
     def _output_image(self):
+        unit = self.v_unit.get().strip()
         if self.is_field():
             if self.src is None:
                 return None
-            return fmap.annotate(self.src, self.readings, self.v_unit.get().strip())
-        return self.result.image if self.result else None
+            base, k = self._enhanced(self.src)
+            if k == 1:
+                return fmap.annotate(self.src, self.readings, unit)
+            scaled = [dataclasses.replace(r, x=r.x * k + k // 2, y=r.y * k + k // 2)
+                      for r in self.readings]
+            return fmap.annotate(base, scaled, unit, scale=k)
+        if not self.result:
+            return None
+        return self._enhanced(self.result.image)[0]
 
     def _spin(self, parent, text, var, lo, hi):
         f = ttk.Frame(parent); f.pack(fill="x", pady=3)
@@ -743,10 +783,17 @@ class App(tk.Tk):
         self._view = (sc, ox, oy)
         self.lbl_zoom.configure(text="맞춤" if self._zoom == 1.0 else f"{sc * 100:.0f}%")
         if ix1 > ix0 and iy1 > iy0:
-            crop = cv2.cvtColor(img[iy0:iy1, ix0:ix1], cv2.COLOR_BGR2RGB)
+            kind = enhance.parse(self.quality.get())[0]
+            eimg, k = self._enhanced(img)
+            crop = cv2.cvtColor(eimg[iy0 * k:iy1 * k, ix0 * k:ix1 * k], cv2.COLOR_BGR2RGB)
             size = (max(1, round((ix1 - ix0) * sc)), max(1, round((iy1 - iy0) * sc)))
-            pil = Image.fromarray(crop).resize(
-                size, Image.NEAREST if sc >= 3 else Image.LANCZOS)
+            if kind == "none":
+                resample = Image.NEAREST if sc >= 3 else Image.LANCZOS
+            elif sc / k >= 1:
+                resample = Image.BICUBIC
+            else:
+                resample = Image.LANCZOS
+            pil = Image.fromarray(crop).resize(size, resample)
             self._tk_img = ImageTk.PhotoImage(pil)
             self.canvas.create_image(ox + ix0 * sc, oy + iy0 * sc, image=self._tk_img,
                                      anchor="nw")
