@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+import datetime
 import os
 import threading
 import tkinter as tk
@@ -14,6 +15,7 @@ from PIL import Image, ImageGrab, ImageTk
 from . import core
 from . import enhance
 from . import fieldmap as fmap
+from . import settings
 
 APP = "PostFX 2D"
 VERSION = "0.1.0"
@@ -55,6 +57,7 @@ class App(tk.Tk):
         self._panned = False
         self._style()
         self._build()
+        self._load_legend()
         self.bind_all("<Control-v>", lambda e: self.paste())
         self.bind_all("<Control-o>", lambda e: self.open_file())
         self.bind_all("<Control-s>", lambda e: self.save())
@@ -265,9 +268,13 @@ class App(tk.Tk):
         self.lut_preview = tk.Canvas(f, height=14, bg=PANEL, highlightthickness=0)
         self.lut_preview.pack(fill="x", pady=(6, 0))
         self.lut_preview.bind("<Configure>", lambda e: self._draw_lut_preview())
-        self.btn_legend = ttk.Button(f, text="🎯  범례(컬러바) 지정하기",
-                                     command=self.start_legend_pick)
-        self.btn_legend.pack(fill="x", pady=(8, 0))
+        self.lbl_legend = ttk.Label(f, text="", style="Muted.TLabel")
+        self.lbl_legend.pack(anchor="w")
+        row = ttk.Frame(f); row.pack(fill="x", pady=(4, 0))
+        self.btn_legend = ttk.Button(row, text="🎯 범례 지정", command=self.start_legend_pick)
+        self.btn_legend.pack(side="left", fill="x", expand=True, padx=(0, 3))
+        ttk.Button(row, text="⟲ 범례 초기화", command=self.reset_legend).pack(
+            side="left", fill="x", expand=True, padx=(3, 0))
         self.v_log = tk.BooleanVar(value=False)
         ttk.Checkbutton(f, text="로그 스케일", variable=self.v_log,
                         command=self._refresh_field).pack(anchor="w", pady=(8, 0))
@@ -310,7 +317,47 @@ class App(tk.Tk):
     def _on_cmap(self):
         if self.cmap.get() == "범례에서 추출" and self._legend_lut is None:
             self.start_legend_pick()
+        else:
+            settings.update(cmap=self.cmap.get())
         self._refresh_field()
+
+    def _load_legend(self):
+        """지난 실행에서 저장한 범례/컬러맵 복원."""
+        d = settings.load()
+        lut = d.get("legend_lut")
+        if lut:
+            try:
+                self._legend_lut = np.array(lut, np.uint8).reshape(-1, 3)
+                self._legend_saved = d.get("legend_saved", "")
+            except ValueError:
+                self._legend_lut = None
+        name = d.get("cmap")
+        if name in fmap.COLORMAPS and (name != "범례에서 추출" or self._legend_lut is not None):
+            self.cmap.set(name)
+        self._update_legend_label()
+
+    def _update_legend_label(self):
+        if self._legend_lut is not None and self.cmap.get() == "범례에서 추출":
+            when = getattr(self, "_legend_saved", "")
+            self.lbl_legend.configure(text=f"저장된 범례 사용 중 · {when} 지정" if when
+                                      else "저장된 범례 사용 중")
+        elif self._legend_lut is not None:
+            self.lbl_legend.configure(text="저장된 범례 있음 (컬러맵에서 '범례에서 추출' 선택)")
+        else:
+            self.lbl_legend.configure(text="")
+
+    def reset_legend(self):
+        if self._legend_lut is None and self.cmap.current() == 0:
+            return
+        if not messagebox.askyesno(APP, "저장된 범례 색상을 지우고 기본 컬러맵(Rainbow)으로 "
+                                        "되돌릴까요?"):
+            return
+        self._legend_lut = None
+        self._legend_saved = ""
+        self.cmap.current(0)
+        settings.update(legend_lut=None, legend_saved=None, cmap=None)
+        self._refresh_field()
+        self.set_status("범례를 초기화했습니다. 기본 Rainbow 컬러맵을 사용합니다.")
 
     def start_legend_pick(self):
         if self.src is None:
@@ -348,6 +395,7 @@ class App(tk.Tk):
         if self._fm and self.src is not None:
             self.readings = [self._fm.read(self.src, r.x, r.y) for r in self.readings]
         self._draw_lut_preview()
+        self._update_legend_label()
         self._fill_field_table()
         if self.is_field():
             self._show()
@@ -475,9 +523,12 @@ class App(tk.Tk):
             self.set_status("⚠ 범례 지정 실패: 컬러바 위에서 더 길게 드래그하세요.")
             return
         self._legend_lut = fmap.lut_from_line(self.src, p0, p1)
+        self._legend_saved = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         self.cmap.set("범례에서 추출")
+        settings.update(legend_lut=self._legend_lut.tolist(), legend_saved=self._legend_saved,
+                        cmap="범례에서 추출")
         self._refresh_field()
-        self.set_status(f"범례 지정 완료: {p0} → {p1}. 이제 맵을 클릭하세요.")
+        self.set_status("범례 지정 완료 · 저장됨 (초기화 전까지 유지). 이제 맵을 클릭하세요.")
 
     def _on_right(self, e):
         if not self.is_field() or not self.readings:
@@ -631,12 +682,10 @@ class App(tk.Tk):
         self.src, self.src_name, self.result = img, name, None
         self._zoom, self._pan = 1.0, [0.0, 0.0]
         self.show_original = True
-        self.readings, self._legend_lut = [], None
+        self.readings = []          # 범례(컬러맵)와 범위는 초기화 전까지 유지
         self._fill_tables()
         h, w = img.shape[:2]
         if self.is_field():
-            if self.cmap.get() == "범례에서 추출":
-                self.cmap.current(0)
             self._refresh_field()
             self._show()
             self.set_status(f"입력 이미지: {name}  ({w}×{h})  · 최소/최대값 입력 후 맵을 클릭하세요.")
