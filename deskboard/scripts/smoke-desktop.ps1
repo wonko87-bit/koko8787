@@ -537,7 +537,8 @@ try {
             [Win]::Drag($from2.L + 80, $from2.T + 60, ($to2X - $from2.L - 80), ($to2Y - $from2.T - 60))
             $landed = WaitFor { @((& $readBoard).categories)[0].tiles.Count -eq $tilesBefore + 1 } 8
             Check "app start #$($round + 1): a dragged-in file becomes a tile" ($ready2 -and $landed) "reachable: $ready2, tiles: $((@((& $readBoard).categories)[0].tiles | ForEach-Object { $_.name }) -join ',')"
-            Stop-Process -Id ($script:started | Where-Object { $_.ProcessName -eq "powershell" } | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
+            # (방금 띄운 끌기 도우미가 목록의 마지막이다)
+            Stop-Process -Id ($script:started | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
         }
     }
