@@ -3,6 +3,7 @@
 #   2) Win+D(바탕화면 보기) 상태에서는 바탕화면 위에 보인다
 #   3) 바탕화면 보기를 끝내면 다시 다른 창 아래로 내려간다
 #   4) 바탕화면 보기 중에 타일을 눌러 연 프로그램을 가리지 않는다
+#   5) 잠금을 풀면 끌어서 옮기고 크기를 바꿀 수 있고, 잠그면 고정되며, 다시 실행해도 그 자리에 뜬다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
 param(
     [Parameter(Mandatory)][string]$Exe,
@@ -40,6 +41,18 @@ public static class Win {
     public static uint Pid(IntPtr h) { uint pid; GetWindowThreadProcessId(h, out pid); return pid; }
     public static IntPtr RootAt(int x, int y) { return GetAncestor(WindowFromPoint(new POINT { X = x, Y = y }), 2); }
     public static void Click(int x, int y) { SetCursorPos(x, y); mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
+    // 사람이 끄는 것처럼 누른 채로 조금씩 움직였다가 뗀다.
+    public static void Drag(int x, int y, int dx, int dy) {
+        SetCursorPos(x, y); System.Threading.Thread.Sleep(200);
+        mouse_event(2, 0, 0, 0, UIntPtr.Zero); System.Threading.Thread.Sleep(400);
+        for (int i = 1; i <= 20; i++) {
+            SetCursorPos(x + dx * i / 20, y + dy * i / 20);
+            mouse_event(1, 0, 0, 0, UIntPtr.Zero);
+            System.Threading.Thread.Sleep(30);
+        }
+        System.Threading.Thread.Sleep(300);
+        mouse_event(4, 0, 0, 0, UIntPtr.Zero); System.Threading.Thread.Sleep(500);
+    }
 }
 '@
 
@@ -50,6 +63,20 @@ $started = @()
 function Check([string]$name, [bool]$ok, [string]$detail = "") {
     if ($ok) { Write-Host "PASS  $name $detail" }
     else { Write-Host "FAIL  $name $detail"; $script:failures++ }
+}
+
+function RectOf([IntPtr]$h) {
+    $rect = New-Object Win+RECT
+    [Win]::GetWindowRect($h, [ref]$rect) | Out-Null
+    return $rect
+}
+
+function RectText($rect) { "$($rect.R - $rect.L)x$($rect.B - $rect.T)@$($rect.L),$($rect.T)" }
+
+# 두 사각형이 (오차 $slack 픽셀 안에서) 같은가
+function SameRect($a, $b, [int]$slack = 0) {
+    [Math]::Abs($a.L - $b.L) -le $slack -and [Math]::Abs($a.T - $b.T) -le $slack -and
+    [Math]::Abs($a.R - $b.R) -le $slack -and [Math]::Abs($a.B - $b.B) -le $slack
 }
 
 function Describe([IntPtr]$h) {
@@ -236,6 +263,64 @@ try {
     Get-Process cmd -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $app.StartTime } | ForEach-Object { $script:started += $_ }
 
     Check "app is still running" (-not $app.HasExited)
+
+    # 5) 위치·크기 조절. 다른 창은 모두 닫고 위젯만 남긴다.
+    foreach ($process in $started) {
+        if ($process.Id -ne $app.Id -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    }
+    Start-Sleep -Seconds 2
+    # 자물쇠 버튼: 헤더 오른쪽 끝에서 두 번째 (오른쪽 여백 8 + 설정 버튼 26 + 간격 4 + 버튼 절반 13)
+    $lock = { param($rect) [Win]::Click($rect.R - 51, $rect.T + 18); Start-Sleep -Milliseconds 1200 }
+    if ([Win]::RootAt($r.R - 51, $r.T + 18) -ne $widget) {
+        $shellApp.ToggleDesktop()
+        WaitFor { [Win]::RootAt($r.R - 51, $r.T + 18) -eq $widget } 10 | Out-Null
+    }
+    Check "widget can be reached to edit its layout" ([Win]::RootAt($r.R - 51, $r.T + 18) -eq $widget) (Describe ([Win]::RootAt($r.R - 51, $r.T + 18)))
+
+    [Win]::Drag($r.L + 420, $r.T + 18, -60, 40)
+    Check "locked: dragging the header does not move the widget" (SameRect (RectOf $widget) $r) (RectText (RectOf $widget))
+    [Win]::Drag($r.R - 4, $r.B - 4, 40, 30)
+    Check "locked: dragging the corner does not resize the widget" (SameRect (RectOf $widget) $r) (RectText (RectOf $widget))
+
+    & $lock $r
+    $unlocked = RectOf $widget
+    Check "unlocking keeps position and size" (SameRect $unlocked $r) (RectText $unlocked)
+
+    [Win]::Drag($unlocked.L + 420, $unlocked.T + 18, -60, 40)
+    $moved = RectOf $widget
+    $expected = New-Object Win+RECT
+    $expected.L = $unlocked.L - 60; $expected.T = $unlocked.T + 40; $expected.R = $unlocked.R - 60; $expected.B = $unlocked.B + 40
+    Check "unlocked: dragging the header moves the widget" (SameRect $moved $expected 3) "$(RectText $unlocked) -> $(RectText $moved)"
+
+    [Win]::Drag($moved.R - 4, $moved.B - 4, 40, 30)
+    $sized = RectOf $widget
+    $expected.L = $moved.L; $expected.T = $moved.T; $expected.R = $moved.R + 40; $expected.B = $moved.B + 30
+    Check "unlocked: dragging the corner resizes the widget" (SameRect $sized $expected 3) "$(RectText $moved) -> $(RectText $sized)"
+
+    & $lock $sized
+    $locked = RectOf $widget
+    Check "locking keeps position and size" (SameRect $locked $sized) (RectText $locked)
+    [Win]::Drag($locked.L + 420, $locked.T + 18, 50, 0)
+    Check "locked again: the widget stays put" (SameRect (RectOf $widget) $locked) (RectText (RectOf $widget))
+
+    Start-Sleep -Seconds 3
+    $windowFile = Join-Path $dataDir "window.json"
+    $saved = if (Test-Path $windowFile) { Get-Content $windowFile -Raw | ConvertFrom-Json } else { $null }
+    Check "position and size are saved" ($saved -and $saved.x -eq $locked.L -and $saved.y -eq $locked.T -and $saved.width -eq ($locked.R - $locked.L) -and $saved.height -eq ($locked.B - $locked.T)) ($saved | ConvertTo-Json -Compress)
+    $board = Get-Content $boardFile -Raw | ConvertFrom-Json
+    Check "the board survived and the widget is locked again" ($board.settings.locked -eq $true -and $board.categories[0].tiles[0].name -eq "cmd" -and $board.notes.Count -eq 1)
+
+    Stop-Process -Id $app.Id -Force
+    WaitFor { [Win]::FindWindowW($null, "DeskBoard") -eq [IntPtr]::Zero } 10 | Out-Null
+    $app = Start-Process -FilePath $Exe -PassThru
+    $started += $app
+    $again = WaitFor { $w = [Win]::FindWindowW($null, "DeskBoard"); $w -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($w) } 60
+    Check "widget starts again" $again
+    if ($again) {
+        Start-Sleep -Seconds 2
+        $restored = RectOf ([Win]::FindWindowW($null, "DeskBoard"))
+        Check "widget comes back where it was left" (SameRect $restored $locked) (RectText $restored)
+    }
 }
 catch {
     Write-Host "ERROR $_"
