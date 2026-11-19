@@ -1,0 +1,1345 @@
+:root {
+  font-family: "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* ---------- 테마 ----------
+   배경색은 불투명도 설정과 곱해 쓰도록 R,G,B 숫자로 둔다.
+   강조색은 각 배경 위에서 눈에 띄되 어울리는 색으로 골랐다. */
+
+.widget,
+.theme-choice {
+  --panel: 21, 23, 30;
+  --text: #e9ebf1;
+  --muted: #9aa1b2;
+  --accent: #7c9cff;
+  --accent-strong: #94aeff;
+  --on-accent: #10131c;
+  --danger: #ff7b7b;
+  --line: rgba(255, 255, 255, 0.09);
+  --surface: rgba(255, 255, 255, 0.06);
+  --surface-hover: rgba(255, 255, 255, 0.13);
+  --field: rgba(0, 0, 0, 0.3);
+  --field-line: rgba(255, 255, 255, 0.14);
+  --popup: #262a35;
+  --popup-line: rgba(255, 255, 255, 0.12);
+  --overlay: rgba(8, 9, 12, 0.6);
+  --scroll: rgba(255, 255, 255, 0.18);
+  --tint-alpha: 0.3;
+  --shadow: rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+.widget[data-theme="light"],
+.theme-choice[data-theme="light"] {
+  --panel: 247, 248, 250;
+  --text: #1f2430;
+  --muted: #667085;
+  --accent: #2563eb;
+  --accent-strong: #1d4fd7;
+  --on-accent: #ffffff;
+  --danger: #d92d20;
+  --line: rgba(16, 24, 40, 0.1);
+  --surface: rgba(16, 24, 40, 0.07);
+  --surface-hover: rgba(16, 24, 40, 0.13);
+  --field: #ffffff;
+  --field-line: rgba(16, 24, 40, 0.18);
+  --popup: #ffffff;
+  --popup-line: rgba(16, 24, 40, 0.12);
+  --overlay: rgba(30, 36, 50, 0.35);
+  --scroll: rgba(16, 24, 40, 0.22);
+  --tint-alpha: 0.26;
+  --shadow: rgba(16, 24, 40, 0.22);
+  color-scheme: light;
+}
+
+.widget[data-theme="mint"],
+.theme-choice[data-theme="mint"] {
+  --panel: 224, 243, 234;
+  --text: #1d3b34;
+  --muted: #5b7d73;
+  --accent: #e5605e;
+  --accent-strong: #d24a48;
+  --on-accent: #ffffff;
+  --danger: #c93a34;
+  --line: rgba(29, 59, 52, 0.12);
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-hover: rgba(255, 255, 255, 0.92);
+  --field: #ffffff;
+  --field-line: rgba(29, 59, 52, 0.2);
+  --popup: #f5fbf8;
+  --popup-line: rgba(29, 59, 52, 0.14);
+  --overlay: rgba(29, 59, 52, 0.3);
+  --scroll: rgba(29, 59, 52, 0.22);
+  --tint-alpha: 0.3;
+  --shadow: rgba(29, 59, 52, 0.22);
+  color-scheme: light;
+}
+
+.widget[data-theme="lavender"],
+.theme-choice[data-theme="lavender"] {
+  --panel: 236, 231, 248;
+  --text: #2d2646;
+  --muted: #72698f;
+  --accent: #d2437d;
+  --accent-strong: #bb326b;
+  --on-accent: #ffffff;
+  --danger: #c4314b;
+  --line: rgba(45, 38, 70, 0.12);
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-hover: rgba(255, 255, 255, 0.92);
+  --field: #ffffff;
+  --field-line: rgba(45, 38, 70, 0.2);
+  --popup: #faf8ff;
+  --popup-line: rgba(45, 38, 70, 0.14);
+  --overlay: rgba(45, 38, 70, 0.3);
+  --scroll: rgba(45, 38, 70, 0.22);
+  --tint-alpha: 0.3;
+  --shadow: rgba(45, 38, 70, 0.22);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* 브라우저 미리보기 전용: 투명 창 대신 바탕화면 흉내 */
+html.preview body {
+  background: linear-gradient(135deg, #3b6ea8 0%, #6a4fa3 55%, #c4688a 100%);
+}
+html.preview .widget {
+  inset: 24px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---------- 위젯 틀 ---------- */
+
+.widget {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(var(--panel), var(--alpha, 0.86));
+  color: var(--text);
+}
+
+.widget.editing {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.widget.fatal {
+  padding: 24px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.widget.editing .header {
+  cursor: move;
+  background: var(--surface-hover);
+}
+
+.title {
+  margin-right: 6px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.header-hint {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--accent);
+  font-size: 11.5px;
+}
+
+.text-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: none;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.text-button {
+  padding: 0 8px 0 6px;
+}
+
+.icon-button {
+  width: 26px;
+}
+
+.text-button:hover,
+.icon-button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.icon-button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.update-pill {
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.update-pill:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ---------- 바로가기 ---------- */
+
+.shortcuts {
+  flex: none;
+  width: calc(var(--split, 0.56) * 100%);
+  padding: 6px 8px 12px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.tiles-s {
+  --tile-w: 62px;
+  --tile-icon: 30px;
+  --tile-font: 11px;
+}
+.tiles-m {
+  --tile-w: 78px;
+  --tile-icon: 38px;
+  --tile-font: 12px;
+}
+.tiles-l {
+  --tile-w: 98px;
+  --tile-icon: 50px;
+  --tile-font: 12.5px;
+}
+
+.category + .category {
+  margin-top: 8px;
+}
+
+.category-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+}
+
+.category-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.category-head .icon-button {
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+}
+
+.category:hover .category-head .icon-button,
+.category-head .icon-button:focus-visible {
+  opacity: 1;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-w), 1fr));
+  gap: 6px;
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.tiles.drop-end {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 4px 7px;
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  outline: none;
+  transition: background 0.12s, transform 0.08s;
+}
+
+.tile:hover,
+.tile:focus-visible {
+  background: var(--surface-hover);
+}
+
+.tile:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.tile:active {
+  transform: scale(0.96);
+}
+
+.tile.dragging {
+  opacity: 0.35;
+}
+
+.tile.drop-before::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: -4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* 타일 바탕색 */
+.tile[data-color],
+.swatch[data-color] {
+  background: rgba(var(--tint), var(--tint-alpha));
+}
+.tile[data-color]:hover,
+.tile[data-color]:focus-visible {
+  background: rgba(var(--tint), calc(var(--tint-alpha) + 0.16));
+}
+[data-color="red"] {
+  --tint: 235, 87, 87;
+}
+[data-color="orange"] {
+  --tint: 242, 153, 74;
+}
+[data-color="yellow"] {
+  --tint: 232, 196, 60;
+}
+[data-color="green"] {
+  --tint: 92, 184, 108;
+}
+[data-color="teal"] {
+  --tint: 60, 186, 170;
+}
+[data-color="blue"] {
+  --tint: 84, 148, 245;
+}
+[data-color="purple"] {
+  --tint: 155, 115, 240;
+}
+[data-color="pink"] {
+  --tint: 236, 112, 168;
+}
+
+.tile-glyph,
+.tile-image,
+.tile-emoji {
+  width: var(--tile-icon);
+  height: var(--tile-icon);
+  pointer-events: none;
+}
+
+.tile-glyph {
+  display: grid;
+  place-items: center;
+  border-radius: 28%;
+  color: #171a22;
+}
+
+.tile-image {
+  object-fit: contain;
+}
+
+.tile-emoji {
+  display: grid;
+  place-items: center;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-size: calc(var(--tile-icon) * 0.82);
+  line-height: 1;
+}
+
+.kind-folder {
+  background: #f2b84b;
+}
+.kind-program {
+  background: #7c9cff;
+}
+.kind-file {
+  background: #b3bacb;
+}
+.kind-link {
+  background: #4fd1b5;
+}
+
+.tile-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-size: var(--tile-font);
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.category.file-drop .tiles {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 60;
+  max-width: 160px;
+  padding: 4px 9px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 6px 16px var(--shadow);
+}
+
+.tiles-empty,
+.add-category {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px dashed var(--field-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tiles-empty {
+  grid-column: 1 / -1;
+  height: 40px;
+}
+
+.add-category {
+  width: 100%;
+  height: 30px;
+  margin-top: 12px;
+}
+
+.tiles-empty:hover,
+.add-category:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* ---------- 영역 나누는 선 ---------- */
+
+.splitter {
+  flex: none;
+  position: relative;
+  width: 1px;
+  background: var(--line);
+}
+
+.widget.editing .splitter {
+  width: 3px;
+  background: var(--accent);
+  cursor: col-resize;
+}
+
+/* 선은 가늘게 보이되 잡기는 쉽게 */
+.widget.editing .splitter::after {
+  content: "";
+  position: absolute;
+  inset: 0 -5px;
+}
+
+/* ---------- 메모판 ---------- */
+
+.notes {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  overflow: auto;
+}
+
+.notes-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.note {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  border-radius: 3px 3px 12px 3px;
+  color: #2b2a26;
+  font-family: var(--note-font, inherit), "Segoe UI", "Malgun Gothic", sans-serif;
+  box-shadow: 0 3px 8px var(--shadow);
+}
+
+.note.moving {
+  box-shadow: 0 10px 22px var(--shadow);
+}
+
+.note-yellow {
+  --paper: #ffe98a;
+  --paper-edge: #f0d560;
+}
+.note-pink {
+  --paper: #ffc4d3;
+  --paper-edge: #f3a3b8;
+}
+.note-green {
+  --paper: #cdf0a6;
+  --paper-edge: #aede7d;
+}
+.note-blue {
+  --paper: #b9dcff;
+  --paper-edge: #93c4f3;
+}
+.note-purple {
+  --paper: #dccaff;
+  --paper-edge: #c3a9f5;
+}
+
+.note {
+  background: var(--paper);
+}
+
+.note-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 22px;
+  padding: 0 4px 0 7px;
+  border-radius: 3px 3px 0 0;
+  background: var(--paper-edge);
+  cursor: grab;
+  touch-action: none;
+}
+
+.note.moving .note-bar {
+  cursor: grabbing;
+}
+
+.note-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.note-tool {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #2b2a26;
+  font-family: "Segoe UI", sans-serif;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.note:hover .note-tool,
+.note:focus-within .note-tool {
+  opacity: 1;
+}
+
+.note-tool:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.note-tool:disabled {
+  color: rgba(0, 0, 0, 0.3);
+  cursor: default;
+}
+
+.note-font {
+  width: 22px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* 서식 줄: 메모 안의 글을 편집하는 동안에만 아래쪽에 나타난다.
+   글상자와 체크리스트는 위쪽부터 놓이므로, 이 줄이 생겨도 적어 둔 글이 밀리지 않는다. */
+.note-format {
+  flex: none;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 20px 0 6px;
+  border-radius: 0 0 12px 3px;
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.note:focus-within .note-format {
+  display: flex;
+}
+
+.note-format .note-tool {
+  opacity: 1;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 12px;
+}
+
+.note-bold {
+  font-weight: 700;
+}
+
+.note-italic {
+  margin-right: 4px;
+  font-style: italic;
+}
+
+.ink-color {
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  border-radius: 3px;
+}
+
+.ink-color:hover {
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.4);
+}
+
+/* 지금 색을 보여 주는 점. 누르면 색 고르는 줄이 열린다. */
+.note-swatch {
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.note-swatch:hover:not(:disabled) {
+  background: var(--paper);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.45);
+}
+
+.note-palette {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.note-color {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.28);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.note-color.current {
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.55);
+}
+
+/* 서식 있는 편집 칸 (메모 본문, 체크리스트 항목) */
+.rich {
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.rich:empty::before {
+  content: attr(data-placeholder);
+  color: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+/* 글 메모: 아무 데나 글상자를 놓는 종이 */
+.note-canvas {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: auto;
+  line-height: 1.45;
+  cursor: text;
+}
+
+.note-canvas::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.canvas-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.box {
+  position: absolute;
+  min-width: 18px;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
+.box:hover,
+.box:focus-within {
+  outline: 1px dashed rgba(0, 0, 0, 0.3);
+}
+
+/* 글상자 위쪽의 얇은 손잡이. 올리거나 편집 중일 때만 보인다. */
+.box-grip {
+  position: absolute;
+  top: -6px;
+  left: -1px;
+  right: -1px;
+  height: 5px;
+  border-radius: 2px 2px 0 0;
+  background: rgba(0, 0, 0, 0.28);
+  cursor: move;
+  opacity: 0;
+  touch-action: none;
+}
+
+.box:hover .box-grip,
+.box:focus-within .box-grip {
+  opacity: 1;
+}
+
+.note-list {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 8px 12px;
+  overflow-y: auto;
+  line-height: 1.45;
+}
+
+.note-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.note-item input[type="checkbox"] {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  margin: 0;
+  accent-color: #4a4634;
+  cursor: pointer;
+}
+
+.note-item .rich {
+  flex: 1;
+  min-width: 0;
+  padding: 1px 2px;
+}
+
+/* 끝낸 항목은 글자색을 바꾸지 않고 흐리게 한다. 색을 바꾸면 항목에 입힌 글자색을 읽어 올 수 없다. */
+.note-item.done .rich {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.note-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.note textarea::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.note textarea::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.note-grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 0 0 12px 0;
+  background: linear-gradient(135deg, transparent 50%, var(--paper-edge) 50%);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+/* ---------- 창 크기 조절 손잡이 (잠금을 풀었을 때만) ---------- */
+
+.resize-edge {
+  position: absolute;
+  z-index: 5;
+}
+.edge-North,
+.edge-South {
+  left: 14px;
+  right: 14px;
+  height: 6px;
+  cursor: ns-resize;
+}
+.edge-East,
+.edge-West {
+  top: 14px;
+  bottom: 14px;
+  width: 6px;
+  cursor: ew-resize;
+}
+.edge-North {
+  top: 0;
+}
+.edge-South {
+  bottom: 0;
+}
+.edge-East {
+  right: 0;
+}
+.edge-West {
+  left: 0;
+}
+.edge-NorthEast,
+.edge-NorthWest,
+.edge-SouthEast,
+.edge-SouthWest {
+  width: 14px;
+  height: 14px;
+}
+.edge-NorthEast {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+.edge-NorthWest {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.edge-SouthEast {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+.edge-SouthWest {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+/* ---------- 설정 · 메뉴 · 대화상자 ---------- */
+
+.settings,
+.menu,
+.dialog {
+  border: 1px solid var(--popup-line);
+  background: var(--popup);
+  box-shadow: 0 10px 28px var(--shadow);
+}
+
+.settings {
+  position: absolute;
+  top: 40px;
+  right: 8px;
+  z-index: 20;
+  width: 290px;
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 48px);
+  padding: 4px 12px 12px;
+  overflow-y: auto;
+  border-radius: 12px;
+}
+
+.settings h4 {
+  margin: 10px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.settings-row > span {
+  flex: none;
+  width: 92px;
+}
+
+.settings-row select,
+.hotkey {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--field-line);
+  border-radius: 7px;
+  outline: none;
+  background: var(--field);
+  text-align: left;
+}
+
+.settings-row select:focus,
+.hotkey:focus-visible,
+.hotkey.capturing {
+  border-color: var(--accent);
+}
+
+.hotkey.capturing {
+  color: var(--accent);
+}
+
+.settings-check {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+}
+
+.settings-check input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.link-button {
+  flex: none;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.settings-error,
+.settings-note {
+  margin: 2px 0 4px;
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.settings-error {
+  color: var(--danger);
+}
+
+.settings-note {
+  color: var(--muted);
+}
+
+.theme-choices {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+}
+
+/* 테마 미리보기: 그 테마의 배경색 바탕에 강조색 점 */
+.theme-choice {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  border-radius: 8px;
+  background: rgb(var(--panel));
+}
+
+.theme-choice i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.theme-choice.current {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.settings-row output {
+  flex: none;
+  width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented {
+  flex: 1;
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.segmented button {
+  flex: 1;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.segmented button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.settings-actions button,
+.dialog button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--field-line);
+  border-radius: 7px;
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.settings-actions button {
+  flex: 1;
+}
+
+.settings-actions button:hover,
+.dialog button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.settings-actions button.danger {
+  color: var(--danger);
+}
+
+.settings-version {
+  margin: 10px 0 0;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 140px;
+  padding: 4px;
+  border-radius: 9px;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.menu-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.menu-item.danger {
+  color: var(--danger);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--overlay);
+}
+
+.dialog {
+  width: 340px;
+  max-width: 100%;
+  max-height: 100%;
+  padding: 14px;
+  overflow-y: auto;
+  border-radius: 12px;
+}
+
+.dialog h2 {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.dialog label,
+.dialog-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.dialog label > span,
+.dialog-row > span {
+  flex: none;
+  width: 54px;
+  color: var(--muted);
+}
+
+.swatches {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dialog .swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.dialog .swatch.current {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.dialog .segmented button {
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.dialog .segmented button.active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.dialog button.dialog-small {
+  flex: none;
+  height: 28px;
+  padding: 0 8px;
+}
+
+.dialog input,
+.dialog select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--field-line);
+  border-radius: 7px;
+  outline: none;
+  background: var(--field);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.dialog input:focus,
+.dialog select:focus {
+  border-color: var(--accent);
+}
+
+.dialog-pickers {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0 0 62px;
+}
+
+.dialog-pickers button {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.dialog-warning {
+  margin: 6px 0 0 62px;
+  color: var(--danger);
+  font-size: 11.5px;
+}
+
+.dialog-message {
+  margin: 0;
+  color: var(--text);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.dialog button.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+.dialog button.primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.dialog button.primary.danger,
+.dialog button.primary.danger:hover:not(:disabled) {
+  background: var(--danger);
+}
+
+.dialog button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 50;
+  max-width: calc(100% - 24px);
+  padding: 7px 12px;
+  border: 1px solid var(--popup-line);
+  border-radius: 9px;
+  background: var(--popup);
+  color: var(--text);
+  transform: translateX(-50%);
+  overflow-wrap: anywhere;
+  box-shadow: 0 6px 18px var(--shadow);
+}
+
+.toast.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}

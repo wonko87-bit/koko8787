@@ -1,0 +1,49 @@
+[package]
+name = "deskboard"
+version = "0.2.2"
+description = "바탕화면에 붙어 있는 바로가기 타일 · 포스트잇 메모 위젯"
+authors = ["koko8787"]
+edition = "2021"
+
+[lib]
+name = "deskboard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+# 타일 아이콘을 PNG data URL 로 넘겨주는 데 쓴다
+png = "0.17"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+# 파일 놓기를 받는 COM 객체를 만드는 매크로가 이 크레이트 이름을 직접 가리킨다
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Ole",
+    "Win32_System_SystemServices",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
