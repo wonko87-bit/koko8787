@@ -48,6 +48,18 @@ impl Store {
     }
 }
 
+/// 백업 파일의 내용을 보드로 읽는다. 아무 JSON 이나 빈 보드로 받아들이지 않도록 모양을 먼저 본다.
+pub fn parse_backup(text: &str) -> Result<Board, String> {
+    let not_a_backup = || "DeskBoard 백업 파일이 아닙니다.".to_string();
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|_| not_a_backup())?;
+    if !value["categories"].is_array() || !value["notes"].is_array() {
+        return Err(not_a_backup());
+    }
+    let mut board: Board = serde_json::from_value(value).map_err(|_| not_a_backup())?;
+    board.sanitize();
+    Ok(board)
+}
+
 /// 임시 파일에 쓴 뒤 교체해, 쓰는 도중 꺼져도 기존 파일이 깨지지 않게 한다.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
@@ -95,6 +107,8 @@ mod tests {
                 name: "보고서".into(),
                 target: r"C:\업무\보고서".into(),
                 kind: "folder".into(),
+                color: "teal".into(),
+                icon: "emoji:📁".into(),
             }],
         });
         board.notes[0].text = "장보기\n우유".into();
@@ -121,6 +135,21 @@ mod tests {
             .collect();
         assert_eq!(kept.len(), 1);
         assert_eq!(fs::read_to_string(kept[0].path()).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn exported_board_can_be_imported_back() {
+        let mut board = Board::starter();
+        board.settings.theme = "mint".into();
+        let json = serde_json::to_string_pretty(&board).unwrap();
+        assert_eq!(parse_backup(&json).unwrap(), board);
+    }
+
+    #[test]
+    fn files_that_are_not_backups_are_refused() {
+        for text in ["", "not json", "{}", "[]", r#"{"x":1,"y":2,"width":3,"height":4}"#, r#"{"categories":1,"notes":[]}"#] {
+            assert!(parse_backup(text).is_err(), "{text}");
+        }
     }
 
     #[test]

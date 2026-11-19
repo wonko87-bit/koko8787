@@ -79,3 +79,15 @@ export const SlidersIcon = () => (
     <circle cx="9" cy="17" r="2" />
   </Svg>
 );
+
+export const ChecklistIcon = () => (
+  <Svg size={13}>
+    <path d="M3.5 6.5l2 2 3.5-4M3.5 16.5l2 2 3.5-4M13 7h8M13 17h8" />
+  </Svg>
+);
+
+export const TextIcon = () => (
+  <Svg size={13}>
+    <path d="M4 6h16M4 12h16M4 18h10" />
+  </Svg>
+);

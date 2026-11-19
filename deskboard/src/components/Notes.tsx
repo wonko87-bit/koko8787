@@ -1,8 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
-import { NOTE_COLORS, NOTE_MIN_H, NOTE_MIN_W } from "../types";
-import type { Note } from "../types";
-import { CloseIcon } from "./icons";
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
+import { newItem } from "../board";
+import { NOTE_COLORS, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "../types";
+import type { Note, NoteItem } from "../types";
+import { ChecklistIcon, CloseIcon, TextIcon } from "./icons";
 
 const COLOR_NAMES: Record<Note["color"], string> = {
   yellow: "노랑",
@@ -12,17 +13,83 @@ const COLOR_NAMES: Record<Note["color"], string> = {
   purple: "보라",
 };
 
+/** 체크리스트. Enter 로 아래에 항목을 만들고, 빈 항목에서 Backspace 로 지운다. */
+function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patch: Partial<Note>) => void }) {
+  const inputs = useRef(new Map<string, HTMLInputElement>());
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const items = note.items;
+
+  useEffect(() => {
+    if (!focusId) return;
+    inputs.current.get(focusId)?.focus();
+    setFocusId(null);
+  }, [focusId]);
+
+  const setItems = (next: NoteItem[]) => onChange(note.id, { items: next });
+  const patch = (id: string, change: Partial<NoteItem>) =>
+    setItems(items.map((item) => (item.id === id ? { ...item, ...change } : item)));
+
+  const onKeyDown = (item: NoteItem, index: number) => (e: KeyboardEvent<HTMLInputElement>) => {
+    // 한글을 조합하는 중의 Enter 는 글자를 확정하는 것이지 줄을 바꾸는 것이 아니다.
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const added = newItem();
+      setItems([...items.slice(0, index + 1), added, ...items.slice(index + 1)]);
+      setFocusId(added.id);
+    } else if (e.key === "Backspace" && item.text === "" && items.length > 1) {
+      e.preventDefault();
+      setItems(items.filter((other) => other.id !== item.id));
+      setFocusId((items[index - 1] ?? items[index + 1]).id);
+    } else if (e.key === "ArrowUp" && index > 0) {
+      setFocusId(items[index - 1].id);
+    } else if (e.key === "ArrowDown" && index < items.length - 1) {
+      setFocusId(items[index + 1].id);
+    }
+  };
+
+  return (
+    <div className="note-list" style={{ fontSize: note.fontSize }}>
+      {items.map((item, index) => (
+        <div key={item.id} className={item.done ? "note-item done" : "note-item"}>
+          <input
+            type="checkbox"
+            checked={item.done}
+            aria-label={item.done ? "끝냄 표시 지우기" : "끝냄으로 표시"}
+            onChange={(e) => patch(item.id, { done: e.target.checked })}
+          />
+          <input
+            type="text"
+            ref={(el) => {
+              if (el) inputs.current.set(item.id, el);
+              else inputs.current.delete(item.id);
+            }}
+            value={item.text}
+            placeholder="할 일…"
+            spellCheck={false}
+            onChange={(e) => patch(item.id, { text: e.target.value })}
+            onKeyDown={onKeyDown(item, index)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface CardProps {
   note: Note;
   focusOnMount: boolean;
   onChange: (id: string, patch: Partial<Note>) => void;
+  onSwitchKind: (id: string) => void;
   onRemove: (note: Note) => void;
   onRaise: (id: string) => void;
 }
 
-const NoteCard = memo(function NoteCard({ note, focusOnMount, onChange, onRemove, onRaise }: CardProps) {
+const NoteCard = memo(function NoteCard(props: CardProps) {
+  const { note, focusOnMount, onChange, onSwitchKind, onRemove, onRaise } = props;
   // 끄는 동안에는 화면에서만 움직이고, 손을 뗄 때 한 번 저장한다.
   const [live, setLive] = useState<Partial<Note> | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const shown = live ? { ...note, ...live } : note;
 
@@ -59,6 +126,8 @@ const NoteCard = memo(function NoteCard({ note, focusOnMount, onChange, onRemove
     handle.addEventListener("pointercancel", end);
   };
 
+  const isList = note.kind === "list";
+
   return (
     <div
       className={`note note-${note.color}${live ? " moving" : ""}`}
@@ -66,28 +135,73 @@ const NoteCard = memo(function NoteCard({ note, focusOnMount, onChange, onRemove
       onPointerDownCapture={() => onRaise(note.id)}
     >
       <div className="note-bar" title="끌어서 옮기기" onPointerDown={beginDrag("move")}>
-        <div className="note-colors">
+        <div className="note-tools">
+          <button
+            className={`note-tool note-swatch note-${note.color}`}
+            title="색 바꾸기"
+            aria-label="색 바꾸기"
+            aria-expanded={paletteOpen}
+            onClick={() => setPaletteOpen((open) => !open)}
+          />
+          <button
+            className="note-tool"
+            title={isList ? "글 메모로 바꾸기" : "체크리스트로 바꾸기"}
+            aria-label={isList ? "글 메모로 바꾸기" : "체크리스트로 바꾸기"}
+            onClick={() => onSwitchKind(note.id)}
+          >
+            {isList ? <TextIcon /> : <ChecklistIcon />}
+          </button>
+          <button
+            className="note-tool note-font"
+            title="글자 작게"
+            aria-label="글자 작게"
+            disabled={note.fontSize <= NOTE_FONT_MIN}
+            onClick={() => onChange(note.id, { fontSize: note.fontSize - 1 })}
+          >
+            A−
+          </button>
+          <button
+            className="note-tool note-font"
+            title="글자 크게"
+            aria-label="글자 크게"
+            disabled={note.fontSize >= NOTE_FONT_MAX}
+            onClick={() => onChange(note.id, { fontSize: note.fontSize + 1 })}
+          >
+            A+
+          </button>
+        </div>
+        <button className="note-tool note-remove" title="메모 떼기" aria-label="메모 떼기" onClick={() => onRemove(note)}>
+          <CloseIcon size={12} />
+        </button>
+      </div>
+      {paletteOpen && (
+        <div className="note-palette">
           {NOTE_COLORS.map((color) => (
             <button
               key={color}
               className={`note-color note-${color}${color === note.color ? " current" : ""}`}
               title={`${COLOR_NAMES[color]}색으로`}
               aria-label={`${COLOR_NAMES[color]}색으로`}
-              onClick={() => onChange(note.id, { color })}
+              onClick={() => {
+                onChange(note.id, { color });
+                setPaletteOpen(false);
+              }}
             />
           ))}
         </div>
-        <button className="note-remove" title="메모 떼기" aria-label="메모 떼기" onClick={() => onRemove(note)}>
-          <CloseIcon size={12} />
-        </button>
-      </div>
-      <textarea
-        ref={textRef}
-        value={note.text}
-        placeholder="메모…"
-        spellCheck={false}
-        onChange={(e) => onChange(note.id, { text: e.target.value })}
-      />
+      )}
+      {isList ? (
+        <Checklist note={note} onChange={onChange} />
+      ) : (
+        <textarea
+          ref={textRef}
+          value={note.text}
+          placeholder="메모…"
+          spellCheck={false}
+          style={{ fontSize: note.fontSize }}
+          onChange={(e) => onChange(note.id, { text: e.target.value })}
+        />
+      )}
       <div className="note-grip" title="끌어서 크기 조절" onPointerDown={beginDrag("size")} />
     </div>
   );
@@ -100,11 +214,13 @@ interface BoardProps {
   boardRef: RefObject<HTMLDivElement>;
   onAdd: (at: { x: number; y: number }) => void;
   onChange: (id: string, patch: Partial<Note>) => void;
+  onSwitchKind: (id: string) => void;
   onRemove: (note: Note) => void;
   onRaise: (id: string) => void;
 }
 
-export function NoteBoard({ notes, focusId, boardRef, onAdd, onChange, onRemove, onRaise }: BoardProps) {
+export function NoteBoard(props: BoardProps) {
+  const { notes, focusId, boardRef, onAdd, onChange, onSwitchKind, onRemove, onRaise } = props;
   return (
     <div
       ref={boardRef}
@@ -123,6 +239,7 @@ export function NoteBoard({ notes, focusId, boardRef, onAdd, onChange, onRemove,
           note={note}
           focusOnMount={note.id === focusId}
           onChange={onChange}
+          onSwitchKind={onSwitchKind}
           onRemove={onRemove}
           onRaise={onRaise}
         />

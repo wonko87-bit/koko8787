@@ -9,6 +9,9 @@
 //! 셸의 바탕화면 창이 표식 창보다 위에 있으면 바탕화면 보기 상태다.
 //! 올라오는 창은 Windows 판마다 다르다 (Windows 10: WorkerW, Windows 11 24H2: Progman).
 //!
+//! 단축키나 트레이로 "불러오면" 위젯이 잠깐 다른 창들 위로 올라오고, 다른 프로그램으로
+//! 돌아가는 순간 다시 내려간다.
+//!
 //! 주인 창이 다른 프로세스의 것이라, 탐색기가 죽어도 위젯 창은 없어지지 않고 주인만 잃는다.
 //! 탐색기가 다시 뜨면 새 바탕화면 창을 기준으로 같은 일을 계속한다.
 
@@ -40,6 +43,12 @@ static MARKER: AtomicIsize = AtomicIsize::new(0);
 /// 지금 위젯이 딸려 있는 바탕화면 창. 0 이면 평소 상태(맨 아래)다.
 static ATTACHED_TO: AtomicIsize = AtomicIsize::new(0);
 static MOVING_SELF: AtomicBool = AtomicBool::new(false);
+/// 불러와서 다른 창들 위에 올라와 있는 중인지
+static SUMMONED: AtomicBool = AtomicBool::new(false);
+/// 불러온 뒤 위젯이 실제로 앞 창이 된 적이 있는지. 그 전에는 "다른 창으로 갔다"고 판단하지 않는다.
+static SUMMON_TOOK_FOCUS: AtomicBool = AtomicBool::new(false);
+/// 불러오기 전에 쓰고 있던 창. 다시 내려갈 때 포커스를 돌려준다.
+static RETURN_TO: AtomicIsize = AtomicIsize::new(0);
 static FAST_LEFT: AtomicU32 = AtomicU32::new(0);
 
 fn hwnd(value: &AtomicIsize) -> HWND {
@@ -108,6 +117,43 @@ pub fn sync_visibility(show: impl FnOnce()) {
             log(|| format!("showing the widget took the focus; gave it back: {returned}"));
         }
     }
+}
+
+/// 위젯을 다른 창들 위로 불러온다. 이미 불러와 있으면 도로 내려보낸다. 창을 만든 스레드에서 부른다.
+pub fn toggle_summon() {
+    unsafe {
+        let widget = hwnd(&WIDGET);
+        if widget.is_invalid() {
+            return;
+        }
+        if SUMMONED.load(Relaxed) {
+            dismiss(true);
+            return;
+        }
+        RETURN_TO.store(GetForegroundWindow().0 as isize, Relaxed);
+        SUMMONED.store(true, Relaxed);
+        SUMMON_TOOK_FOCUS.store(false, Relaxed);
+        // 앞 창이 되면서 창 순서도 맨 위로 올라가야 하므로, 이때만 순서 변경을 받아들인다.
+        MOVING_SELF.store(true, Relaxed);
+        let focused = SetForegroundWindow(widget).as_bool();
+        let _ = SetWindowPos(widget, Some(HWND_TOP), 0, 0, 0, 0, Z_ONLY);
+        MOVING_SELF.store(false, Relaxed);
+        log(|| format!("summoned (took the focus: {focused})"));
+    }
+}
+
+/// 불러온 위젯을 제자리(맨 아래, 또는 보이고 있는 바탕화면 위)로 돌려보낸다.
+unsafe fn dismiss(give_focus_back: bool) {
+    let widget = hwnd(&WIDGET);
+    SUMMONED.store(false, Relaxed);
+    if hwnd(&ATTACHED_TO).is_invalid() {
+        set_order(widget, HWND_BOTTOM);
+    }
+    let previous = hwnd(&RETURN_TO);
+    if give_focus_back && previous != widget && IsWindow(Some(previous)).as_bool() {
+        let _ = SetForegroundWindow(previous);
+    }
+    log(|| "dismissed".into());
 }
 
 fn tool_window_style(ex_style: isize) -> isize {
@@ -189,6 +235,16 @@ unsafe fn evaluate() {
     if IsIconic(widget).as_bool() {
         let _ = ShowWindow(widget, SW_SHOWNOACTIVATE);
     }
+    if SUMMONED.load(Relaxed) {
+        // 불러온 위젯은 다른 프로그램의 창이 앞에 나오는 순간 물러난다.
+        // (위젯이 띄운 파일 선택 창 같은 우리 창은 예외)
+        let foreground = GetForegroundWindow();
+        if !foreground.is_invalid() && process_of(foreground) == process_of(widget) {
+            SUMMON_TOOK_FOCUS.store(true, Relaxed);
+        } else if SUMMON_TOOK_FOCUS.load(Relaxed) {
+            dismiss(false);
+        }
+    }
     let attached_to = hwnd(&ATTACHED_TO);
     match raised_desktop() {
         Some(desktop) => {
@@ -210,7 +266,9 @@ unsafe fn evaluate() {
         None if !attached_to.is_invalid() => {
             ATTACHED_TO.store(0, Relaxed);
             SetWindowLongPtrW(widget, GWLP_HWNDPARENT, 0);
-            set_order(widget, HWND_BOTTOM);
+            if !SUMMONED.load(Relaxed) {
+                set_order(widget, HWND_BOTTOM);
+            }
             log(|| "desktop is back down -> detached, widget at the bottom".into());
         }
         None => {}

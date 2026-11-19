@@ -3,7 +3,27 @@ import type { FormEvent, ReactNode } from "react";
 import { api } from "../api";
 import type { TargetInfo } from "../api";
 import { newId } from "../board";
-import type { Category, Tile } from "../types";
+import { TILE_COLORS } from "../types";
+import type { Category, Tile, TileColor } from "../types";
+
+const TILE_COLOR_NAMES: Record<TileColor, string> = {
+  "": "기본",
+  red: "빨강",
+  orange: "주황",
+  yellow: "노랑",
+  green: "초록",
+  teal: "청록",
+  blue: "파랑",
+  purple: "보라",
+  pink: "분홍",
+};
+
+type IconMode = "auto" | "emoji" | "file";
+const ICON_MODES: { value: IconMode; label: string }[] = [
+  { value: "auto", label: "자동" },
+  { value: "emoji", label: "이모지" },
+  { value: "file", label: "파일에서" },
+];
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -44,6 +64,12 @@ export function TileDialog({ categories, tile, categoryId, onSave, onClose }: Ti
   const [name, setName] = useState(tile?.name ?? "");
   const [target, setTarget] = useState(tile?.target ?? "");
   const [category, setCategory] = useState(categoryId);
+  const [color, setColor] = useState<TileColor>(tile?.color ?? "");
+  const [iconMode, setIconMode] = useState<IconMode>(
+    tile?.icon.startsWith("emoji:") ? "emoji" : tile?.icon.startsWith("file:") ? "file" : "auto",
+  );
+  const [emoji, setEmoji] = useState(tile?.icon.startsWith("emoji:") ? tile.icon.slice(6) : "");
+  const [iconFile, setIconFile] = useState(tile?.icon.startsWith("file:") ? tile.icon.slice(5) : "");
   const [info, setInfo] = useState<TargetInfo | null>(null);
   const [saving, setSaving] = useState(false);
   const targetRef = useRef<HTMLInputElement>(null);
@@ -78,7 +104,21 @@ export function TileDialog({ categories, tile, categoryId, onSave, onClose }: Ti
     if (!value || saving) return;
     setSaving(true);
     const kind = await api.classify(value).then((r) => r.kind, () => tile?.kind ?? "file");
-    onSave(category, { id: tile?.id ?? newId(), name: name.trim() || suggestName(value), target: value, kind });
+    // 이모지나 파일을 고르지 않았으면 대상의 아이콘을 그대로 쓴다.
+    const icon =
+      iconMode === "emoji" && emoji.trim()
+        ? `emoji:${emoji.trim()}`
+        : iconMode === "file" && iconFile.trim()
+          ? `file:${iconFile.trim()}`
+          : "";
+    onSave(category, {
+      id: tile?.id ?? newId(),
+      name: name.trim() || suggestName(value),
+      target: value,
+      kind,
+      color,
+      icon,
+    });
   };
 
   return (
@@ -123,6 +163,71 @@ export function TileDialog({ categories, tile, categoryId, onSave, onClose }: Ti
             ))}
           </select>
         </label>
+        <div className="dialog-row">
+          <span>색</span>
+          <div className="swatches">
+            {TILE_COLORS.map((value) => (
+              <button
+                key={value || "default"}
+                type="button"
+                className={value === color ? "swatch current" : "swatch"}
+                data-color={value || undefined}
+                title={TILE_COLOR_NAMES[value]}
+                aria-label={`타일 색 ${TILE_COLOR_NAMES[value]}`}
+                aria-pressed={value === color}
+                onClick={() => setColor(value)}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="dialog-row">
+          <span>아이콘</span>
+          <div className="segmented">
+            {ICON_MODES.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                className={iconMode === value ? "active" : ""}
+                aria-pressed={iconMode === value}
+                onClick={() => setIconMode(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {iconMode === "emoji" && (
+          <label>
+            <span />
+            <input
+              value={emoji}
+              onChange={(e) => setEmoji(e.target.value)}
+              placeholder="이모지 하나 (Win + . 으로 입력)"
+              maxLength={8}
+            />
+          </label>
+        )}
+        {iconMode === "file" && (
+          <label>
+            <span />
+            <input
+              value={iconFile}
+              onChange={(e) => setIconFile(e.target.value)}
+              placeholder="그림·아이콘·프로그램 파일 경로"
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="dialog-small"
+              onClick={async () => {
+                const picked = await api.pickFile().catch(() => null);
+                if (picked) setIconFile(picked);
+              }}
+            >
+              선택…
+            </button>
+          </label>
+        )}
         <div className="dialog-actions">
           <button type="button" onClick={onClose}>
             취소

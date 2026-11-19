@@ -8,6 +8,13 @@ const NOTE_MAX: f64 = 4000.0;
 const NOTE_COLORS: [&str; 5] = ["yellow", "pink", "green", "blue", "purple"];
 const TILE_KINDS: [&str; 4] = ["folder", "program", "file", "link"];
 const TILE_SIZES: [&str; 3] = ["s", "m", "l"];
+/// 타일 바탕색. 빈 문자열은 테마 기본색이다.
+const TILE_COLORS: [&str; 9] = ["", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"];
+const THEMES: [&str; 4] = ["dark", "light", "mint", "lavender"];
+const NOTE_KINDS: [&str; 2] = ["text", "list"];
+pub const NOTE_FONT_MIN: f64 = 10.0;
+pub const NOTE_FONT_MAX: f64 = 32.0;
+pub const DEFAULT_HOTKEY: &str = "Ctrl+Alt+D";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -33,8 +40,12 @@ pub struct Tile {
     pub name: String,
     /// 폴더·파일·프로그램 경로 또는 URL
     pub target: String,
-    /// folder | program | file | link — 타일 그림을 고르는 데만 쓴다
+    /// folder | program | file | link — 아이콘을 구하지 못했을 때 보일 그림을 고르는 데 쓴다
     pub kind: String,
+    /// 타일 바탕색 이름. 비어 있으면 테마 기본색
+    pub color: String,
+    /// 비어 있으면 대상의 아이콘을 그대로 쓴다. `emoji:🙂` 는 글자 하나, `file:경로` 는 그 파일의 그림
+    pub icon: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -50,6 +61,19 @@ pub struct Note {
     pub color: String,
     /// 겹쳤을 때 위에 오는 순서
     pub z: u32,
+    /// text: 자유롭게 쓰는 메모 / list: 체크리스트
+    pub kind: String,
+    /// 체크리스트 항목 (kind 가 list 일 때 쓴다)
+    pub items: Vec<NoteItem>,
+    pub font_size: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NoteItem {
+    pub id: String,
+    pub text: String,
+    pub done: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -63,6 +87,14 @@ pub struct Settings {
     pub opacity: f64,
     /// 잠그면 창 이동·크기 조절이 막힌다
     pub locked: bool,
+    /// dark | light | mint | lavender
+    pub theme: String,
+    /// 메모 글꼴 이름. 비어 있으면 기본 글꼴
+    pub note_font: String,
+    /// 위젯을 앞으로 불러오는 전역 단축키. 비어 있으면 쓰지 않는다
+    pub hotkey: String,
+    /// 시작할 때 새 버전이 있는지 확인한다
+    pub check_updates: bool,
 }
 
 impl Default for Board {
@@ -82,13 +114,25 @@ impl Default for Note {
             h: 150.0,
             color: "yellow".into(),
             z: 1,
+            kind: "text".into(),
+            items: Vec::new(),
+            font_size: 13.0,
         }
     }
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { split: 0.56, tile_size: "m".into(), opacity: 0.86, locked: true }
+        Settings {
+            split: 0.56,
+            tile_size: "m".into(),
+            opacity: 0.86,
+            locked: true,
+            theme: "dark".into(),
+            note_font: String::new(),
+            hotkey: DEFAULT_HOTKEY.into(),
+            check_updates: true,
+        }
     }
 }
 
@@ -103,12 +147,13 @@ impl Board {
             notes: vec![Note {
                 id: "note-welcome".into(),
                 text: "DeskBoard 사용법\n\n\
-                       · 왼쪽 ＋ 로 폴더·프로그램 바로가기 추가\n\
+                       · ＋ 바로가기, 또는 탐색기에서 파일·폴더를 끌어다 놓아 추가\n\
                        · 메모는 위쪽 띠를 끌어 옮기고, 오른쪽 아래 모서리로 크기 조절\n\
-                       · 자물쇠 버튼을 풀면 위젯 위치·크기 변경"
+                       · 자물쇠 버튼을 풀면 위젯 위치·크기 변경\n\
+                       · Ctrl+Alt+D 로 어디서든 위젯 불러오기"
                     .into(),
-                w: 250.0,
-                h: 170.0,
+                w: 270.0,
+                h: 190.0,
                 ..Note::default()
             }],
             ..Board::default()
@@ -124,6 +169,9 @@ impl Board {
         if !TILE_SIZES.contains(&s.tile_size.as_str()) {
             s.tile_size = "m".into();
         }
+        if !THEMES.contains(&s.theme.as_str()) {
+            s.theme = "dark".into();
+        }
         for note in &mut self.notes {
             let d = Note::default();
             note.x = clamp_or(note.x, 0.0, NOTE_MAX, d.x);
@@ -133,10 +181,17 @@ impl Board {
             if !NOTE_COLORS.contains(&note.color.as_str()) {
                 note.color = d.color;
             }
+            if !NOTE_KINDS.contains(&note.kind.as_str()) {
+                note.kind = d.kind;
+            }
+            note.font_size = clamp_or(note.font_size, NOTE_FONT_MIN, NOTE_FONT_MAX, d.font_size);
         }
         for tile in self.categories.iter_mut().flat_map(|c| c.tiles.iter_mut()) {
             if !TILE_KINDS.contains(&tile.kind.as_str()) {
                 tile.kind = "file".into();
+            }
+            if !TILE_COLORS.contains(&tile.color.as_str()) {
+                tile.color = String::new();
             }
         }
     }
@@ -160,6 +215,9 @@ mod tests {
         assert_eq!(board.settings, Settings::default());
         assert_eq!(board.notes[0].text, "hi");
         assert_eq!(board.notes[0].w, Note::default().w);
+        assert_eq!(board.notes[0].kind, "text");
+        assert_eq!(board.notes[0].font_size, 13.0);
+        assert_eq!(board.settings.hotkey, DEFAULT_HOTKEY);
         assert!(board.categories.is_empty());
     }
 
@@ -167,6 +225,9 @@ mod tests {
     fn json_uses_camel_case_names_the_frontend_expects() {
         let json = serde_json::to_value(Board::starter()).unwrap();
         assert!(json["settings"]["tileSize"].is_string());
+        assert!(json["settings"]["noteFont"].is_string());
+        assert!(json["settings"]["checkUpdates"].is_boolean());
+        assert!(json["notes"][0]["fontSize"].is_number());
         assert!(json["categories"][0]["tiles"].is_array());
     }
 
@@ -179,7 +240,10 @@ mod tests {
         board.notes[0].x = -40.0;
         board.notes[0].w = 3.0;
         board.notes[0].color = "black".into();
-        board.categories[0].tiles.push(Tile { kind: "weird".into(), ..Tile::default() });
+        board.notes[0].kind = "table".into();
+        board.notes[0].font_size = 400.0;
+        board.settings.theme = "neon".into();
+        board.categories[0].tiles.push(Tile { kind: "weird".into(), color: "glitter".into(), ..Tile::default() });
         board.sanitize();
         assert_eq!(board.settings.split, 0.8);
         assert_eq!(board.settings.opacity, Settings::default().opacity);
@@ -187,7 +251,11 @@ mod tests {
         assert_eq!(board.notes[0].x, 0.0);
         assert_eq!(board.notes[0].w, NOTE_MIN_W);
         assert_eq!(board.notes[0].color, "yellow");
+        assert_eq!(board.notes[0].kind, "text");
+        assert_eq!(board.notes[0].font_size, NOTE_FONT_MAX);
+        assert_eq!(board.settings.theme, "dark");
         assert_eq!(board.categories[0].tiles[0].kind, "file");
+        assert_eq!(board.categories[0].tiles[0].color, "");
     }
 
     #[test]

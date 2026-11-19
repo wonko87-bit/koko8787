@@ -47,10 +47,11 @@ pub fn classify(target: &str) -> TargetInfo {
 }
 
 /// 탐색기에서 더블클릭한 것과 같은 방식으로 연다.
+/// `elevated` 면 "관리자 권한으로 실행"과 같아서, Windows 가 먼저 확인 창(UAC)을 띄운다.
 #[cfg(windows)]
-pub fn open(target: &str) -> Result<(), String> {
+pub fn open(target: &str, elevated: bool) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
+    use windows::core::{w, PCWSTR};
     use windows::Win32::System::Com::{
         CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
     };
@@ -75,7 +76,7 @@ pub fn open(target: &str) -> Result<(), String> {
         let com = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
         let result = ShellExecuteW(
             None,
-            PCWSTR::null(),
+            if elevated { w!("runas") } else { PCWSTR::null() },
             PCWSTR(file.as_ptr()),
             PCWSTR::null(),
             directory.as_ref().map_or(PCWSTR::null(), |d| PCWSTR(d.as_ptr())),
@@ -100,7 +101,7 @@ pub fn open(target: &str) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-pub fn open(_target: &str) -> Result<(), String> {
+pub fn open(_target: &str, _elevated: bool) -> Result<(), String> {
     Err("바로가기 실행은 Windows 에서만 지원합니다.".into())
 }
 

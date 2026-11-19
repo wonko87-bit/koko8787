@@ -4,6 +4,8 @@
 #   3) 바탕화면 보기를 끝내면 다시 다른 창 아래로 내려간다
 #   4) 바탕화면 보기 중에 타일을 눌러 연 프로그램을 가리지 않는다
 #   5) 잠금을 풀면 끌어서 옮기고 크기를 바꿀 수 있고, 잠그면 고정되며, 다시 실행해도 그 자리에 뜬다
+#   7) 단축키로 불러오면 다른 창 위로 올라오고, 다른 창을 쓰면 물러난다
+#   8) 다른 프로그램에서 끌어온 파일이 바로가기가 되고, 프로그램 타일에 실제 아이콘이 그려진다
 #   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯은 남아 있고, 새 바탕화면에서도 똑같이 동작한다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
 # 마우스를 직접 움직이고 다른 창을 최소화하므로 CI 같은 빈 환경에서만 돌린다.
@@ -38,6 +40,7 @@ public static class Win {
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern bool GetWindowBand(IntPtr h, out uint band);
@@ -54,6 +57,12 @@ public static class Win {
         SetCursorPos(x, y); Thread.Sleep(150);
         mouse_event(2, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(60);
         mouse_event(4, 0, 0, 0, UIntPtr.Zero);
+    }
+    // Ctrl+Alt+D (위젯 불러오기 기본 단축키)
+    public static void SummonHotkey() {
+        keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 0, UIntPtr.Zero);
+        keybd_event(0x44, 0, 0, UIntPtr.Zero); Thread.Sleep(60); keybd_event(0x44, 0, 2, UIntPtr.Zero);
+        keybd_event(0x12, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero);
     }
     // 사람이 끄는 것처럼 누른 채로 조금씩 움직였다가 뗀다.
     public static void Drag(int x, int y, int dx, int dy) {
@@ -152,16 +161,26 @@ function IsAbove([IntPtr]$a, [IntPtr]$b) {
 }
 
 # 최소화할 수 있는 평범한 창을 하나 띄운다.
-function OpenWindow([string]$title, [int]$x, [int]$y, [int]$w, [int]$h) {
+# $dragFile 을 주면, 창을 누른 채 끌 때 그 파일을 끌어 옮기는 것처럼 동작한다 (탐색기에서 파일을 끄는 것과 같다).
+function OpenWindow([string]$title, [int]$x, [int]$y, [int]$w, [int]$h, [string]$dragFile = "") {
     $code = @'
 Add-Type -AssemblyName System.Windows.Forms
 $f = New-Object Windows.Forms.Form
 $f.Text = '{TITLE}'
 $f.StartPosition = 'Manual'
 $f.SetBounds({X}, {Y}, {W}, {H})
+if ('{DRAG}') {
+    $f.add_MouseDown({
+        $files = New-Object System.Collections.Specialized.StringCollection
+        $files.Add('{DRAG}') | Out-Null
+        $data = New-Object Windows.Forms.DataObject
+        $data.SetFileDropList($files)
+        $f.DoDragDrop($data, [Windows.Forms.DragDropEffects]::Copy) | Out-Null
+    })
+}
 [Windows.Forms.Application]::Run($f)
 '@
-    $code = $code.Replace('{TITLE}', $title).Replace('{X}', "$x").Replace('{Y}', "$y").Replace('{W}', "$w").Replace('{H}', "$h")
+    $code = $code.Replace('{TITLE}', $title).Replace('{DRAG}', $dragFile).Replace('{X}', "$x").Replace('{Y}', "$y").Replace('{W}', "$w").Replace('{H}', "$h")
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code))
     $process = Start-Process powershell.exe -PassThru -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", $encoded
     $script:started += $process
@@ -251,7 +270,10 @@ try {
     $coverX = $r.L + [int]($width * 0.4)
     $probeX = $r.L + [int]($width * 0.75)
     $probeY = $r.T + [int]($height * 0.5)
-    $cover = OpenWindow "DeskBoardCover" $coverX $r.T ($width - [int]($width * 0.4)) $height
+    # 위젯 아래로 조금 더 내려오게 해서, 위젯이 앞에 나와 있어도 덮개 창을 클릭할 수 있게 한다.
+    $cover = OpenWindow "DeskBoardCover" $coverX $r.T ($width - [int]($width * 0.4)) ($height + 90)
+    $coverOnlyX = $coverX + 80
+    $coverOnlyY = $r.B + 50
     $atProbe = { [Win]::RootAt($probeX, $probeY) }
     # 1) 평소
     Check "normal: another window covers the widget" (WaitFor { (& $atProbe) -eq $cover } 5) (Describe (& $atProbe))
@@ -263,6 +285,31 @@ try {
     Write-Host "after clicking the widget, foreground: $(Describe ([Win]::GetForegroundWindow()))"
     Check "normal: clicking the widget does not bring it in front" ((& $atProbe) -eq $cover) (Describe (& $atProbe))
     DumpOrder "normal"
+
+    # 7) 불러오기 단축키
+    [Win]::SummonHotkey()
+    Check "hotkey: widget comes in front of other windows" (WaitFor { (& $atProbe) -eq $widget } 5) (Describe (& $atProbe))
+    Check "hotkey: widget has the focus" (WaitFor { [Win]::GetForegroundWindow() -eq $widget } 3) (Describe ([Win]::GetForegroundWindow()))
+    [Win]::Click($coverOnlyX, $coverOnlyY)
+    Check "summoned widget steps back when another window is used" (WaitFor { (& $atProbe) -eq $cover } 5) (Describe (& $atProbe))
+    [Win]::SummonHotkey()
+    Check "hotkey works again" (WaitFor { (& $atProbe) -eq $widget } 5) (Describe (& $atProbe))
+    [Win]::SummonHotkey()
+    Check "hotkey while summoned sends the widget back" (WaitFor { (& $atProbe) -eq $cover } 5) (Describe (& $atProbe))
+    Check "and returns the focus to the window used before" (WaitFor { [Win]::GetForegroundWindow() -eq $cover } 3) (Describe ([Win]::GetForegroundWindow()))
+
+    # 8) 다른 프로그램에서 파일을 끌어다 놓기
+    $dropFile = Join-Path $env:SystemRoot "explorer.exe"
+    $source = OpenWindow "DeskBoardDragSource" 20 ($r.B + 30) 160 100 $dropFile
+    $sourceBox = RectOf $source
+    $fromX = $sourceBox.L + 80
+    $fromY = $sourceBox.T + 60
+    # 첫 카테고리의 타일 줄, 첫 타일 오른쪽 빈 자리에 놓는다.
+    [Win]::Drag($fromX, $fromY, ($r.L + 220 - $fromX), ($r.T + 105 - $fromY))
+    $dropped = WaitFor { @((& $readBoard).categories)[0].tiles.Count -eq 2 } 8
+    $tilesNow = @((& $readBoard).categories)[0].tiles
+    Check "a file dragged in from another program becomes a tile" ($dropped -and $tilesNow[1].target -eq $dropFile -and $tilesNow[1].name -eq "explorer" -and $tilesNow[1].kind -eq "program") ($tilesNow | ConvertTo-Json -Compress)
+    Stop-Process -Id ($script:started | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
 
     # 2) 바탕화면 보기 (Win+D 와 같은 동작)
     $shellApp = New-Object -ComObject Shell.Application
@@ -285,8 +332,17 @@ try {
                 if ($c.R -ge 240 -and $c.G -ge 215 -and $c.G -le 245 -and $c.B -ge 110 -and $c.B -le 160) { $yellow++ }
             }
         }
+        # 아이콘을 구하지 못한 프로그램 타일은 파란 네모(124,156,255)를 그린다. 첫 타일(cmd.exe)에 그게 없어야 한다.
+        $placeholder = 0
+        for ($y = 70; $y -lt 125; $y += 2) {
+            for ($x = 14; $x -lt 110; $x += 2) {
+                $c = $bitmap.GetPixel($x, $y)
+                if ([Math]::Abs($c.R - 124) -le 8 -and [Math]::Abs($c.G - 156) -le 8 -and $c.B -ge 245) { $placeholder++ }
+            }
+        }
         $graphics.Dispose(); $bitmap.Dispose()
         Check "show desktop: the yellow note is drawn" ($yellow -ge 300) "($yellow yellow samples)"
+        Check "the program tile shows a real icon, not the placeholder" ($placeholder -lt 20) "($placeholder placeholder samples)"
     }
 
     # 3) 바탕화면 보기 끝

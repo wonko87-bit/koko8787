@@ -1,0 +1,78 @@
+name: DeskBoard Release
+
+# 자동 업데이트용 서명 설치 파일을 GitHub Releases 에 발행한다.
+# Actions 탭에서 수동 실행하거나, deskboard-v* 태그를 푸시하면 동작한다.
+#
+# 이 저장소의 "최신(latest) 릴리스"는 FileBox 의 자동 업데이트가 쓰고 있다.
+# DeskBoard 릴리스가 그 자리를 차지하지 않도록 prerelease 로 발행하고,
+# DeskBoard 가 읽는 latest.json 은 고정 태그 릴리스(deskboard-updater)에 따로 올려 둔다.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["deskboard-v*"]
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deskboard/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: deskboard/src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: deskboard
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: deskboard
+
+      - name: Run Rust tests
+        run: cargo test
+        working-directory: deskboard/src-tauri
+
+      - name: Build, sign and publish release
+        id: publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: deskboard
+          tagName: deskboard-v__VERSION__
+          releaseName: DeskBoard v__VERSION__
+          releaseBody: |
+            아래 `.exe` 설치 파일을 받아 설치하세요.
+            이미 DeskBoard 를 쓰고 있다면 앱이 업데이트를 알려줍니다.
+          releaseDraft: false
+          prerelease: true
+          includeUpdaterJson: true
+
+      # 앱이 확인하는 주소는 고정 태그 릴리스의 latest.json 이다. 방금 발행한 것으로 바꿔 놓는다.
+      - name: Point the updater at this release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="deskboard-v${{ steps.publish.outputs.appVersion }}"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir updater
+          if ! gh release view deskboard-updater --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create deskboard-updater --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "DeskBoard 자동 업데이트 정보" \
+              --notes "DeskBoard 앱이 새 버전을 확인할 때 읽는 파일입니다. 설치 파일은 deskboard-v* 릴리스에 있습니다."
+          fi
+          gh release upload deskboard-updater updater/latest.json --repo "$GITHUB_REPOSITORY" --clobber

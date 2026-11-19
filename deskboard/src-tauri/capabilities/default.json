@@ -2,12 +2,18 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "DeskBoard 위젯 창 기본 권한",
-  "windows": ["main"],
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
     "core:window:allow-start-resize-dragging",
     "core:window:allow-set-resizable",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "autostart:default",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
