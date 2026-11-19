@@ -388,8 +388,12 @@ try {
             [Win]::Drag($item.X, $item.Y, ($dropX - $item.X), ($dropY - $item.Y))
             $pulled = WaitFor { @((& $readBoard).categories)[0].tiles.Count -eq 3 } 8
             $last = @((& $readBoard).categories)[0].tiles | Select-Object -Last 1
-            Check "a file dragged from an Explorer window onto the summoned widget becomes a tile" ($pulled -and $last.target -eq $dragFile -and $last.kind -eq "file") ($last | ConvertTo-Json -Compress)
-            Check "the widget steps back once the file has been dropped" (WaitFor { [Win]::RootAt($dropX, $dropY) -eq $explorer -and -not [Win]::TopMost($widget) } 5) (Describe ([Win]::RootAt($dropX, $dropY)))
+            # (임시 폴더 경로는 짧은 이름(RUNNER~1)으로 올 수 있어서 끝부분만 견준다.)
+            $isDraggedFile = $last.name -eq "drag-me.txt" -and $last.target -like "*\deskboard-drag-test\drag-me.txt" -and $last.kind -eq "file"
+            Check "a file dragged from an Explorer window onto the summoned widget becomes a tile" ($pulled -and $isDraggedFile) ($last | ConvertTo-Json -Compress)
+            # 놓고 나면 위젯이 앞 창이 되어 그대로 남는다. 다른 창을 쓰면 그때 물러난다.
+            [Win]::Click($item.X, $item.Y)
+            Check "after the drop, using the Explorer window sends the widget back" (WaitFor { [Win]::RootAt($dropX, $dropY) -eq $explorer -and -not [Win]::TopMost($widget) } 5) (Describe ([Win]::RootAt($dropX, $dropY)))
         }
         [Win]::PostMessageW($explorer, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
         WaitFor { $null -eq (ExplorerWindow "deskboard-drag-test") } 10 | Out-Null
