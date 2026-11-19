@@ -7,9 +7,18 @@ mod store;
 
 use geometry::{GeometryStore, Rect};
 use model::Board;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use store::Store;
-use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, RunEvent, State, WebviewWindow, WindowEvent};
+use tauri::{
+    AppHandle, Manager, PhysicalPosition, PhysicalSize, RunEvent, State, WebviewWindow,
+    WebviewWindowBuilder, WindowEvent,
+};
+
+/// 사용자가 위젯 창을 직접 닫았는지. 닫지 않았는데 창이 없어졌다면 다시 만들어야 한다.
+#[derive(Default)]
+struct ClosedByUser(AtomicBool);
 
 #[tauri::command]
 fn load_board(store: State<'_, Store>) -> Board {
@@ -65,22 +74,46 @@ fn place(window: &WebviewWindow, saved: Option<Rect>) -> tauri::Result<()> {
     Ok(())
 }
 
-/// 창을 옮기거나 크기를 바꿀 때마다 자리를 기억해 둔다.
-fn remember_geometry(window: &WebviewWindow, geometry: Arc<GeometryStore>) {
+/// 창을 옮기거나 크기를 바꿀 때마다 자리를 기억해 두고, 사용자가 닫으면 그것도 적어 둔다.
+fn watch_window(window: &WebviewWindow, geometry: Arc<GeometryStore>) {
     let tracked = window.clone();
-    window.on_window_event(move |event| {
-        if !matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
-            return;
+    window.on_window_event(move |event| match event {
+        WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+            let (Ok(position), Ok(size)) = (tracked.outer_position(), tracked.inner_size()) else {
+                return;
+            };
+            // 최소화된 창은 화면 밖 좌표와 0 크기를 알려 오므로 기억하지 않는다.
+            if size.width == 0 || size.height == 0 || position.x <= -30000 || position.y <= -30000 {
+                return;
+            }
+            geometry.set(Rect { x: position.x, y: position.y, width: size.width, height: size.height });
         }
-        let (Ok(position), Ok(size)) = (tracked.outer_position(), tracked.inner_size()) else {
-            return;
-        };
-        // 최소화된 창은 화면 밖 좌표와 0 크기를 알려 오므로 기억하지 않는다.
-        if size.width == 0 || size.height == 0 || position.x <= -30000 || position.y <= -30000 {
-            return;
+        WindowEvent::CloseRequested { .. } => {
+            tracked.state::<ClosedByUser>().0.store(true, Ordering::Release);
         }
-        geometry.set(Rect { x: position.x, y: position.y, width: size.width, height: size.height });
+        _ => {}
     });
+}
+
+/// 위젯 창을 만들어 기억해 둔 자리에 놓고, 바탕화면에 붙인 뒤 보인다.
+fn open_widget(app: &AppHandle) -> tauri::Result<()> {
+    let config = app.config().app.windows.first().cloned().expect("tauri.conf.json has no window");
+    let window = WebviewWindowBuilder::from_config(app, &config)?.build()?;
+    let geometry = app.state::<Arc<GeometryStore>>().inner().clone();
+    if let Err(e) = place(&window, geometry.get()) {
+        eprintln!("[deskboard] could not place the window: {e}");
+    }
+    watch_window(&window, geometry);
+
+    // 창 순서를 다루는 일은 창을 만든 스레드에서 해야 한다.
+    #[cfg(windows)]
+    let handle = window.hwnd()?.0 as isize;
+    let shown = window.clone();
+    window.run_on_main_thread(move || {
+        #[cfg(windows)]
+        desktop::install(windows::Win32::Foundation::HWND(handle as _));
+        let _ = shown.show();
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,17 +129,10 @@ pub fn run() {
             let geometry = Arc::new(GeometryStore::load(data_dir.join("window.json")));
             app.manage(geometry.clone());
 
-            let window = app.get_webview_window("main").ok_or("main window is missing")?;
-            if let Err(e) = place(&window, geometry.get()) {
-                eprintln!("[deskboard] could not place the window: {e}");
-            }
-            remember_geometry(&window, geometry.clone());
             geometry::spawn_flusher(geometry);
+            app.manage(ClosedByUser::default());
 
-            #[cfg(windows)]
-            desktop::install(windows::Win32::Foundation::HWND(window.hwnd()?.0 as _));
-            #[cfg(not(windows))]
-            window.show()?;
+            open_widget(app.handle())?;
 
             Ok(())
         })
@@ -121,9 +147,23 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building DeskBoard");
 
-    app.run(|app, event| {
-        if let RunEvent::Exit = event {
-            app.state::<Arc<GeometryStore>>().flush();
+    app.run(|app, event| match event {
+        // 닫으라고 한 적이 없는데 창이 없어졌다: 위젯이 붙어 있던 바탕화면 창이
+        // 탐색기와 함께 사라지면서 같이 없어진 것이다. 끝내지 않고 창을 다시 만든다.
+        RunEvent::ExitRequested { code: None, api, .. }
+            if !app.state::<ClosedByUser>().0.load(Ordering::Acquire) =>
+        {
+            api.prevent_exit();
+            let app = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(500));
+                if let Err(e) = open_widget(&app) {
+                    eprintln!("[deskboard] could not reopen the widget: {e}");
+                    app.exit(1);
+                }
+            });
         }
+        RunEvent::Exit => app.state::<Arc<GeometryStore>>().flush(),
+        _ => {}
     });
 }

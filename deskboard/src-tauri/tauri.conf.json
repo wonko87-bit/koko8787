@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "DeskBoard",
         "width": 780,
         "height": 460,

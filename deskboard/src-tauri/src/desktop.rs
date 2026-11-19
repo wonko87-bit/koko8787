@@ -2,11 +2,15 @@
 //!
 //! 평소에는 모든 창의 맨 아래에 깔려 있어 다른 프로그램을 가리지 않는다.
 //! Win+D(바탕화면 보기)를 누르면 셸이 바탕화면 창을 다른 창들 위로 끌어올려
-//! 가리는데, 그동안에만 위젯을 "항상 위"로 올려 바탕화면 위에 보이게 한다.
-//! (Rainmeter 의 "바탕화면에 고정"과 같은 방식)
+//! 가리는데, 그동안에는 위젯을 그 바탕화면 창에 딸린 창(owned window)으로 만든다.
+//! Windows 는 딸린 창을 언제나 주인 창 위에 두므로, 바탕화면을 클릭해도 위젯이 가려지지 않는다.
 //!
 //! 바탕화면이 올라왔는지는 맨 아래에 둔 보이지 않는 표식 창으로 판단한다.
 //! 셸의 바탕화면 창이 표식 창보다 위에 있으면 바탕화면 보기 상태다.
+//! 올라오는 창은 Windows 판마다 다르다 (Windows 10: WorkerW, Windows 11 24H2: Progman).
+//!
+//! 주인 창이 없어지면(탐색기가 죽거나 다시 시작되면) 딸린 창도 함께 없어진다.
+//! 그때 창을 다시 만드는 일은 lib.rs 가 맡는다.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -33,21 +37,23 @@ const Z_ONLY: SET_WINDOW_POS_FLAGS =
 // 아래 값들은 모두 창을 만든 스레드(메인 스레드)에서만 읽고 쓴다.
 static WIDGET: AtomicIsize = AtomicIsize::new(0);
 static MARKER: AtomicIsize = AtomicIsize::new(0);
-static RAISED: AtomicBool = AtomicBool::new(false);
+/// 지금 위젯이 딸려 있는 바탕화면 창. 0 이면 평소 상태(맨 아래)다.
+static ATTACHED_TO: AtomicIsize = AtomicIsize::new(0);
 static MOVING_SELF: AtomicBool = AtomicBool::new(false);
 static FAST_LEFT: AtomicU32 = AtomicU32::new(0);
+static HOOKED: AtomicBool = AtomicBool::new(false);
 
 fn hwnd(value: &AtomicIsize) -> HWND {
     HWND(value.load(Relaxed) as *mut core::ffi::c_void)
 }
 
-/// 창을 바탕화면에 붙이고 화면에 보인다. 창을 만든 스레드에서 한 번만 부른다.
+/// 창을 바탕화면에 붙인다. 창을 만든 스레드에서, 창을 보이기 전에 부른다.
+/// 창이 없어졌다가 다시 만들어지면 새 창에 대해 다시 부를 수 있다.
 pub fn install(widget: HWND) {
     unsafe {
         // Alt+Tab 목록과 작업 표시줄에 나타나지 않게 한다.
         let ex = GetWindowLongPtrW(widget, GWL_EXSTYLE);
-        let ex = (ex | WS_EX_TOOLWINDOW.0 as isize) & !(WS_EX_APPWINDOW.0 as isize);
-        SetWindowLongPtrW(widget, GWL_EXSTYLE, ex);
+        SetWindowLongPtrW(widget, GWL_EXSTYLE, tool_window_style(ex));
 
         let marker = CreateWindowExW(
             WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
@@ -67,26 +73,30 @@ pub fn install(widget: HWND) {
 
         WIDGET.store(widget.0 as isize, Relaxed);
         MARKER.store(marker.0 as isize, Relaxed);
+        ATTACHED_TO.store(0, Relaxed);
 
         let _ = SetWindowPos(marker, Some(HWND_BOTTOM), 0, 0, 0, 0, Z_ONLY);
         let _ = SetWindowPos(widget, Some(HWND_BOTTOM), 0, 0, 0, 0, Z_ONLY);
 
         let _ = SetWindowSubclass(widget, Some(subclass_proc), SUBCLASS_ID, 0);
         SetTimer(Some(widget), TIMER_POLL, POLL_MS, None);
-        SetWinEventHook(
-            EVENT_SYSTEM_FOREGROUND,
-            EVENT_SYSTEM_FOREGROUND,
-            None,
-            Some(foreground_changed),
-            0,
-            0,
-            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
-        );
-
-        // 쓰던 프로그램의 포커스를 뺏지 않고 조용히 나타난다.
-        let _ = ShowWindow(widget, SW_SHOWNOACTIVATE);
+        if !HOOKED.swap(true, Relaxed) {
+            SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                None,
+                Some(foreground_changed),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            );
+        }
         evaluate();
     }
+}
+
+fn tool_window_style(ex_style: isize) -> isize {
+    (ex_style | WS_EX_TOOLWINDOW.0 as isize) & !(WS_EX_APPWINDOW.0 as isize)
 }
 
 unsafe extern "system" fn subclass_proc(
@@ -103,10 +113,11 @@ unsafe extern "system" fn subclass_proc(
             let pos = &mut *(lparam.0 as *mut WINDOWPOS);
             pos.flags |= SWP_NOZORDER;
         }
-        WM_WINDOWPOSCHANGING | WM_WINDOWPOSCHANGED if MOVING_SELF.load(Relaxed) => {
-            let pos = &*(lparam.0 as *const WINDOWPOS);
-            let name = if message == WM_WINDOWPOSCHANGING { "changing" } else { "changed" };
-            log(|| format!("  {name}: insert_after={:?} flags={:#x}", pos.hwndInsertAfter.0, pos.flags.0));
+        // 창 틀이 창 모양을 바꿀 때(크기 조절 허용 등) 확장 스타일을 통째로 다시 써서
+        // 위에서 넣은 도구 창 표시가 지워지므로, 바뀌는 순간에 다시 넣는다.
+        WM_STYLECHANGING if wparam.0 as i32 == GWL_EXSTYLE.0 => {
+            let styles = &mut *(lparam.0 as *mut STYLESTRUCT);
+            styles.styleNew = tool_window_style(styles.styleNew as isize) as u32;
         }
         WM_TIMER if wparam.0 == TIMER_POLL => {
             evaluate();
@@ -123,12 +134,14 @@ unsafe extern "system" fn subclass_proc(
             return LRESULT(0);
         }
         WM_NCDESTROY => {
+            log(|| "widget window is gone".into());
             let _ = KillTimer(Some(window), TIMER_POLL);
             let _ = KillTimer(Some(window), TIMER_FAST);
             let _ = RemoveWindowSubclass(window, Some(subclass_proc), SUBCLASS_ID);
             let _ = DestroyWindow(hwnd(&MARKER));
             WIDGET.store(0, Relaxed);
             MARKER.store(0, Relaxed);
+            ATTACHED_TO.store(0, Relaxed);
         }
         _ => {}
     }
@@ -153,7 +166,7 @@ unsafe extern "system" fn foreground_changed(
     SetTimer(Some(widget), TIMER_FAST, FAST_MS, None);
 }
 
-/// 바탕화면 보기 상태가 바뀌었으면 위젯의 창 순서를 맞춘다.
+/// 바탕화면 보기 상태가 바뀌었으면 위젯을 붙이거나 뗀다.
 unsafe fn evaluate() {
     let widget = hwnd(&WIDGET);
     if widget.is_invalid() {
@@ -162,58 +175,32 @@ unsafe fn evaluate() {
     if IsIconic(widget).as_bool() {
         let _ = ShowWindow(widget, SW_SHOWNOACTIVATE);
     }
-    let was_raised = RAISED.load(Relaxed);
+    let attached_to = hwnd(&ATTACHED_TO);
     match raised_desktop() {
         Some(desktop) => {
-            if !was_raised || !is_above(widget, desktop) {
-                RAISED.store(true, Relaxed);
-                lift_above(widget, desktop);
+            if attached_to != desktop || !is_above(widget, desktop) {
+                // 바탕화면 창의 딸린 창이 되어 그 위에 선다.
+                ATTACHED_TO.store(desktop.0 as isize, Relaxed);
+                SetWindowLongPtrW(widget, GWLP_HWNDPARENT, desktop.0 as isize);
+                set_order(widget, HWND_TOP);
+                log(|| {
+                    format!(
+                        "desktop {:?} [{}] is shown -> attached, widget above it: {}",
+                        desktop.0,
+                        class_name(desktop),
+                        is_above(widget, desktop),
+                    )
+                });
             }
         }
-        None if was_raised => {
-            RAISED.store(false, Relaxed);
+        None if !attached_to.is_invalid() => {
+            ATTACHED_TO.store(0, Relaxed);
             SetWindowLongPtrW(widget, GWLP_HWNDPARENT, 0);
-            set_order(widget, HWND_NOTOPMOST);
             set_order(widget, HWND_BOTTOM);
-            log(|| format!("desktop is back down -> widget topmost: {}", is_topmost(widget)));
+            log(|| "desktop is back down -> detached, widget at the bottom".into());
         }
         None => {}
     }
-}
-
-/// 위젯을 올라온 바탕화면 창 위로 올린다. (어느 방법이 통하는지 기록하며 차례로 시도)
-unsafe fn lift_above(widget: HWND, desktop: HWND) {
-    let report = |step: &str| {
-        log(|| {
-            format!(
-                "lift over {:?} [{}] by {step}: above={}, topmost={}, desktop topmost={}",
-                desktop.0,
-                class_name(desktop),
-                is_above(widget, desktop),
-                is_topmost(widget),
-                is_topmost(desktop),
-            )
-        });
-        is_above(widget, desktop)
-    };
-
-    set_order(widget, HWND_TOPMOST);
-    if report("HWND_TOPMOST") {
-        return;
-    }
-    set_order(widget, HWND_TOP);
-    if report("HWND_TOP") {
-        return;
-    }
-    if let Ok(above_desktop) = GetWindow(desktop, GW_HWNDPREV) {
-        set_order(widget, above_desktop);
-        if report("insert just above the desktop") {
-            return;
-        }
-    }
-    SetWindowLongPtrW(widget, GWLP_HWNDPARENT, desktop.0 as isize);
-    set_order(widget, HWND_TOP);
-    report("owner = desktop, then HWND_TOP");
 }
 
 /// 표식 창보다 위로 올라온 셸 바탕화면 창을 찾는다. 없으면 평소 상태다.
@@ -260,10 +247,6 @@ unsafe fn is_desktop_class(window: HWND) -> bool {
     name == "WorkerW" || name == "Progman"
 }
 
-unsafe fn is_topmost(window: HWND) -> bool {
-    GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0
-}
-
 unsafe fn covers_a_screen(window: HWND) -> bool {
     let mut rect = RECT::default();
     GetWindowRect(window, &mut rect).is_ok()
@@ -291,7 +274,7 @@ unsafe fn set_order(window: HWND, insert_after: HWND) {
     MOVING_SELF.store(false, Relaxed);
 }
 
-/// 환경 변수 DESKBOARD_LOG 에 파일 경로를 주면 창 순서를 바꿀 때마다 한 줄씩 남긴다.
+/// 환경 변수 DESKBOARD_LOG 에 파일 경로를 주면 위젯을 붙이고 뗄 때마다 한 줄씩 남긴다.
 /// 바탕화면 보기 동작은 Windows 판마다 달라서, 안 보인다는 제보가 왔을 때 원인을 볼 수 있게 해 둔다.
 fn log(message: impl FnOnce() -> String) {
     static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();

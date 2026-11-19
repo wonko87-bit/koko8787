@@ -4,6 +4,7 @@
 #   3) 바탕화면 보기를 끝내면 다시 다른 창 아래로 내려간다
 #   4) 바탕화면 보기 중에 타일을 눌러 연 프로그램을 가리지 않는다
 #   5) 잠금을 풀면 끌어서 옮기고 크기를 바꿀 수 있고, 잠그면 고정되며, 다시 실행해도 그 자리에 뜬다
+#   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯이 다시 나타난다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
 # 마우스를 직접 움직이고 다른 창을 최소화하므로 CI 같은 빈 환경에서만 돌린다.
 param(
@@ -38,7 +39,6 @@ public static class Win {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int cmd);
-    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern bool GetWindowBand(IntPtr h, out uint band);
     // PowerShell 은 $null 을 빈 문자열로 넘기므로, 클래스 이름 없이 제목으로만 찾는 일은 여기서 한다.
@@ -50,7 +50,6 @@ public static class Win {
     public static uint Pid(IntPtr h) { uint pid; GetWindowThreadProcessId(h, out pid); return pid; }
     public static int Band(IntPtr h) { uint band; try { return GetWindowBand(h, out band) ? (int)band : -1; } catch { return -2; } }
     public static IntPtr RootAt(int x, int y) { return GetAncestor(WindowFromPoint(new POINT { X = x, Y = y }), 2); }
-    public static void MakeTopMost(IntPtr h) { SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x13); }
     public static void Click(int x, int y) {
         SetCursorPos(x, y); Thread.Sleep(150);
         mouse_event(2, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(60);
@@ -152,28 +151,17 @@ function IsAbove([IntPtr]$a, [IntPtr]$b) {
     return $false
 }
 
-# 시험용 창을 하나 띄운다.
-#   normal: 최소화할 수 있는 평범한 창
-#   tool  : 위젯처럼 최소화되지 않는 도구 창
-#   owned : 셸의 바탕화면 창을 소유자로 둔 도구 창
-function OpenWindow([string]$title, [string]$kind, [int]$x, [int]$y, [int]$w, [int]$h) {
+# 최소화할 수 있는 평범한 창을 하나 띄운다.
+function OpenWindow([string]$title, [int]$x, [int]$y, [int]$w, [int]$h) {
     $code = @'
 Add-Type -AssemblyName System.Windows.Forms
 $f = New-Object Windows.Forms.Form
 $f.Text = '{TITLE}'
 $f.StartPosition = 'Manual'
 $f.SetBounds({X}, {Y}, {W}, {H})
-if ('{KIND}' -ne 'normal') {
-    $f.FormBorderStyle = 'FixedToolWindow'
-    $f.ShowInTaskbar = $false
-}
-if ('{KIND}' -eq 'owned') {
-    Add-Type -Namespace N -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern IntPtr SetWindowLongPtrW(IntPtr h, int i, IntPtr v); [DllImport("user32.dll")] public static extern IntPtr GetShellWindow();'
-    $f.add_Shown({ [N.U]::SetWindowLongPtrW($f.Handle, -8, [N.U]::GetShellWindow()) | Out-Null })
-}
 [Windows.Forms.Application]::Run($f)
 '@
-    $code = $code.Replace('{TITLE}', $title).Replace('{KIND}', $kind).Replace('{X}', "$x").Replace('{Y}', "$y").Replace('{W}', "$w").Replace('{H}', "$h")
+    $code = $code.Replace('{TITLE}', $title).Replace('{X}', "$x").Replace('{Y}', "$y").Replace('{W}', "$w").Replace('{H}', "$h")
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code))
     $process = Start-Process powershell.exe -PassThru -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", $encoded
     $script:started += $process
@@ -263,13 +251,8 @@ try {
     $coverX = $r.L + [int]($width * 0.4)
     $probeX = $r.L + [int]($width * 0.75)
     $probeY = $r.T + [int]($height * 0.5)
-    $cover = OpenWindow "DeskBoardCover" "normal" $coverX $r.T ($width - [int]($width * 0.4)) $height
+    $cover = OpenWindow "DeskBoardCover" $coverX $r.T ($width - [int]($width * 0.4)) $height
     $atProbe = { [Win]::RootAt($probeX, $probeY) }
-    # 바탕화면 보기 때 창이 어떻게 다뤄지는지 보려고 위젯과 겹치지 않는 자리에 도구 창 둘을 둔다.
-    $toolY = $r.B + 30
-    $tool = OpenWindow "DeskBoardTool" "tool" 20 $toolY 170 110
-    $owned = OpenWindow "DeskBoardOwned" "owned" 210 $toolY 170 110
-
     # 1) 평소
     Check "normal: another window covers the widget" (WaitFor { (& $atProbe) -eq $cover } 5) (Describe (& $atProbe))
     $clickX = $r.L + [int]($width * 0.12)
@@ -287,15 +270,6 @@ try {
     Check "show desktop: widget is visible on the desktop" (WaitFor { (& $atProbe) -eq $widget } 10) (Describe (& $atProbe))
     Check "show desktop: widget is not minimized or hidden" ([Win]::IsWindowVisible($widget) -and -not [Win]::IsIconic($widget))
     DumpOrder "desktop shown"
-
-    # 참고용 관찰: 이 Windows 에서 바탕화면 보기가 최소화되지 않는 창을 어떻게 다루는가
-    $toolAt = { [Win]::RootAt(20 + 85, $toolY + 55) }
-    $ownedAt = { [Win]::RootAt(210 + 85, $toolY + 55) }
-    Write-Host "INFO  plain tool window while desktop is shown: $(if ((& $toolAt) -eq $tool) { 'still on top' } else { 'covered by ' + (Describe (& $toolAt)) })"
-    Write-Host "INFO  tool window owned by the shell window:    $(if ((& $ownedAt) -eq $owned) { 'still on top' } else { 'covered by ' + (Describe (& $ownedAt)) })"
-    [Win]::MakeTopMost($tool)
-    Start-Sleep -Milliseconds 500
-    Write-Host "INFO  tool window after making it always-on-top: $(if ((& $toolAt) -eq $tool) { 'on top' } else { 'covered by ' + (Describe (& $toolAt)) }) (topmost flag: $([Win]::TopMost($tool)))"
 
     if ($Screenshot) {
         Add-Type -AssemblyName System.Drawing
@@ -394,6 +368,28 @@ try {
     Check "widget starts again" ($again -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($again))
     if ($again -ne [IntPtr]::Zero) {
         Check "widget comes back where it was left" (SameRect (RectOf $again) $locked) (RectText (RectOf $again))
+    }
+
+    # 6) 바탕화면 보기 중에는 위젯이 바탕화면 창에 딸려 있어, 탐색기가 죽으면 창도 같이 없어진다.
+    #    그래도 앱이 살아남아 위젯을 다시 띄워야 한다.
+    $centerX = $locked.L + [int](($locked.R - $locked.L) / 2)
+    $centerY = $locked.T + [int](($locked.B - $locked.T) / 2)
+    $shellApp.ToggleDesktop()
+    Check "show desktop before the shell restarts: widget is attached to the desktop" (WaitFor { [Win]::GetWindow($again, 4) -ne [IntPtr]::Zero } 10) (Describe ([Win]::GetWindow($again, 4)))
+    Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
+    Check "the widget window goes away with the shell" (WaitFor { [Win]::Find("DeskBoard") -ne $again } 15)
+    $reopened = WaitFor { $w = [Win]::Find("DeskBoard"); $w -ne [IntPtr]::Zero -and $w -ne $again -and [Win]::IsWindowVisible($w) } 30
+    Check "the widget reopens by itself" $reopened
+    Check "the app survived the shell restart" (-not $app.HasExited)
+    if ($reopened) {
+        Check "the reopened widget is where it was" (SameRect (RectOf ([Win]::Find("DeskBoard"))) $locked) (RectText (RectOf ([Win]::Find("DeskBoard"))))
+    }
+    $shellBack = WaitFor { [Win]::GetShellWindow() -ne [IntPtr]::Zero } 30
+    Write-Host "INFO  shell after being killed: $(if ($shellBack) { 'restarted, ' + (Describe ([Win]::GetShellWindow())) } else { 'did not come back on this machine' })"
+    if ($shellBack -and $reopened) {
+        Start-Sleep -Seconds 5
+        $final = [Win]::Find("DeskBoard")
+        Check "the widget is still there once the shell is back" ($final -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($final) -and [Win]::RootAt($centerX, $centerY) -eq $final) (Describe ([Win]::RootAt($centerX, $centerY)))
     }
 }
 catch {

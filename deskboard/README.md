@@ -45,7 +45,11 @@
 
 - [Tauri 2](https://tauri.app) (Rust 백엔드 + WebView2 UI), React + TypeScript + Vite
 - 바탕화면 고정: `src-tauri/src/desktop.rs` — 맨 아래에 둔 표식 창보다 셸의 바탕화면 창이 위로 올라오면
-  "바탕화면 보기" 상태로 보고, 그동안만 위젯을 올려 둡니다.
+  "바탕화면 보기" 상태로 보고, 그동안 위젯을 그 바탕화면 창에 딸린 창으로 붙여 둡니다.
+  (올라오는 창은 Windows 10 에서는 `WorkerW`, Windows 11 24H2 에서는 `Progman` 입니다.)
+- 바탕화면 보기 중에 탐색기(explorer.exe)가 재시작되면 붙어 있던 위젯 창도 함께 사라지는데,
+  앱이 이를 알아채고 창을 다시 띄웁니다.
+- 문제 진단: 환경 변수 `DESKBOARD_LOG` 에 파일 경로를 주고 실행하면 위젯을 붙이고 뗄 때마다 기록을 남깁니다.
 
 ## 개발
 
@@ -59,5 +63,5 @@ npm run tauri build    # 설치 파일(NSIS) 빌드 → src-tauri/target/release
 `npm run dev` 만 실행하면 브라우저에서 화면만 미리 볼 수 있습니다 (저장은 localStorage, 실행은 흉내만).
 
 GitHub Actions 의 **DeskBoard Windows Build** 워크플로가 테스트 · 설치 파일 빌드를 하고,
-실제 Windows 바탕화면에서 `Win + D` 동작을 확인하는 스모크 테스트(`scripts/smoke-desktop.ps1`)를 돌립니다.
+실제 Windows 바탕화면에서 `Win + D` 동작과 위치·크기 조절을 확인하는 스모크 테스트(`scripts/smoke-desktop.ps1`)를 돌립니다.
 설치 파일은 워크플로 실행 결과의 `DeskBoard-windows-installer` 아티팩트로 받을 수 있습니다.
