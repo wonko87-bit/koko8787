@@ -97,7 +97,7 @@ pub fn install(widget: HWND) {
 /// 창 틀에게도 창이 보인다는 것을 알린다 (`show` 가 그 일을 한다).
 ///
 /// 창 틀은 자기 기록에 "숨김"으로 남아 있는 창을, 창 모양을 바꿀 일이 생길 때마다 도로 숨긴다.
-/// 그런데 창 틀을 통해 보이게 하면 창이 활성화될 수 있어서, 그랬다면 쓰던 프로그램에 포커스를 돌려준다.
+/// 그런데 창 틀을 통해 보이게 하면 이미 보이는 창이어도 활성화되므로, 쓰던 프로그램에 포커스를 돌려준다.
 pub fn sync_visibility(show: impl FnOnce()) {
     unsafe {
         let widget = hwnd(&WIDGET);
@@ -127,10 +127,6 @@ unsafe extern "system" fn subclass_proc(
         WM_WINDOWPOSCHANGING if !MOVING_SELF.load(Relaxed) => {
             let pos = &mut *(lparam.0 as *mut WINDOWPOS);
             pos.flags |= SWP_NOZORDER;
-            // 보이게 하는 요청이 창을 활성화까지 하지는 않게 한다.
-            if pos.flags.contains(SWP_SHOWWINDOW) {
-                pos.flags |= SWP_NOACTIVATE;
-            }
         }
         // 창 틀(tao)은 창 모양을 바꿀 때(크기 조절 허용 등) 확장 스타일을 자기 기록대로 통째로
         // 다시 써서 위에서 넣은 도구 창 표시가 지워지므로, 바뀌는 순간에 다시 넣는다.
