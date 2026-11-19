@@ -106,7 +106,7 @@ pub fn run() {
             // 바탕화면에 붙이면서, 쓰던 프로그램의 포커스를 뺏지 않고 조용히 보인다.
             #[cfg(windows)]
             desktop::install(windows::Win32::Foundation::HWND(window.hwnd()?.0 as _));
-            // 창 틀도 창이 보인다는 것을 알아야, 나중에 창 모양을 바꿀 때 도로 숨기지 않는다.
+            #[cfg(not(windows))]
             window.show()?;
 
             Ok(())

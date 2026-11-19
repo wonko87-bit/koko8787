@@ -111,11 +111,17 @@ unsafe extern "system" fn subclass_proc(
             let pos = &mut *(lparam.0 as *mut WINDOWPOS);
             pos.flags |= SWP_NOZORDER;
         }
-        // 창 틀이 창 모양을 바꿀 때(크기 조절 허용 등) 확장 스타일을 통째로 다시 써서
-        // 위에서 넣은 도구 창 표시가 지워지므로, 바뀌는 순간에 다시 넣는다.
-        WM_STYLECHANGING if wparam.0 as i32 == GWL_EXSTYLE.0 => {
+        // 창 틀(tao)은 창 모양을 바꿀 때(크기 조절 허용 등) 스타일을 자기 기록대로 통째로 다시 쓴다.
+        // 그 기록에는 이 창이 "숨김"이고 도구 창도 아니어서, 그대로 두면 잠금을 푸는 순간
+        // 창이 숨겨진다. 바뀌는 순간에 보임 상태와 도구 창 표시를 지킨다.
+        // (창 틀을 통해 보이게 하면 기록은 맞지만, 창이 활성화되어 쓰던 프로그램의 포커스를 뺏는다.)
+        WM_STYLECHANGING => {
             let styles = &mut *(lparam.0 as *mut STYLESTRUCT);
-            styles.styleNew = tool_window_style(styles.styleNew as isize) as u32;
+            if wparam.0 as i32 == GWL_EXSTYLE.0 {
+                styles.styleNew = tool_window_style(styles.styleNew as isize) as u32;
+            } else if wparam.0 as i32 == GWL_STYLE.0 {
+                styles.styleNew |= styles.styleOld & WS_VISIBLE.0;
+            }
         }
         WM_TIMER if wparam.0 == TIMER_POLL => {
             evaluate();
