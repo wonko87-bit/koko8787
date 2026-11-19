@@ -6,6 +6,8 @@
 #   5) 잠금을 풀면 끌어서 옮기고 크기를 바꿀 수 있고, 잠그면 고정되며, 다시 실행해도 그 자리에 뜬다
 #   7) 단축키로 불러오면 다른 창 위로 올라오고, 다른 창을 쓰면 물러난다
 #   8) 다른 프로그램에서 끌어온 파일이 바로가기가 되고, 프로그램 타일에 실제 아이콘이 그려진다
+#   9) 타일을 끌어 순서를 바꿀 수 있다
+#  10) 불러온 위젯은 겹쳐 있는 탐색기 창에서 파일을 집어 오는 동안 위에 남아 있고, 놓으면 바로가기가 된다
 #   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯은 남아 있고, 새 바탕화면에서도 똑같이 동작한다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
 # 마우스를 직접 움직이고 다른 창을 최소화하므로 CI 같은 빈 환경에서만 돌린다.
@@ -43,6 +45,7 @@ public static class Win {
     [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int height, bool repaint);
     [DllImport("user32.dll")] public static extern bool GetWindowBand(IntPtr h, out uint band);
     // PowerShell 은 $null 을 빈 문자열로 넘기므로, 클래스 이름 없이 제목으로만 찾는 일은 여기서 한다.
     public static IntPtr Find(string title) { return FindWindowW(null, title); }
@@ -205,6 +208,33 @@ function MinimizeOtherWindows() {
     Start-Sleep -Seconds 1
 }
 
+# 탐색기 창 안에서 이름이 $prefix 로 시작하는 항목의 화면 좌표(항목 왼쪽에서 30픽셀 들어간 가운데 높이)를 찾는다.
+# UI 자동화는 Windows PowerShell 에 들어 있어 그쪽에서 돌린다. 못 찾으면 $null.
+function FindExplorerItem([IntPtr]$window, [string]$prefix) {
+    $code = @'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+$root = [Windows.Automation.AutomationElement]::FromHandle([IntPtr]{HWND})
+$isItem = New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::ListItem)
+foreach ($item in $root.FindAll([Windows.Automation.TreeScope]::Descendants, $isItem)) {
+    if ($item.Current.Name -like '{PREFIX}*') {
+        $box = $item.Current.BoundingRectangle
+        Write-Output ("{0},{1}" -f [int]($box.X + 30), [int]($box.Y + $box.Height / 2))
+        break
+    }
+}
+'@
+    $code = $code.Replace('{HWND}', "$($window.ToInt64())").Replace('{PREFIX}', $prefix)
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code))
+    $found = & powershell.exe -NoProfile -EncodedCommand $encoded 2>$null | Where-Object { $_ -match '^-?\d+,-?\d+$' } | Select-Object -First 1
+    if (-not $found) { return $null }
+    $parts = "$found".Split(',')
+    return @{ X = [int]$parts[0]; Y = [int]$parts[1] }
+}
+
+function ExplorerWindow([string]$titlePrefix) {
+    TopLevelWindows | Where-Object { [Win]::Class($_) -eq "CabinetWClass" -and [Win]::Title($_) -like "$titlePrefix*" } | Select-Object -First 1
+}
+
 function ConsoleWindows() {
     @(TopLevelWindows | Where-Object { [Win]::Title($_) -like "*cmd.exe*" })
 }
@@ -290,12 +320,14 @@ try {
     [Win]::SummonHotkey()
     Check "hotkey: widget comes in front of other windows" (WaitFor { (& $atProbe) -eq $widget } 5) (Describe (& $atProbe))
     Check "hotkey: widget has the focus" (WaitFor { [Win]::GetForegroundWindow() -eq $widget } 3) (Describe ([Win]::GetForegroundWindow()))
+    Check "hotkey: widget is always-on-top while summoned" ([Win]::TopMost($widget))
     [Win]::Click($coverOnlyX, $coverOnlyY)
     Check "summoned widget steps back when another window is used" (WaitFor { (& $atProbe) -eq $cover } 5) (Describe (& $atProbe))
     [Win]::SummonHotkey()
     Check "hotkey works again" (WaitFor { (& $atProbe) -eq $widget } 5) (Describe (& $atProbe))
     [Win]::SummonHotkey()
     Check "hotkey while summoned sends the widget back" (WaitFor { (& $atProbe) -eq $cover } 5) (Describe (& $atProbe))
+    Check "and it is no longer always-on-top" (-not [Win]::TopMost($widget))
     Check "and returns the focus to the window used before" (WaitFor { [Win]::GetForegroundWindow() -eq $cover } 3) (Describe ([Win]::GetForegroundWindow()))
 
     # 8) 다른 프로그램에서 파일을 끌어다 놓기
@@ -316,6 +348,52 @@ try {
     $tilesNow = @((& $readBoard).categories)[0].tiles
     Check "a file dragged in from another program becomes a tile" ($dropped -and $tilesNow[1].target -eq $dropFile -and $tilesNow[1].name -eq "explorer" -and $tilesNow[1].kind -eq "program") ($tilesNow | ConvertTo-Json -Compress)
     Stop-Process -Id ($script:started | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
+
+    # 9) 타일 끌어 옮기기: 첫 타일(cmd)을 둘째 타일(explorer)의 오른쪽 절반에 놓으면 그 뒤로 간다.
+    #    (타일 폭 78 + 간격 6 이므로 둘째 타일의 오른쪽 절반은 첫 타일 가운데에서 114픽셀쯤 오른쪽이다.)
+    $tileNames = { (@((& $readBoard).categories)[0].tiles | ForEach-Object { $_.name }) -join "," }
+    $consolesBeforeReorder = @(ConsoleWindows).Count
+    [Win]::Drag($r.L + 48, $r.T + 100, 114, 0)
+    Check "dragging a tile past its neighbour reorders them" (WaitFor { (& $tileNames) -eq "explorer,cmd" } 5) (& $tileNames)
+    [Win]::Drag($r.L + 48, $r.T + 100, 114, 0)
+    Check "and dragging again puts them back" (WaitFor { (& $tileNames) -eq "cmd,explorer" } 5) (& $tileNames)
+    Check "dragging a tile does not open it" (@(ConsoleWindows).Count -eq $consolesBeforeReorder -and $null -eq (ExplorerWindow ""))
+
+    # 10) 실제 탐색기 창에서 파일을 끌어오기. 탐색기 창은 위젯의 왼쪽 아래와 겹치게 두고,
+    #     파일 목록은 위젯 아래쪽 빈 화면에 오게 한다.
+    $dragDir = Join-Path $env:TEMP "deskboard-drag-test"
+    New-Item -ItemType Directory -Force $dragDir | Out-Null
+    $dragFile = Join-Path $dragDir "drag-me.txt"
+    Set-Content -Path $dragFile -Value "drag me"
+    Start-Process explorer.exe $dragDir
+    $explorerOpened = WaitFor { $null -ne (ExplorerWindow "deskboard-drag-test") } 30
+    Check "an Explorer window opens for the test folder" $explorerOpened
+    if ($explorerOpened) {
+        $explorer = ExplorerWindow "deskboard-drag-test"
+        [Win]::MoveWindow($explorer, 0, 380, 640, 330, $true) | Out-Null
+        Start-Sleep -Seconds 2
+        $item = $null
+        WaitFor { $script:foundItem = FindExplorerItem $explorer "drag-me"; $null -ne $script:foundItem } 20 | Out-Null
+        $item = $script:foundItem
+        Check "the file is listed in the Explorer window" ($null -ne $item) "$(if ($item) { "at $($item.X),$($item.Y)" })"
+        # 위젯과 탐색기 창이 겹치는 자리 (바로가기 영역의 왼쪽 아래 빈 곳)
+        $dropX = $r.L + 100
+        $dropY = $r.T + 400
+        if ($item) {
+            Check "without summoning, the Explorer window covers that part of the widget" ([Win]::RootAt($dropX, $dropY) -eq $explorer) (Describe ([Win]::RootAt($dropX, $dropY)))
+            [Win]::SummonHotkey()
+            Check "summoned widget is above the overlapping Explorer window" (WaitFor { [Win]::RootAt($dropX, $dropY) -eq $widget } 5) (Describe ([Win]::RootAt($dropX, $dropY)))
+            Check "the file can still be grabbed" ([Win]::RootAt($item.X, $item.Y) -eq $explorer) (Describe ([Win]::RootAt($item.X, $item.Y)))
+            # 파일을 누른 채 위젯으로 끌어가는 동안, 탐색기 창이 앞 창이 되어도 위젯이 위에 남아 있어야 놓을 수 있다.
+            [Win]::Drag($item.X, $item.Y, ($dropX - $item.X), ($dropY - $item.Y))
+            $pulled = WaitFor { @((& $readBoard).categories)[0].tiles.Count -eq 3 } 8
+            $last = @((& $readBoard).categories)[0].tiles | Select-Object -Last 1
+            Check "a file dragged from an Explorer window onto the summoned widget becomes a tile" ($pulled -and $last.target -eq $dragFile -and $last.kind -eq "file") ($last | ConvertTo-Json -Compress)
+            Check "the widget steps back once the file has been dropped" (WaitFor { [Win]::RootAt($dropX, $dropY) -eq $explorer -and -not [Win]::TopMost($widget) } 5) (Describe ([Win]::RootAt($dropX, $dropY)))
+        }
+        [Win]::PostMessageW($explorer, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+        WaitFor { $null -eq (ExplorerWindow "deskboard-drag-test") } 10 | Out-Null
+    }
 
     # 2) 바탕화면 보기 (Win+D 와 같은 동작)
     $shellApp = New-Object -ComObject Shell.Application

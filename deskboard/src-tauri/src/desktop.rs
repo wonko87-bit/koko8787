@@ -9,8 +9,9 @@
 //! 셸의 바탕화면 창이 표식 창보다 위에 있으면 바탕화면 보기 상태다.
 //! 올라오는 창은 Windows 판마다 다르다 (Windows 10: WorkerW, Windows 11 24H2: Progman).
 //!
-//! 단축키나 트레이로 "불러오면" 위젯이 잠깐 다른 창들 위로 올라오고, 다른 프로그램으로
-//! 돌아가는 순간 다시 내려간다.
+//! 단축키나 트레이로 "불러오면" 위젯이 잠깐 다른 창들 위로("항상 위") 올라오고, 다른 프로그램으로
+//! 돌아가면 다시 내려간다. 다만 다른 창에서 마우스를 누르고 있는 동안은 기다린다 —
+//! 탐색기에서 파일을 집어 위젯으로 끌어오는 중일 수 있기 때문이다.
 //!
 //! 주인 창이 다른 프로세스의 것이라, 탐색기가 죽어도 위젯 창은 없어지지 않고 주인만 잃는다.
 //! 탐색기가 다시 뜨면 새 바탕화면 창을 기준으로 같은 일을 계속한다.
@@ -22,6 +23,7 @@ use std::sync::OnceLock;
 use windows::core::w;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
 use windows::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -135,13 +137,14 @@ pub fn toggle_summon() {
         // 앞 창이 되면서 창 순서도 맨 위로 올라가야 하므로, 이때만 순서 변경을 받아들인다.
         MOVING_SELF.store(true, Relaxed);
         let _ = SetForegroundWindow(widget);
-        let _ = SetWindowPos(widget, Some(HWND_TOP), 0, 0, 0, 0, Z_ONLY);
+        // "항상 위"로 둬야, 다른 창에서 파일을 집으려고 그 창을 눌러도 위젯이 가려지지 않는다.
+        let _ = SetWindowPos(widget, Some(HWND_TOPMOST), 0, 0, 0, 0, Z_ONLY);
         MOVING_SELF.store(false, Relaxed);
         // 바로 앞 창이 되었으면 지금 적어 둔다. 다음 확인 때까지 미루면, 그 사이에 사용자가
         // 다른 창을 눌렀을 때 물러날 때를 놓쳐 "불러온 상태"로 남는다.
         let focused = GetForegroundWindow() == widget;
         SUMMON_TOOK_FOCUS.store(focused, Relaxed);
-        log(|| format!("summoned (took the focus: {focused})"));
+        log(|| format!("summoned (took the focus: {focused}, always on top: {})", is_topmost(widget)));
     }
 }
 
@@ -149,6 +152,7 @@ pub fn toggle_summon() {
 unsafe fn dismiss(give_focus_back: bool) {
     let widget = hwnd(&WIDGET);
     SUMMONED.store(false, Relaxed);
+    set_order(widget, HWND_NOTOPMOST);
     if hwnd(&ATTACHED_TO).is_invalid() {
         set_order(widget, HWND_BOTTOM);
     }
@@ -239,12 +243,13 @@ unsafe fn evaluate() {
         let _ = ShowWindow(widget, SW_SHOWNOACTIVATE);
     }
     if SUMMONED.load(Relaxed) {
-        // 불러온 위젯은 다른 프로그램의 창이 앞에 나오는 순간 물러난다.
+        // 불러온 위젯은 다른 프로그램의 창이 앞에 나오면 물러난다.
         // (위젯이 띄운 파일 선택 창 같은 우리 창은 예외)
+        // 마우스를 누르고 있는 동안은 물러나지 않는다: 그 창에서 파일을 집어 위젯으로 끌어오는 중일 수 있다.
         let foreground = GetForegroundWindow();
         if !foreground.is_invalid() && process_of(foreground) == process_of(widget) {
             SUMMON_TOOK_FOCUS.store(true, Relaxed);
-        } else if SUMMON_TOOK_FOCUS.load(Relaxed) {
+        } else if SUMMON_TOOK_FOCUS.load(Relaxed) && !mouse_button_held() {
             dismiss(false);
         }
     }
@@ -303,6 +308,15 @@ unsafe fn raised_desktop() -> Option<HWND> {
         current = GetWindow(window, GW_HWNDNEXT).ok();
     }
     None
+}
+
+unsafe fn is_topmost(window: HWND) -> bool {
+    GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0
+}
+
+/// 마우스 단추(왼쪽이든 오른쪽이든)가 지금 눌려 있는지
+unsafe fn mouse_button_held() -> bool {
+    GetAsyncKeyState(VK_LBUTTON.0 as i32) < 0 || GetAsyncKeyState(VK_RBUTTON.0 as i32) < 0
 }
 
 unsafe fn process_of(window: HWND) -> u32 {
