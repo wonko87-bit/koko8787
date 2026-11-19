@@ -35,6 +35,8 @@ public static class Win {
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+    // PowerShell 은 $null 을 빈 문자열로 넘기므로, 클래스 이름 없이 제목으로만 찾는 일은 여기서 한다.
+    public static IntPtr Find(string title) { return FindWindowW(null, title); }
     public static string Class(IntPtr h) { var s = new StringBuilder(256); GetClassNameW(h, s, 256); return s.ToString(); }
     public static string Title(IntPtr h) { var s = new StringBuilder(256); GetWindowTextW(h, s, 256); return s.ToString(); }
     public static bool TopMost(IntPtr h) { return (GetWindowLongPtr(h, -20).ToInt64() & 0x8) != 0; }
@@ -126,9 +128,9 @@ function OpenCover([string]$title, [int]$x, [int]$y, [int]$w, [int]$h) {
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code))
     $process = Start-Process powershell.exe -PassThru -ArgumentList "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", $encoded
     $script:started += $process
-    $found = WaitFor { $c = [Win]::FindWindowW($null, $title); $c -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($c) } 30
+    $found = WaitFor { $c = [Win]::Find($title); $c -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($c) } 30
     if (-not $found) { throw "cover window '$title' did not appear" }
-    return [Win]::FindWindowW($null, $title)
+    return [Win]::Find($title)
 }
 
 # 창 순서에서 $a 가 $b 보다 위에 있는가
@@ -184,10 +186,10 @@ try {
 
     $app = Start-Process -FilePath $Exe -PassThru
     $started += $app
-    $appeared = WaitFor { $w = [Win]::FindWindowW($null, "DeskBoard"); $w -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($w) } 60
+    $appeared = WaitFor { $w = [Win]::Find("DeskBoard"); $w -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($w) } 60
     Check "widget window appears" $appeared
     if (-not $appeared) { DumpOrder "widget missing"; throw "widget window did not appear" }
-    $widget = [Win]::FindWindowW($null, "DeskBoard")
+    $widget = [Win]::Find("DeskBoard")
     Start-Sleep -Seconds 4   # 화면이 그려질 시간
 
     $r = New-Object Win+RECT
@@ -311,14 +313,14 @@ try {
     Check "the board survived and the widget is locked again" ($board.settings.locked -eq $true -and $board.categories[0].tiles[0].name -eq "cmd" -and $board.notes.Count -eq 1)
 
     Stop-Process -Id $app.Id -Force
-    WaitFor { [Win]::FindWindowW($null, "DeskBoard") -eq [IntPtr]::Zero } 10 | Out-Null
+    WaitFor { [Win]::Find("DeskBoard") -eq [IntPtr]::Zero } 10 | Out-Null
     $app = Start-Process -FilePath $Exe -PassThru
     $started += $app
-    $again = WaitFor { $w = [Win]::FindWindowW($null, "DeskBoard"); $w -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($w) } 60
+    $again = WaitFor { $w = [Win]::Find("DeskBoard"); $w -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($w) } 60
     Check "widget starts again" $again
     if ($again) {
         Start-Sleep -Seconds 2
-        $restored = RectOf ([Win]::FindWindowW($null, "DeskBoard"))
+        $restored = RectOf ([Win]::Find("DeskBoard"))
         Check "widget comes back where it was left" (SameRect $restored $locked) (RectText $restored)
     }
 }
