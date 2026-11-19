@@ -132,12 +132,15 @@ pub fn toggle_summon() {
         }
         RETURN_TO.store(GetForegroundWindow().0 as isize, Relaxed);
         SUMMONED.store(true, Relaxed);
-        SUMMON_TOOK_FOCUS.store(false, Relaxed);
         // 앞 창이 되면서 창 순서도 맨 위로 올라가야 하므로, 이때만 순서 변경을 받아들인다.
         MOVING_SELF.store(true, Relaxed);
-        let focused = SetForegroundWindow(widget).as_bool();
+        let _ = SetForegroundWindow(widget);
         let _ = SetWindowPos(widget, Some(HWND_TOP), 0, 0, 0, 0, Z_ONLY);
         MOVING_SELF.store(false, Relaxed);
+        // 바로 앞 창이 되었으면 지금 적어 둔다. 다음 확인 때까지 미루면, 그 사이에 사용자가
+        // 다른 창을 눌렀을 때 물러날 때를 놓쳐 "불러온 상태"로 남는다.
+        let focused = GetForegroundWindow() == widget;
+        SUMMON_TOOK_FOCUS.store(focused, Relaxed);
         log(|| format!("summoned (took the focus: {focused})"));
     }
 }

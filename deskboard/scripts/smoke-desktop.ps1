@@ -304,8 +304,14 @@ try {
     $sourceBox = RectOf $source
     $fromX = $sourceBox.L + 80
     $fromY = $sourceBox.T + 60
+    $toX = $r.L + 220
+    $toY = $r.T + 105
+    # 도우미 프로세스의 콘솔 창이 잠깐 떴다 사라지므로, 누를 자리와 놓을 자리가 드러날 때까지 기다린다.
+    $ready = WaitFor { [Win]::RootAt($fromX, $fromY) -eq $source -and [Win]::RootAt($toX, $toY) -eq $widget } 10
+    Check "drag source and drop spot are both reachable" $ready "from: $(Describe ([Win]::RootAt($fromX, $fromY))), to: $(Describe ([Win]::RootAt($toX, $toY)))"
+    Start-Sleep -Milliseconds 500
     # 첫 카테고리의 타일 줄, 첫 타일 오른쪽 빈 자리에 놓는다.
-    [Win]::Drag($fromX, $fromY, ($r.L + 220 - $fromX), ($r.T + 105 - $fromY))
+    [Win]::Drag($fromX, $fromY, ($toX - $fromX), ($toY - $fromY))
     $dropped = WaitFor { @((& $readBoard).categories)[0].tiles.Count -eq 2 } 8
     $tilesNow = @((& $readBoard).categories)[0].tiles
     Check "a file dragged in from another program becomes a tile" ($dropped -and $tilesNow[1].target -eq $dropFile -and $tilesNow[1].name -eq "explorer" -and $tilesNow[1].kind -eq "program") ($tilesNow | ConvertTo-Json -Compress)
