@@ -1,7 +1,8 @@
 name: DeskBoard Release
 
 # 자동 업데이트용 서명 설치 파일을 GitHub Releases 에 발행한다.
-# Actions 탭에서 수동 실행하거나, deskboard-v* 태그를 푸시하면 동작한다.
+# 버전을 올려 푸시하면(tauri.conf.json 이 바뀌면) 동작한다. 그 버전이 이미 발행되어 있으면 아무것도 하지 않는다.
+# Actions 탭에서 수동 실행하거나 deskboard-v* 태그를 푸시해도 된다.
 #
 # 이 저장소의 "최신(latest) 릴리스"는 FileBox 의 자동 업데이트가 쓰고 있다.
 # DeskBoard 릴리스가 그 자리를 차지하지 않도록 prerelease 로 발행하고,
@@ -10,9 +11,34 @@ on:
   workflow_dispatch:
   push:
     tags: ["deskboard-v*"]
+    branches: ["main", "claude/magical-albattani-ylxgx6"]
+    paths: ["deskboard/src-tauri/tauri.conf.json"]
 
 jobs:
+  # 지금 버전이 이미 발행되어 있는지 본다. 버전 말고 다른 설정만 바꾼 푸시는 여기서 끝난다.
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      released: ${{ steps.version.outputs.released }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./deskboard/src-tauri/tauri.conf.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "deskboard-v$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "DeskBoard v$version is already released."
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
+    needs: check
+    if: needs.check.outputs.released == 'false'
     runs-on: windows-latest
     permissions:
       contents: write

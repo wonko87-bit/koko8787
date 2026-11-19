@@ -76,7 +76,8 @@ npm run tauri build    # 설치 파일(NSIS) 빌드 → src-tauri/target/release
 
 ### 릴리스와 자동 업데이트
 
-**DeskBoard Release** 워크플로(수동 실행 또는 `deskboard-v*` 태그 푸시)가 서명된 설치 파일을 릴리스로 발행합니다.
+**DeskBoard Release** 워크플로가 서명된 설치 파일을 릴리스로 발행합니다. 버전을 올려 푸시하면 자동으로 돌고
+(그 버전이 이미 발행되어 있으면 건너뜁니다), 수동 실행이나 `deskboard-v*` 태그 푸시로도 돌릴 수 있습니다.
 앱은 `deskboard-updater` 릴리스의 `latest.json` 을 읽어 새 버전을 알아챕니다.
 
 - 버전은 `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` 세 곳을 함께 올립니다.

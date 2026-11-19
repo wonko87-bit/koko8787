@@ -1,6 +1,6 @@
 [package]
 name = "deskboard"
-version = "0.2.0"
+version = "0.2.1"
 description = "바탕화면에 붙어 있는 바로가기 타일 · 포스트잇 메모 위젯"
 authors = ["koko8787"]
 edition = "2021"
