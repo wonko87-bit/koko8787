@@ -111,7 +111,7 @@ mod tests {
                 icon: "emoji:📁".into(),
             }],
         });
-        board.notes[0].text = "장보기\n우유".into();
+        board.notes[0].boxes[0].text = "장보기\n우유".into();
         Store::open(path.clone()).replace(board.clone()).unwrap();
 
         assert_eq!(Store::open(path).get(), board);

@@ -658,13 +658,25 @@ button {
   letter-spacing: -0.03em;
 }
 
-.note-tool-gap {
-  width: 5px;
+/* 서식 줄: 메모 안의 글을 편집하는 동안에만 아래쪽에 나타난다.
+   글상자와 체크리스트는 위쪽부터 놓이므로, 이 줄이 생겨도 적어 둔 글이 밀리지 않는다. */
+.note-format {
+  flex: none;
+  display: none;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 20px 0 6px;
+  border-radius: 0 0 12px 3px;
+  background: rgba(0, 0, 0, 0.07);
 }
 
-.note-bold,
-.note-italic,
-.note-ink {
+.note:focus-within .note-format {
+  display: flex;
+}
+
+.note-format .note-tool {
+  opacity: 1;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 12px;
 }
@@ -674,22 +686,20 @@ button {
 }
 
 .note-italic {
+  margin-right: 4px;
   font-style: italic;
 }
 
-/* 글자 색 단추: 밑에 색 띠가 있는 A */
-.note-ink {
-  font-weight: 700;
-  line-height: 1;
-  box-shadow: inset 0 -3px 0 -1px #d92d20;
-}
-
 .ink-color {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   padding: 0;
   border: 1px solid rgba(0, 0, 0, 0.28);
   border-radius: 3px;
+}
+
+.ink-color:hover {
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.4);
 }
 
 /* 지금 색을 보여 주는 점. 누르면 색 고르는 줄이 열린다. */
@@ -744,16 +754,62 @@ button {
   pointer-events: none;
 }
 
-.note-text {
+/* 글 메모: 아무 데나 글상자를 놓는 종이 */
+.note-canvas {
   flex: 1;
+  position: relative;
   min-height: 0;
-  padding: 7px 9px 12px;
-  overflow-y: auto;
+  overflow: auto;
   line-height: 1.45;
+  cursor: text;
 }
 
-.note-text::-webkit-scrollbar-thumb {
+.note-canvas::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.2);
+}
+
+.canvas-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.box {
+  position: absolute;
+  min-width: 18px;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+
+.box:hover,
+.box:focus-within {
+  outline: 1px dashed rgba(0, 0, 0, 0.3);
+}
+
+/* 글상자 위쪽의 얇은 손잡이. 올리거나 편집 중일 때만 보인다. */
+.box-grip {
+  position: absolute;
+  top: -6px;
+  left: -1px;
+  right: -1px;
+  height: 5px;
+  border-radius: 2px 2px 0 0;
+  background: rgba(0, 0, 0, 0.28);
+  cursor: move;
+  opacity: 0;
+  touch-action: none;
+}
+
+.box:hover .box-grip,
+.box:focus-within .box-grip {
+  opacity: 1;
 }
 
 .note-list {

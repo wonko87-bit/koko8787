@@ -22,6 +22,7 @@ interface Props {
   style?: CSSProperties;
   onChange: (value: Rich) => void;
   onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
+  onBlur?: () => void;
   /** 편집 칸 요소를 받아 간다 (포커스를 옮기는 데 쓴다). */
   elementRef?: (el: HTMLDivElement | null) => void;
 }
@@ -34,7 +35,7 @@ interface Props {
  * 칠 때마다 다시 그리면 커서가 맨 앞으로 튀고 한글 조합이 끊긴다.
  */
 export function RichText(props: Props) {
-  const { value, singleLine = false, placeholder, className, style, onChange, onKeyDown, elementRef } = props;
+  const { value, singleLine = false, placeholder, className, style, onChange, onKeyDown, onBlur, elementRef } = props;
   const ref = useRef<HTMLDivElement | null>(null);
   /** 화면에 지금 그려져 있는 값 */
   const shown = useRef<Rich | null>(null);
@@ -92,6 +93,7 @@ export function RichText(props: Props) {
       data-placeholder={placeholder}
       spellCheck={false}
       onInput={readBack}
+      onBlur={onBlur}
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
       onDrop={(e) => e.preventDefault()}

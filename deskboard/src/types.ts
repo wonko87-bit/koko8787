@@ -58,6 +58,16 @@ export interface NoteItem {
   marks: Mark[];
 }
 
+/** 메모지 안의 글상자. 위치는 메모지 글 영역의 왼쪽 위 기준이다 (px). */
+export interface TextBox extends Rich {
+  id: string;
+  x: number;
+  y: number;
+}
+
+/** 글상자를 따로 놓지 않았을 때의 자리 */
+export const BOX_ORIGIN = { x: 8, y: 6 };
+
 export interface Note {
   id: string;
   text: string;
@@ -73,8 +83,10 @@ export interface Note {
   kind: "text" | "list";
   items: NoteItem[];
   fontSize: number;
-  /** text 의 어느 부분이 굵은지·기울었는지·무슨 색인지 */
+  /** 예전 판이 글 메모의 내용을 두던 곳. 지금은 boxes 를 쓰고, 여기는 비어 있다. */
   marks: Mark[];
+  /** 글 메모의 내용. 메모지 안 아무 데나 놓을 수 있는 글상자들이다. */
+  boxes: TextBox[];
 }
 
 export type TileSize = "s" | "m" | "l";

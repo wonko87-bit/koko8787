@@ -1,9 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
-import { newItem } from "../board";
+import { newBox, newItem } from "../board";
 import { INK_HEX } from "../richText";
 import { INK_COLORS, NOTE_COLORS, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "../types";
-import type { InkColor, Note, NoteItem } from "../types";
+import type { InkColor, Note, NoteItem, TextBox } from "../types";
 import { ChecklistIcon, CloseIcon, TextIcon } from "./icons";
 import { format, RichText } from "./RichText";
 
@@ -90,27 +90,118 @@ function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patc
   );
 }
 
+/** 글상자가 글을 쓸 수 있으려면 오른쪽에 최소한 이만큼의 폭은 있어야 한다. */
+const BOX_MIN_ROOM = 90;
+
+/** 메모의 지금 내용을 보고 바꿀 것을 정한다. 연달아 일어나는 변경(글상자를 비우고 바로 다른 곳을 클릭 등)이 서로를 덮어쓰지 않게 한다. */
+type UpdateNote = (id: string, change: (note: Note) => Partial<Note>) => void;
+
+/**
+ * 글 메모의 내용. 메모지 안 빈 곳을 클릭하면 그 자리에 글상자가 생기고,
+ * 아무것도 적지 않은(공백뿐인) 글상자는 다른 곳을 누르는 순간 사라진다.
+ */
+function NoteCanvas({ note, focusFirst, onUpdate }: { note: Note; focusFirst: boolean; onUpdate: UpdateNote }) {
+  const editors = useRef(new Map<string, HTMLDivElement>());
+  const [focusId, setFocusId] = useState<string | null>(focusFirst ? (note.boxes[0]?.id ?? null) : null);
+  // 끄는 동안에는 화면에서만 움직이고, 손을 뗄 때 한 번 저장한다.
+  const [moving, setMoving] = useState<{ id: string; x: number; y: number } | null>(null);
+  /** 빈 곳에서 누르기 시작했는지. 글상자 안에서 글자를 끌어 선택하다 빈 곳에서 뗀 것은 클릭으로 치지 않는다. */
+  const pressedOnEmpty = useRef(false);
+
+  useEffect(() => {
+    if (!focusId) return;
+    editors.current.get(focusId)?.focus();
+    setFocusId(null);
+  }, [focusId]);
+
+  const editBoxes = (edit: (boxes: TextBox[]) => TextBox[]) => onUpdate(note.id, (n) => ({ boxes: edit(n.boxes) }));
+
+  const beginMove = (box: TextBox) => (e: ReactPointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const start = { px: e.clientX, py: e.clientY };
+    let latest: { x: number; y: number } | null = null;
+    const move = (ev: PointerEvent) => {
+      latest = { x: Math.max(0, box.x + ev.clientX - start.px), y: Math.max(0, box.y + ev.clientY - start.py) };
+      setMoving({ id: box.id, ...latest });
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      const to = latest;
+      if (to) editBoxes((boxes) => boxes.map((b) => (b.id === box.id ? { ...b, x: Math.round(to.x), y: Math.round(to.y) } : b)));
+      setMoving(null);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  };
+
+  return (
+    <div
+      className="note-canvas"
+      style={{ fontSize: note.fontSize }}
+      onMouseDown={(e) => (pressedOnEmpty.current = e.button === 0 && e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (!pressedOnEmpty.current || e.target !== e.currentTarget) return;
+        pressedOnEmpty.current = false;
+        const el = e.currentTarget;
+        const area = el.getBoundingClientRect();
+        // 클릭한 자리에 첫 줄이 오게 한다. 오른쪽 끝에 너무 붙으면 글 쓸 폭이 없으니 조금 당겨 놓는다.
+        const box = newBox({
+          x: Math.min(e.clientX - area.left - 4, el.clientWidth - BOX_MIN_ROOM) + el.scrollLeft,
+          y: e.clientY - area.top + el.scrollTop - note.fontSize * 0.8,
+        });
+        editBoxes((boxes) => [...boxes, box]);
+        setFocusId(box.id);
+      }}
+    >
+      {note.boxes.length === 0 && <p className="canvas-hint">아무 데나 클릭해서 적으세요</p>}
+      {note.boxes.map((box) => {
+        const at = moving?.id === box.id ? moving : box;
+        return (
+          <div
+            key={box.id}
+            className="box"
+            // 메모지 오른쪽 끝에서 줄을 바꾸되, 끝에 붙은 글상자도 최소한의 폭은 갖는다 (넘치면 메모지 안에서 스크롤된다).
+            style={{ left: at.x, top: at.y, maxWidth: `max(${BOX_MIN_ROOM}px, calc(100% - ${at.x}px - 4px))` }}
+          >
+            <div className="box-grip" title="끌어서 옮기기" onPointerDown={beginMove(box)} />
+            <RichText
+              value={box}
+              elementRef={(el) => {
+                if (el) editors.current.set(box.id, el);
+                else editors.current.delete(box.id);
+              }}
+              onChange={(rich) => editBoxes((boxes) => boxes.map((b) => (b.id === box.id ? { ...b, ...rich } : b)))}
+              onBlur={() => editBoxes((boxes) => boxes.filter((b) => b.id !== box.id || b.text.trim() !== ""))}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface CardProps {
   note: Note;
   focusOnMount: boolean;
   onChange: (id: string, patch: Partial<Note>) => void;
+  onUpdate: UpdateNote;
   onSwitchKind: (id: string) => void;
   onRemove: (note: Note) => void;
   onRaise: (id: string) => void;
 }
 
 const NoteCard = memo(function NoteCard(props: CardProps) {
-  const { note, focusOnMount, onChange, onSwitchKind, onRemove, onRaise } = props;
+  const { note, focusOnMount, onChange, onUpdate, onSwitchKind, onRemove, onRaise } = props;
   // 끄는 동안에는 화면에서만 움직이고, 손을 뗄 때 한 번 저장한다.
   const [live, setLive] = useState<Partial<Note> | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [inkOpen, setInkOpen] = useState(false);
-  const textRef = useRef<HTMLDivElement | null>(null);
   const shown = live ? { ...note, ...live } : note;
-
-  useEffect(() => {
-    if (focusOnMount) textRef.current?.focus();
-  }, [focusOnMount]);
 
   const beginDrag = (mode: "move" | "size") => (e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
@@ -184,23 +275,6 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
           >
             A+
           </button>
-          <span className="note-tool-gap" />
-          <button className="note-tool note-bold" title="굵게 (선택한 글자)" aria-label="굵게" onMouseDown={keepSelection} onClick={format.bold}>
-            B
-          </button>
-          <button className="note-tool note-italic" title="기울임 (선택한 글자)" aria-label="기울임" onMouseDown={keepSelection} onClick={format.italic}>
-            I
-          </button>
-          <button
-            className="note-tool note-ink"
-            title="글자 색 (선택한 글자)"
-            aria-label="글자 색"
-            aria-expanded={inkOpen}
-            onMouseDown={keepSelection}
-            onClick={() => setInkOpen((open) => !open)}
-          >
-            A
-          </button>
         </div>
         <button className="note-tool note-remove" title="메모 떼기" aria-label="메모 떼기" onClick={() => onRemove(note)}>
           <CloseIcon size={12} />
@@ -222,47 +296,39 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
           ))}
         </div>
       )}
-      {inkOpen && (
-        <div className="note-palette">
-          <button
-            className="ink-color"
-            style={{ background: "#2b2a26" }}
-            title="기본 글자색으로"
-            aria-label="기본 글자색으로"
-            onMouseDown={keepSelection}
-            onClick={() => {
-              format.color("");
-              setInkOpen(false);
-            }}
-          />
-          {INK_COLORS.map((color) => (
-            <button
-              key={color}
-              className="ink-color"
-              style={{ background: INK_HEX[color] }}
-              title={`${INK_NAMES[color]} 글자로`}
-              aria-label={`${INK_NAMES[color]} 글자로`}
-              onMouseDown={keepSelection}
-              onClick={() => {
-                format.color(color);
-                setInkOpen(false);
-              }}
-            />
-          ))}
-        </div>
-      )}
       {isList ? (
         <Checklist note={note} onChange={onChange} />
       ) : (
-        <RichText
-          className="note-text"
-          value={note}
-          placeholder="메모…"
-          style={{ fontSize: note.fontSize }}
-          elementRef={(el) => (textRef.current = el)}
-          onChange={(rich) => onChange(note.id, rich)}
-        />
+        <NoteCanvas note={note} focusFirst={focusOnMount} onUpdate={onUpdate} />
       )}
+      {/* 글을 편집하는 동안에만 보이는 서식 줄. 선택한 글자에 적용된다. */}
+      <div className="note-format">
+        <button className="note-tool note-bold" title="굵게 (Ctrl+B)" aria-label="굵게" onMouseDown={keepSelection} onClick={format.bold}>
+          B
+        </button>
+        <button className="note-tool note-italic" title="기울임 (Ctrl+I)" aria-label="기울임" onMouseDown={keepSelection} onClick={format.italic}>
+          I
+        </button>
+        <button
+          className="ink-color"
+          style={{ background: "#2b2a26" }}
+          title="기본 글자색으로"
+          aria-label="기본 글자색으로"
+          onMouseDown={keepSelection}
+          onClick={() => format.color("")}
+        />
+        {INK_COLORS.map((color) => (
+          <button
+            key={color}
+            className="ink-color"
+            style={{ background: INK_HEX[color] }}
+            title={`${INK_NAMES[color]} 글자로`}
+            aria-label={`${INK_NAMES[color]} 글자로`}
+            onMouseDown={keepSelection}
+            onClick={() => format.color(color)}
+          />
+        ))}
+      </div>
       <div className="note-grip" title="끌어서 크기 조절" onPointerDown={beginDrag("size")} />
     </div>
   );
@@ -275,13 +341,14 @@ interface BoardProps {
   boardRef: RefObject<HTMLDivElement>;
   onAdd: (at: { x: number; y: number }) => void;
   onChange: (id: string, patch: Partial<Note>) => void;
+  onUpdate: UpdateNote;
   onSwitchKind: (id: string) => void;
   onRemove: (note: Note) => void;
   onRaise: (id: string) => void;
 }
 
 export function NoteBoard(props: BoardProps) {
-  const { notes, focusId, boardRef, onAdd, onChange, onSwitchKind, onRemove, onRaise } = props;
+  const { notes, focusId, boardRef, onAdd, onChange, onUpdate, onSwitchKind, onRemove, onRaise } = props;
   return (
     <div
       ref={boardRef}
@@ -300,6 +367,7 @@ export function NoteBoard(props: BoardProps) {
           note={note}
           focusOnMount={note.id === focusId}
           onChange={onChange}
+          onUpdate={onUpdate}
           onSwitchKind={onSwitchKind}
           onRemove={onRemove}
           onRaise={onRaise}

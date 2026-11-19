@@ -1,8 +1,8 @@
 // 보드를 바꾸는 순수 함수들. 원본은 건드리지 않고 새 보드를 돌려준다.
 
-import { NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "./types";
+import { BOX_ORIGIN, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "./types";
 import { joinRich, sliceRich } from "./richText";
-import type { Board, Category, Note, NoteItem, Rich, Settings, Tile } from "./types";
+import type { Board, Category, Note, NoteItem, Rich, Settings, TextBox, Tile } from "./types";
 
 export const newId = () => crypto.randomUUID();
 
@@ -97,6 +97,8 @@ export function addNote(board: Board, at: { x: number; y: number }): { board: Bo
     items: [],
     fontSize: 13,
     marks: [],
+    // 바로 적을 수 있게 빈 글상자 하나를 놓아 둔다. 아무것도 안 적으면 사라진다.
+    boxes: [newBox(BOX_ORIGIN)],
   };
   return { board: { ...board, notes: [...board.notes, note] }, note };
 }
@@ -142,18 +144,39 @@ export const newItem = (rich: Rich = { text: "", marks: [] }, done = false): Not
   done,
 });
 
-/** 글 메모의 각 줄을 체크리스트 항목으로 바꾼다. 빈 줄은 버리고, 항목이 하나도 없으면 빈 항목 하나를 둔다. 서식은 따라간다. */
-export function textToItems(note: Rich): NoteItem[] {
+export const newBox = (at: { x: number; y: number }, rich: Rich = { text: "", marks: [] }): TextBox => ({
+  id: newId(),
+  x: Math.max(0, Math.round(at.x)),
+  y: Math.max(0, Math.round(at.y)),
+  text: rich.text,
+  marks: rich.marks,
+});
+
+/** 적힌 것이 하나도 없는 메모인가 */
+export function isNoteEmpty(note: Note): boolean {
+  const parts: Rich[] = note.kind === "list" ? note.items : note.boxes;
+  return parts.every((part) => !part.text.trim());
+}
+
+/** 글의 각 줄을 체크리스트 항목으로 바꾼다. 빈 줄은 버린다. 서식은 따라간다. */
+function linesToItems(rich: Rich): NoteItem[] {
   const items: NoteItem[] = [];
   let start = 0;
-  for (const line of note.text.split("\n")) {
+  for (const line of rich.text.split("\n")) {
     const end = start + line.length;
     if (line.trim()) {
       const done = line.startsWith(DONE_MARK);
-      items.push(newItem(sliceRich(note, done ? start + DONE_MARK.length : start, end), done));
+      items.push(newItem(sliceRich(rich, done ? start + DONE_MARK.length : start, end), done));
     }
     start = end + 1;
   }
+  return items;
+}
+
+/** 글상자들을 위에서 아래로, 같은 높이면 왼쪽에서 오른쪽으로 읽어 체크리스트 항목으로 바꾼다. */
+export function boxesToItems(boxes: TextBox[]): NoteItem[] {
+  const ordered = [...boxes].sort((a, b) => a.y - b.y || a.x - b.x);
+  const items = ordered.flatMap(linesToItems);
   return items.length > 0 ? items : [newItem()];
 }
 
@@ -164,13 +187,15 @@ export function itemsToText(items: NoteItem[]): Rich {
   return joinRich(lines, "\n");
 }
 
-/** 글 메모와 체크리스트를 서로 바꾼다. 내용은 줄 단위로 옮겨 간다. */
+/** 글 메모와 체크리스트를 서로 바꾼다. 내용은 줄 단위로 옮겨 가고, 글상자의 자리는 남지 않는다. */
 export function switchNoteKind(board: Board, id: string): Board {
   const note = board.notes.find((n) => n.id === id);
   if (!note) return board;
-  return note.kind === "list"
-    ? updateNote(board, id, { kind: "text", ...itemsToText(note.items), items: [] })
-    : updateNote(board, id, { kind: "list", items: textToItems(note), text: "", marks: [] });
+  if (note.kind === "list") {
+    const text = itemsToText(note.items);
+    return updateNote(board, id, { kind: "text", items: [], boxes: text.text ? [newBox(BOX_ORIGIN, text)] : [] });
+  }
+  return updateNote(board, id, { kind: "list", items: boxesToItems(note.boxes), boxes: [] });
 }
 
 export function patchSettings(board: Board, patch: Partial<Settings>): Board {

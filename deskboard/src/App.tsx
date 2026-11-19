@@ -130,6 +130,14 @@ export default function App() {
     (id: string, patch: Partial<Note>) => change((b) => ops.updateNote(b, id, patch)),
     [change],
   );
+  const updateNoteWith = useCallback(
+    (id: string, decide: (note: Note) => Partial<Note>) =>
+      change((b) => {
+        const note = b.notes.find((n) => n.id === id);
+        return note ? ops.updateNote(b, id, decide(note)) : b;
+      }),
+    [change],
+  );
   const raiseNote = useCallback((id: string) => change((b) => ops.raiseNote(b, id)), [change]);
   const switchNoteKind = useCallback((id: string) => change((b) => ops.switchNoteKind(b, id)), [change]);
   const addNote = useCallback(
@@ -149,8 +157,7 @@ export default function App() {
   const removeNote = useCallback(
     (note: Note) => {
       const remove = () => change((b) => ops.removeNote(b, note.id));
-      const empty = note.kind === "list" ? note.items.every((i) => !i.text.trim()) : !note.text.trim();
-      if (empty) return remove();
+      if (ops.isNoteEmpty(note)) return remove();
       setDialog({
         type: "confirm",
         title: "메모 떼기",
@@ -414,6 +421,7 @@ export default function App() {
           boardRef={notesRef}
           onAdd={addNote}
           onChange={changeNote}
+          onUpdate={updateNoteWith}
           onSwitchKind={switchNoteKind}
           onRemove={removeNote}
           onRaise={raiseNote}

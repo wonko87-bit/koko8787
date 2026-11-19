@@ -70,7 +70,24 @@ pub struct Note {
     pub font_size: f64,
     /// text 의 어느 부분이 굵은지·기울었는지·무슨 색인지
     pub marks: Vec<Mark>,
+    /// 글 메모의 내용. 메모지 안 아무 데나 놓을 수 있는 글상자들이다.
+    /// (예전 판은 글 전체를 text 에 두었다. 읽을 때 글상자 하나로 옮긴다.)
+    pub boxes: Vec<TextBox>,
 }
+
+/// 메모지 안의 글상자. 위치는 메모지 글 영역의 왼쪽 위 기준이다 (CSS px).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TextBox {
+    pub id: String,
+    pub x: f64,
+    pub y: f64,
+    pub text: String,
+    pub marks: Vec<Mark>,
+}
+
+/// 글상자를 따로 놓지 않았을 때의 자리 (예전 글 메모를 옮길 때도 여기에 둔다)
+pub const BOX_ORIGIN: (f64, f64) = (8.0, 6.0);
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -135,6 +152,7 @@ impl Default for Note {
             items: Vec::new(),
             font_size: 13.0,
             marks: Vec::new(),
+            boxes: Vec::new(),
         }
     }
 }
@@ -176,6 +194,12 @@ impl Board {
             }],
             ..Board::default()
         }
+        .sanitized()
+    }
+
+    fn sanitized(mut self) -> Self {
+        self.sanitize();
+        self
     }
 
     /// 손으로 고친 파일이나 잘못된 값이 들어와도 화면이 깨지지 않게 범위를 맞춘다.
@@ -206,6 +230,26 @@ impl Board {
             clean_marks(&note.text, &mut note.marks);
             for item in &mut note.items {
                 clean_marks(&item.text, &mut item.marks);
+            }
+            // 예전 판의 글 메모는 글 전체가 text 에 있다. 글상자 하나로 옮긴다.
+            if note.kind == "text" && !note.text.trim().is_empty() {
+                note.boxes.insert(
+                    0,
+                    TextBox {
+                        id: format!("{}-text", note.id),
+                        x: BOX_ORIGIN.0,
+                        y: BOX_ORIGIN.1,
+                        text: std::mem::take(&mut note.text),
+                        marks: std::mem::take(&mut note.marks),
+                    },
+                );
+            }
+            // 아무것도 적지 않은 글상자는 남기지 않는다.
+            note.boxes.retain(|b| !b.text.trim().is_empty());
+            for b in &mut note.boxes {
+                b.x = clamp_or(b.x, 0.0, NOTE_MAX, BOX_ORIGIN.0);
+                b.y = clamp_or(b.y, 0.0, NOTE_MAX, BOX_ORIGIN.1);
+                clean_marks(&b.text, &mut b.marks);
             }
         }
         for tile in self.categories.iter_mut().flat_map(|c| c.tiles.iter_mut()) {
@@ -295,8 +339,9 @@ mod tests {
     #[test]
     fn marks_outside_the_text_or_without_formatting_are_dropped() {
         let mut board = Board::starter();
-        board.notes[0].text = "가나다 abc".into(); // 7 UTF-16 units
-        board.notes[0].marks = vec![
+        let text_box = &mut board.notes[0].boxes[0];
+        text_box.text = "가나다 abc".into(); // 7 UTF-16 units
+        text_box.marks = vec![
             Mark { start: 0, end: 3, bold: true, ..Mark::default() },
             Mark { start: 4, end: 99, italic: true, color: "red".into(), ..Mark::default() },
             Mark { start: 9, end: 12, bold: true, ..Mark::default() },
@@ -305,12 +350,42 @@ mod tests {
         ];
         board.sanitize();
         assert_eq!(
-            board.notes[0].marks,
+            board.notes[0].boxes[0].marks,
             vec![
                 Mark { start: 0, end: 3, bold: true, ..Mark::default() },
                 Mark { start: 4, end: 7, italic: true, color: "red".into(), ..Mark::default() },
             ]
         );
+    }
+
+    #[test]
+    fn old_text_notes_become_a_single_text_box() {
+        let mut board: Board = serde_json::from_str(
+            r#"{"notes":[{"id":"n","text":"장보기\n우유","marks":[{"start":0,"end":3,"bold":true}]}]}"#,
+        )
+        .unwrap();
+        board.sanitize();
+        let note = &board.notes[0];
+        assert_eq!(note.text, "");
+        assert!(note.marks.is_empty());
+        assert_eq!(note.boxes.len(), 1);
+        assert_eq!(note.boxes[0].text, "장보기\n우유");
+        assert_eq!((note.boxes[0].x, note.boxes[0].y), BOX_ORIGIN);
+        assert_eq!(note.boxes[0].marks, vec![Mark { start: 0, end: 3, bold: true, ..Mark::default() }]);
+    }
+
+    #[test]
+    fn empty_text_boxes_are_not_kept_and_positions_stay_inside() {
+        let mut board = Board::starter();
+        board.notes[0].boxes = vec![
+            TextBox { id: "a".into(), x: 40.0, y: 30.0, text: "남는다".into(), ..TextBox::default() },
+            TextBox { id: "b".into(), x: 10.0, y: 80.0, text: "  \n ".into(), ..TextBox::default() },
+            TextBox { id: "c".into(), x: -5.0, y: f64::NAN, text: "밖".into(), ..TextBox::default() },
+        ];
+        board.sanitize();
+        let boxes = &board.notes[0].boxes;
+        assert_eq!(boxes.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), ["a", "c"]);
+        assert_eq!((boxes[1].x, boxes[1].y), (0.0, BOX_ORIGIN.1));
     }
 
     #[test]
