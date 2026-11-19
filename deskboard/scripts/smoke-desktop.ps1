@@ -366,10 +366,18 @@ try {
     $dragFile = Join-Path $dragDir "drag-me.txt"
     Set-Content -Path $dragFile -Value "drag me"
     Start-Process explorer.exe $dragDir
-    $explorerOpened = WaitFor { $null -ne (ExplorerWindow "deskboard-drag-test") } 30
+    # 탐색기는 뜨는 도중에 창을 한 번 갈아 치우기도 한다. 잠깐 뒤에도 같은 창이 남아 있을 때 그 창을 쓴다.
+    $explorerOpened = WaitFor {
+        $first = ExplorerWindow "deskboard-drag-test"
+        if ($null -eq $first) { return $false }
+        Start-Sleep -Milliseconds 700
+        if ((ExplorerWindow "deskboard-drag-test") -ne $first) { return $false }
+        $script:explorerWindow = $first
+        return $true
+    } 30
     Check "an Explorer window opens for the test folder" $explorerOpened
     if ($explorerOpened) {
-        $explorer = ExplorerWindow "deskboard-drag-test"
+        $explorer = $script:explorerWindow
         [Win]::MoveWindow($explorer, 0, 380, 640, 330, $true) | Out-Null
         Start-Sleep -Seconds 2
         $item = $null
