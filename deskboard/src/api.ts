@@ -3,7 +3,7 @@
 
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import * as autostart from "@tauri-apps/plugin-autostart";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -111,13 +111,13 @@ const tauriApi: Api = {
       },
     };
   },
+  // 파일 놓기는 백엔드가 직접 받아 알려 준다 (src-tauri/src/dropzone.rs). 좌표는 물리 픽셀로 온다.
   onFileDrop(handler) {
-    return getCurrentWebview().onDragDropEvent(({ payload }) => {
-      if (payload.type === "leave") return handler({ type: "leave" });
-      const x = payload.position.x / window.devicePixelRatio;
-      const y = payload.position.y / window.devicePixelRatio;
-      if (payload.type === "drop") handler({ type: "drop", x, y, paths: payload.paths });
-      else handler({ type: "over", x, y });
+    type Raw = { type: "over"; x: number; y: number } | { type: "drop"; x: number; y: number; paths: string[] } | { type: "leave" };
+    return listen<Raw>("file-drop", ({ payload }) => {
+      if (payload.type === "leave") return handler(payload);
+      const scale = window.devicePixelRatio || 1;
+      handler({ ...payload, x: payload.x / scale, y: payload.y / scale });
     });
   },
   startMove: () => getCurrentWindow().startDragging(),

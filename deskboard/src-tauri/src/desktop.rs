@@ -363,9 +363,9 @@ unsafe fn set_order(window: HWND, insert_after: HWND) {
     MOVING_SELF.store(false, Relaxed);
 }
 
-/// 환경 변수 DESKBOARD_LOG 에 파일 경로를 주면 위젯을 붙이고 뗄 때마다 한 줄씩 남긴다.
+/// 환경 변수 DESKBOARD_LOG 에 파일 경로를 주면 위젯을 붙이고 뗄 때, 파일을 끌어올 때마다 한 줄씩 남긴다.
 /// 바탕화면 보기 동작은 Windows 판마다 달라서, 안 보인다는 제보가 왔을 때 원인을 볼 수 있게 해 둔다.
-fn log(message: impl FnOnce() -> String) {
+pub(crate) fn log(message: impl FnOnce() -> String) {
     static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
     let Some(path) = PATH.get_or_init(|| std::env::var_os("DESKBOARD_LOG").map(PathBuf::from)) else {
         return;

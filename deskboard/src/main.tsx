@@ -15,6 +15,13 @@ window.addEventListener("contextmenu", (e) => {
   e.preventDefault();
 });
 
+// 파일 놓기는 백엔드가 받는다. 혹시 웹뷰가 먼저 받게 되더라도 그 파일을 화면에 열어 버리지 않게 한다.
+for (const type of ["dragover", "drop"]) {
+  window.addEventListener(type, (e) => {
+    if ((e as DragEvent).dataTransfer?.types.includes("Files")) e.preventDefault();
+  });
+}
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />

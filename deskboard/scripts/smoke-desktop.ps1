@@ -512,6 +512,20 @@ try {
     Check "widget starts again" ($again -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($again))
     if ($again -ne [IntPtr]::Zero) {
         Check "widget comes back where it was left" (SameRect (RectOf $again) $locked) (RectText (RectOf $again))
+
+        # 파일 놓기 받기는 앱이 뜰 때마다 새로 등록된다. 다시 켠 뒤에도 되는지 한 번 더 본다.
+        $tilesBefore = @((& $readBoard).categories)[0].tiles.Count
+        $source2 = OpenWindow "DeskBoardDragSource2" 20 ($locked.B + 30) 160 100 (Join-Path $env:SystemRoot "regedit.exe")
+        $from2 = RectOf $source2
+        $to2X = $locked.L + 100
+        $to2Y = $locked.T + 400
+        $ready2 = WaitFor { [Win]::RootAt($from2.L + 80, $from2.T + 60) -eq $source2 -and [Win]::RootAt($to2X, $to2Y) -eq $again } 10
+        Check "after restart: drag source and drop spot are both reachable" $ready2 "from: $(Describe ([Win]::RootAt($from2.L + 80, $from2.T + 60))), to: $(Describe ([Win]::RootAt($to2X, $to2Y)))"
+        Start-Sleep -Milliseconds 500
+        [Win]::Drag($from2.L + 80, $from2.T + 60, ($to2X - $from2.L - 80), ($to2Y - $from2.T - 60))
+        Check "after restart: a dragged-in file still becomes a tile" (WaitFor { @((& $readBoard).categories)[0].tiles.Count -eq $tilesBefore + 1 } 8) ((@((& $readBoard).categories)[0].tiles | ForEach-Object { $_.name }) -join ",")
+        Stop-Process -Id ($script:started | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
     }
 
     # 6) 바탕화면 보기 중(위젯이 바탕화면 창에 딸려 있는 동안)에 탐색기가 죽었다 살아난다.
@@ -546,7 +560,7 @@ finally {
     StopStarted 0
     if (Test-Path $logFile) {
         Write-Host "--- widget's own window-order log"
-        Get-Content $logFile | Select-Object -First 60 | ForEach-Object { Write-Host "  $_" }
+        Get-Content $logFile | Select-Object -First 90 | ForEach-Object { Write-Host "  $_" }
     }
 }
 

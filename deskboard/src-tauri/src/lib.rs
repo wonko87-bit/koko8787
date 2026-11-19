@@ -1,5 +1,7 @@
 #[cfg(windows)]
 mod desktop;
+#[cfg(windows)]
+mod dropzone;
 mod geometry;
 mod icons;
 mod launch;
@@ -208,9 +210,15 @@ pub fn run() {
             // 바탕화면에 붙이면서, 쓰던 프로그램의 포커스를 뺏지 않고 조용히 보인다.
             #[cfg(windows)]
             {
-                desktop::install(windows::Win32::Foundation::HWND(window.hwnd()?.0 as _));
+                let widget = windows::Win32::Foundation::HWND(window.hwnd()?.0 as _);
+                desktop::install(widget);
                 desktop::sync_visibility(|| {
                     let _ = window.show();
+                });
+                // 다른 프로그램에서 끌어온 파일을 받아 화면에 알린다.
+                let app = app.handle().clone();
+                dropzone::watch(widget, move |drop| {
+                    let _ = tauri::Emitter::emit(&app, "file-drop", drop);
                 });
             }
             #[cfg(not(windows))]
