@@ -4,7 +4,7 @@
 #   3) 바탕화면 보기를 끝내면 다시 다른 창 아래로 내려간다
 #   4) 바탕화면 보기 중에 타일을 눌러 연 프로그램을 가리지 않는다
 #   5) 잠금을 풀면 끌어서 옮기고 크기를 바꿀 수 있고, 잠그면 고정되며, 다시 실행해도 그 자리에 뜬다
-#   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯이 다시 나타난다
+#   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯은 남아 있고, 새 바탕화면에서도 똑같이 동작한다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
 # 마우스를 직접 움직이고 다른 창을 최소화하므로 CI 같은 빈 환경에서만 돌린다.
 param(
@@ -370,26 +370,27 @@ try {
         Check "widget comes back where it was left" (SameRect (RectOf $again) $locked) (RectText (RectOf $again))
     }
 
-    # 6) 바탕화면 보기 중에는 위젯이 바탕화면 창에 딸려 있어, 탐색기가 죽으면 창도 같이 없어진다.
-    #    그래도 앱이 살아남아 위젯을 다시 띄워야 한다.
+    # 6) 바탕화면 보기 중(위젯이 바탕화면 창에 딸려 있는 동안)에 탐색기가 죽었다 살아난다.
     $centerX = $locked.L + [int](($locked.R - $locked.L) / 2)
     $centerY = $locked.T + [int](($locked.B - $locked.T) / 2)
+    $owner = { [Win]::GetWindow($again, 4) }
     $shellApp.ToggleDesktop()
-    Check "show desktop before the shell restarts: widget is attached to the desktop" (WaitFor { [Win]::GetWindow($again, 4) -ne [IntPtr]::Zero } 10) (Describe ([Win]::GetWindow($again, 4)))
+    Check "show desktop before the shell restarts: widget is attached to the desktop" (WaitFor { (& $owner) -ne [IntPtr]::Zero } 10) (Describe (& $owner))
+    $oldShell = [Win]::GetShellWindow()
     Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
-    Check "the widget window goes away with the shell" (WaitFor { [Win]::Find("DeskBoard") -ne $again } 15)
-    $reopened = WaitFor { $w = [Win]::Find("DeskBoard"); $w -ne [IntPtr]::Zero -and $w -ne $again -and [Win]::IsWindowVisible($w) } 30
-    Check "the widget reopens by itself" $reopened
-    Check "the app survived the shell restart" (-not $app.HasExited)
-    if ($reopened) {
-        Check "the reopened widget is where it was" (SameRect (RectOf ([Win]::Find("DeskBoard"))) $locked) (RectText (RectOf ([Win]::Find("DeskBoard"))))
-    }
-    $shellBack = WaitFor { [Win]::GetShellWindow() -ne [IntPtr]::Zero } 30
+    $shellBack = WaitFor { $s = [Win]::GetShellWindow(); $s -ne [IntPtr]::Zero -and $s -ne $oldShell } 40
     Write-Host "INFO  shell after being killed: $(if ($shellBack) { 'restarted, ' + (Describe ([Win]::GetShellWindow())) } else { 'did not come back on this machine' })"
-    if ($shellBack -and $reopened) {
-        Start-Sleep -Seconds 5
-        $final = [Win]::Find("DeskBoard")
-        Check "the widget is still there once the shell is back" ($final -ne [IntPtr]::Zero -and [Win]::IsWindowVisible($final) -and [Win]::RootAt($centerX, $centerY) -eq $final) (Describe ([Win]::RootAt($centerX, $centerY)))
+    Start-Sleep -Seconds 5
+    Check "the app survives the shell restart" (-not $app.HasExited)
+    Check "the widget window survives the shell restart" ([Win]::Find("DeskBoard") -eq $again -and [Win]::IsWindowVisible($again)) (RectText (RectOf $again))
+    if ($shellBack) {
+        Check "the widget lets go of the old desktop window" (WaitFor { (& $owner) -eq [IntPtr]::Zero } 10) (Describe (& $owner))
+        # 새로 뜬 탐색기에서도 바탕화면 보기가 똑같이 동작해야 한다. 탐색기가 창을 다 띄울 시간을 준다.
+        Start-Sleep -Seconds 10
+        MinimizeOtherWindows
+        (New-Object -ComObject Shell.Application).ToggleDesktop()
+        $shown = WaitFor { (& $owner) -ne [IntPtr]::Zero -and [Win]::RootAt($centerX, $centerY) -eq $again } 15
+        Check "show desktop works with the new shell" $shown "owner: $(Describe (& $owner)), at centre: $(Describe ([Win]::RootAt($centerX, $centerY)))"
     }
 }
 catch {

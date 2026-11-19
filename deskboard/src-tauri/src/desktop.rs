@@ -9,8 +9,8 @@
 //! 셸의 바탕화면 창이 표식 창보다 위에 있으면 바탕화면 보기 상태다.
 //! 올라오는 창은 Windows 판마다 다르다 (Windows 10: WorkerW, Windows 11 24H2: Progman).
 //!
-//! 주인 창이 없어지면(탐색기가 죽거나 다시 시작되면) 딸린 창도 함께 없어진다.
-//! 그때 창을 다시 만드는 일은 lib.rs 가 맡는다.
+//! 주인 창이 다른 프로세스의 것이라, 탐색기가 죽어도 위젯 창은 없어지지 않고 주인만 잃는다.
+//! 탐색기가 다시 뜨면 새 바탕화면 창을 기준으로 같은 일을 계속한다.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -41,14 +41,12 @@ static MARKER: AtomicIsize = AtomicIsize::new(0);
 static ATTACHED_TO: AtomicIsize = AtomicIsize::new(0);
 static MOVING_SELF: AtomicBool = AtomicBool::new(false);
 static FAST_LEFT: AtomicU32 = AtomicU32::new(0);
-static HOOKED: AtomicBool = AtomicBool::new(false);
 
 fn hwnd(value: &AtomicIsize) -> HWND {
     HWND(value.load(Relaxed) as *mut core::ffi::c_void)
 }
 
-/// 창을 바탕화면에 붙인다. 창을 만든 스레드에서, 창을 보이기 전에 부른다.
-/// 창이 없어졌다가 다시 만들어지면 새 창에 대해 다시 부를 수 있다.
+/// 창을 바탕화면에 붙이고, 활성화하지 않은 채로 보인다. 창을 만든 스레드에서 한 번 부른다.
 pub fn install(widget: HWND) {
     unsafe {
         // Alt+Tab 목록과 작업 표시줄에 나타나지 않게 한다.
@@ -80,17 +78,17 @@ pub fn install(widget: HWND) {
 
         let _ = SetWindowSubclass(widget, Some(subclass_proc), SUBCLASS_ID, 0);
         SetTimer(Some(widget), TIMER_POLL, POLL_MS, None);
-        if !HOOKED.swap(true, Relaxed) {
-            SetWinEventHook(
-                EVENT_SYSTEM_FOREGROUND,
-                EVENT_SYSTEM_FOREGROUND,
-                None,
-                Some(foreground_changed),
-                0,
-                0,
-                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
-            );
-        }
+        SetWinEventHook(
+            EVENT_SYSTEM_FOREGROUND,
+            EVENT_SYSTEM_FOREGROUND,
+            None,
+            Some(foreground_changed),
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+        );
+
+        let _ = ShowWindow(widget, SW_SHOWNOACTIVATE);
         evaluate();
     }
 }
@@ -134,7 +132,6 @@ unsafe extern "system" fn subclass_proc(
             return LRESULT(0);
         }
         WM_NCDESTROY => {
-            log(|| "widget window is gone".into());
             let _ = KillTimer(Some(window), TIMER_POLL);
             let _ = KillTimer(Some(window), TIMER_FAST);
             let _ = RemoveWindowSubclass(window, Some(subclass_proc), SUBCLASS_ID);
