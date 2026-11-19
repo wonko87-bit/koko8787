@@ -103,6 +103,11 @@ unsafe extern "system" fn subclass_proc(
             let pos = &mut *(lparam.0 as *mut WINDOWPOS);
             pos.flags |= SWP_NOZORDER;
         }
+        WM_WINDOWPOSCHANGING | WM_WINDOWPOSCHANGED if MOVING_SELF.load(Relaxed) => {
+            let pos = &*(lparam.0 as *const WINDOWPOS);
+            let name = if message == WM_WINDOWPOSCHANGING { "changing" } else { "changed" };
+            log(|| format!("  {name}: insert_after={:?} flags={:#x}", pos.hwndInsertAfter.0, pos.flags.0));
+        }
         WM_TIMER if wparam.0 == TIMER_POLL => {
             evaluate();
             return LRESULT(0);
@@ -162,26 +167,53 @@ unsafe fn evaluate() {
         Some(desktop) => {
             if !was_raised || !is_above(widget, desktop) {
                 RAISED.store(true, Relaxed);
-                set_order(widget, HWND_TOPMOST);
-                log(|| {
-                    format!(
-                        "desktop {:?} [{}] is raised (was_raised={was_raised}) -> widget above it: {}, topmost: {}",
-                        desktop.0,
-                        class_name(desktop),
-                        is_above(widget, desktop),
-                        is_topmost(widget),
-                    )
-                });
+                lift_above(widget, desktop);
             }
         }
         None if was_raised => {
             RAISED.store(false, Relaxed);
+            SetWindowLongPtrW(widget, GWLP_HWNDPARENT, 0);
             set_order(widget, HWND_NOTOPMOST);
             set_order(widget, HWND_BOTTOM);
             log(|| format!("desktop is back down -> widget topmost: {}", is_topmost(widget)));
         }
         None => {}
     }
+}
+
+/// 위젯을 올라온 바탕화면 창 위로 올린다. (어느 방법이 통하는지 기록하며 차례로 시도)
+unsafe fn lift_above(widget: HWND, desktop: HWND) {
+    let report = |step: &str| {
+        log(|| {
+            format!(
+                "lift over {:?} [{}] by {step}: above={}, topmost={}, desktop topmost={}",
+                desktop.0,
+                class_name(desktop),
+                is_above(widget, desktop),
+                is_topmost(widget),
+                is_topmost(desktop),
+            )
+        });
+        is_above(widget, desktop)
+    };
+
+    set_order(widget, HWND_TOPMOST);
+    if report("HWND_TOPMOST") {
+        return;
+    }
+    set_order(widget, HWND_TOP);
+    if report("HWND_TOP") {
+        return;
+    }
+    if let Ok(above_desktop) = GetWindow(desktop, GW_HWNDPREV) {
+        set_order(widget, above_desktop);
+        if report("insert just above the desktop") {
+            return;
+        }
+    }
+    SetWindowLongPtrW(widget, GWLP_HWNDPARENT, desktop.0 as isize);
+    set_order(widget, HWND_TOP);
+    report("owner = desktop, then HWND_TOP");
 }
 
 /// 표식 창보다 위로 올라온 셸 바탕화면 창을 찾는다. 없으면 평소 상태다.

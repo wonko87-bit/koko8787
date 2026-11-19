@@ -286,7 +286,7 @@ try {
     $shellApp.ToggleDesktop()
     Check "show desktop: widget is visible on the desktop" (WaitFor { (& $atProbe) -eq $widget } 10) (Describe (& $atProbe))
     Check "show desktop: widget is not minimized or hidden" ([Win]::IsWindowVisible($widget) -and -not [Win]::IsIconic($widget))
-    DumpOrder "desktop shown" $widget
+    DumpOrder "desktop shown"
 
     # 참고용 관찰: 이 Windows 에서 바탕화면 보기가 최소화되지 않는 창을 어떻게 다루는가
     $toolAt = { [Win]::RootAt(20 + 85, $toolY + 55) }
