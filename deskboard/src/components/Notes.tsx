@@ -1,9 +1,22 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { newItem } from "../board";
-import { NOTE_COLORS, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "../types";
-import type { Note, NoteItem } from "../types";
+import { INK_HEX } from "../richText";
+import { INK_COLORS, NOTE_COLORS, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "../types";
+import type { InkColor, Note, NoteItem } from "../types";
 import { ChecklistIcon, CloseIcon, TextIcon } from "./icons";
+import { format, RichText } from "./RichText";
+
+const INK_NAMES: Record<InkColor, string> = {
+  red: "빨강",
+  orange: "주황",
+  green: "초록",
+  blue: "파랑",
+  purple: "보라",
+};
+
+/** 서식 단추를 눌러도 편집 칸의 선택과 포커스가 풀리지 않게 한다. */
+const keepSelection = (e: { preventDefault: () => void }) => e.preventDefault();
 
 const COLOR_NAMES: Record<Note["color"], string> = {
   yellow: "노랑",
@@ -15,7 +28,7 @@ const COLOR_NAMES: Record<Note["color"], string> = {
 
 /** 체크리스트. Enter 로 아래에 항목을 만들고, 빈 항목에서 Backspace 로 지운다. */
 function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patch: Partial<Note>) => void }) {
-  const inputs = useRef(new Map<string, HTMLInputElement>());
+  const inputs = useRef(new Map<string, HTMLDivElement>());
   const [focusId, setFocusId] = useState<string | null>(null);
   const items = note.items;
 
@@ -29,7 +42,7 @@ function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patc
   const patch = (id: string, change: Partial<NoteItem>) =>
     setItems(items.map((item) => (item.id === id ? { ...item, ...change } : item)));
 
-  const onKeyDown = (item: NoteItem, index: number) => (e: KeyboardEvent<HTMLInputElement>) => {
+  const onKeyDown = (item: NoteItem, index: number) => (e: KeyboardEvent<HTMLDivElement>) => {
     // 한글을 조합하는 중의 Enter 는 글자를 확정하는 것이지 줄을 바꾸는 것이 아니다.
     if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter") {
@@ -42,8 +55,10 @@ function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patc
       setItems(items.filter((other) => other.id !== item.id));
       setFocusId((items[index - 1] ?? items[index + 1]).id);
     } else if (e.key === "ArrowUp" && index > 0) {
+      e.preventDefault();
       setFocusId(items[index - 1].id);
     } else if (e.key === "ArrowDown" && index < items.length - 1) {
+      e.preventDefault();
       setFocusId(items[index + 1].id);
     }
   };
@@ -58,16 +73,15 @@ function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patc
             aria-label={item.done ? "끝냄 표시 지우기" : "끝냄으로 표시"}
             onChange={(e) => patch(item.id, { done: e.target.checked })}
           />
-          <input
-            type="text"
-            ref={(el) => {
+          <RichText
+            singleLine
+            value={item}
+            placeholder="할 일…"
+            elementRef={(el) => {
               if (el) inputs.current.set(item.id, el);
               else inputs.current.delete(item.id);
             }}
-            value={item.text}
-            placeholder="할 일…"
-            spellCheck={false}
-            onChange={(e) => patch(item.id, { text: e.target.value })}
+            onChange={(rich) => patch(item.id, rich)}
             onKeyDown={onKeyDown(item, index)}
           />
         </div>
@@ -90,7 +104,8 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
   // 끄는 동안에는 화면에서만 움직이고, 손을 뗄 때 한 번 저장한다.
   const [live, setLive] = useState<Partial<Note> | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const textRef = useRef<HTMLTextAreaElement>(null);
+  const [inkOpen, setInkOpen] = useState(false);
+  const textRef = useRef<HTMLDivElement | null>(null);
   const shown = live ? { ...note, ...live } : note;
 
   useEffect(() => {
@@ -169,6 +184,23 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
           >
             A+
           </button>
+          <span className="note-tool-gap" />
+          <button className="note-tool note-bold" title="굵게 (선택한 글자)" aria-label="굵게" onMouseDown={keepSelection} onClick={format.bold}>
+            B
+          </button>
+          <button className="note-tool note-italic" title="기울임 (선택한 글자)" aria-label="기울임" onMouseDown={keepSelection} onClick={format.italic}>
+            I
+          </button>
+          <button
+            className="note-tool note-ink"
+            title="글자 색 (선택한 글자)"
+            aria-label="글자 색"
+            aria-expanded={inkOpen}
+            onMouseDown={keepSelection}
+            onClick={() => setInkOpen((open) => !open)}
+          >
+            A
+          </button>
         </div>
         <button className="note-tool note-remove" title="메모 떼기" aria-label="메모 떼기" onClick={() => onRemove(note)}>
           <CloseIcon size={12} />
@@ -190,16 +222,45 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
           ))}
         </div>
       )}
+      {inkOpen && (
+        <div className="note-palette">
+          <button
+            className="ink-color"
+            style={{ background: "#2b2a26" }}
+            title="기본 글자색으로"
+            aria-label="기본 글자색으로"
+            onMouseDown={keepSelection}
+            onClick={() => {
+              format.color("");
+              setInkOpen(false);
+            }}
+          />
+          {INK_COLORS.map((color) => (
+            <button
+              key={color}
+              className="ink-color"
+              style={{ background: INK_HEX[color] }}
+              title={`${INK_NAMES[color]} 글자로`}
+              aria-label={`${INK_NAMES[color]} 글자로`}
+              onMouseDown={keepSelection}
+              onClick={() => {
+                format.color(color);
+                setInkOpen(false);
+              }}
+            />
+          ))}
+        </div>
+      )}
       {isList ? (
         <Checklist note={note} onChange={onChange} />
       ) : (
-        <textarea
-          ref={textRef}
-          value={note.text}
+        <RichText
+          className="note-text"
+          value={note}
           placeholder="메모…"
-          spellCheck={false}
           style={{ fontSize: note.fontSize }}
-          onChange={(e) => onChange(note.id, { text: e.target.value })}
+          elementRef={(el) => (textRef.current = el)}
+          onChange={(rich) => onChange(note.id, rich)}
         />
       )}
       <div className="note-grip" title="끌어서 크기 조절" onPointerDown={beginDrag("size")} />

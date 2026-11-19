@@ -1,7 +1,8 @@
 // 보드를 바꾸는 순수 함수들. 원본은 건드리지 않고 새 보드를 돌려준다.
 
 import { NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "./types";
-import type { Board, Category, Note, NoteItem, Settings, Tile } from "./types";
+import { joinRich, sliceRich } from "./richText";
+import type { Board, Category, Note, NoteItem, Rich, Settings, Tile } from "./types";
 
 export const newId = () => crypto.randomUUID();
 
@@ -95,6 +96,7 @@ export function addNote(board: Board, at: { x: number; y: number }): { board: Bo
     kind: "text",
     items: [],
     fontSize: 13,
+    marks: [],
   };
   return { board: { ...board, notes: [...board.notes, note] }, note };
 }
@@ -133,23 +135,33 @@ export function raiseNote(board: Board, id: string): Board {
 /** 체크리스트에서 끝낸 항목을 글 메모로 바꿀 때 줄 앞에 붙이는 표시 */
 const DONE_MARK = "✓ ";
 
-export const newItem = (text = "", done = false): NoteItem => ({ id: newId(), text, done });
+export const newItem = (rich: Rich = { text: "", marks: [] }, done = false): NoteItem => ({
+  id: newId(),
+  text: rich.text,
+  marks: rich.marks,
+  done,
+});
 
-/** 글 메모의 각 줄을 체크리스트 항목으로 바꾼다. 빈 줄은 버리고, 항목이 하나도 없으면 빈 항목 하나를 둔다. */
-export function textToItems(text: string): NoteItem[] {
-  const items = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => (line.startsWith(DONE_MARK) ? newItem(line.slice(DONE_MARK.length), true) : newItem(line)));
+/** 글 메모의 각 줄을 체크리스트 항목으로 바꾼다. 빈 줄은 버리고, 항목이 하나도 없으면 빈 항목 하나를 둔다. 서식은 따라간다. */
+export function textToItems(note: Rich): NoteItem[] {
+  const items: NoteItem[] = [];
+  let start = 0;
+  for (const line of note.text.split("\n")) {
+    const end = start + line.length;
+    if (line.trim()) {
+      const done = line.startsWith(DONE_MARK);
+      items.push(newItem(sliceRich(note, done ? start + DONE_MARK.length : start, end), done));
+    }
+    start = end + 1;
+  }
   return items.length > 0 ? items : [newItem()];
 }
 
-export function itemsToText(items: NoteItem[]): string {
-  return items
+export function itemsToText(items: NoteItem[]): Rich {
+  const lines = items
     .filter((item) => item.text.trim().length > 0)
-    .map((item) => (item.done ? DONE_MARK : "") + item.text)
-    .join("\n");
+    .map((item) => (item.done ? joinRich([{ text: DONE_MARK.trimEnd(), marks: [] }, item], " ") : item));
+  return joinRich(lines, "\n");
 }
 
 /** 글 메모와 체크리스트를 서로 바꾼다. 내용은 줄 단위로 옮겨 간다. */
@@ -157,8 +169,8 @@ export function switchNoteKind(board: Board, id: string): Board {
   const note = board.notes.find((n) => n.id === id);
   if (!note) return board;
   return note.kind === "list"
-    ? updateNote(board, id, { kind: "text", text: itemsToText(note.items), items: [] })
-    : updateNote(board, id, { kind: "list", items: textToItems(note.text), text: "" });
+    ? updateNote(board, id, { kind: "text", ...itemsToText(note.items), items: [] })
+    : updateNote(board, id, { kind: "list", items: textToItems(note), text: "", marks: [] });
 }
 
 export function patchSettings(board: Board, patch: Partial<Settings>): Board {

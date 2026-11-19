@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const NOTE_MIN_W: f64 = 120.0;
+pub const NOTE_MIN_W: f64 = 190.0;
 pub const NOTE_MIN_H: f64 = 90.0;
 const NOTE_MAX: f64 = 4000.0;
 const NOTE_COLORS: [&str; 5] = ["yellow", "pink", "green", "blue", "purple"];
@@ -12,6 +12,8 @@ const TILE_SIZES: [&str; 3] = ["s", "m", "l"];
 const TILE_COLORS: [&str; 9] = ["", "red", "orange", "yellow", "green", "teal", "blue", "purple", "pink"];
 const THEMES: [&str; 4] = ["dark", "light", "mint", "lavender"];
 const NOTE_KINDS: [&str; 2] = ["text", "list"];
+/// 메모 글자색. 빈 문자열은 기본색이다.
+const INK_COLORS: [&str; 6] = ["", "red", "orange", "green", "blue", "purple"];
 pub const NOTE_FONT_MIN: f64 = 10.0;
 pub const NOTE_FONT_MAX: f64 = 32.0;
 pub const DEFAULT_HOTKEY: &str = "Ctrl+Alt+D";
@@ -66,6 +68,8 @@ pub struct Note {
     /// 체크리스트 항목 (kind 가 list 일 때 쓴다)
     pub items: Vec<NoteItem>,
     pub font_size: f64,
+    /// text 의 어느 부분이 굵은지·기울었는지·무슨 색인지
+    pub marks: Vec<Mark>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -74,6 +78,19 @@ pub struct NoteItem {
     pub id: String,
     pub text: String,
     pub done: bool,
+    pub marks: Vec<Mark>,
+}
+
+/// 글의 한 구간에 입힌 서식. 위치는 화면(JavaScript)이 세는 방식대로 UTF-16 단위다.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Mark {
+    pub start: u32,
+    pub end: u32,
+    pub bold: bool,
+    pub italic: bool,
+    /// 글자색 이름. 비어 있으면 기본색
+    pub color: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -117,6 +134,7 @@ impl Default for Note {
             kind: "text".into(),
             items: Vec::new(),
             font_size: 13.0,
+            marks: Vec::new(),
         }
     }
 }
@@ -185,6 +203,10 @@ impl Board {
                 note.kind = d.kind;
             }
             note.font_size = clamp_or(note.font_size, NOTE_FONT_MIN, NOTE_FONT_MAX, d.font_size);
+            clean_marks(&note.text, &mut note.marks);
+            for item in &mut note.items {
+                clean_marks(&item.text, &mut item.marks);
+            }
         }
         for tile in self.categories.iter_mut().flat_map(|c| c.tiles.iter_mut()) {
             if !TILE_KINDS.contains(&tile.kind.as_str()) {
@@ -195,6 +217,18 @@ impl Board {
             }
         }
     }
+}
+
+/// 글 밖을 가리키거나 아무 서식도 없는 구간은 버린다.
+fn clean_marks(text: &str, marks: &mut Vec<Mark>) {
+    let length = text.encode_utf16().count() as u32;
+    marks.retain_mut(|mark| {
+        if !INK_COLORS.contains(&mark.color.as_str()) {
+            mark.color = String::new();
+        }
+        mark.end = mark.end.min(length);
+        mark.start < mark.end && (mark.bold || mark.italic || !mark.color.is_empty())
+    });
 }
 
 fn clamp_or(value: f64, min: f64, max: f64, fallback: f64) -> f64 {
@@ -256,6 +290,27 @@ mod tests {
         assert_eq!(board.settings.theme, "dark");
         assert_eq!(board.categories[0].tiles[0].kind, "file");
         assert_eq!(board.categories[0].tiles[0].color, "");
+    }
+
+    #[test]
+    fn marks_outside_the_text_or_without_formatting_are_dropped() {
+        let mut board = Board::starter();
+        board.notes[0].text = "가나다 abc".into(); // 7 UTF-16 units
+        board.notes[0].marks = vec![
+            Mark { start: 0, end: 3, bold: true, ..Mark::default() },
+            Mark { start: 4, end: 99, italic: true, color: "red".into(), ..Mark::default() },
+            Mark { start: 9, end: 12, bold: true, ..Mark::default() },
+            Mark { start: 1, end: 2, ..Mark::default() },
+            Mark { start: 5, end: 6, color: "neon".into(), ..Mark::default() },
+        ];
+        board.sanitize();
+        assert_eq!(
+            board.notes[0].marks,
+            vec![
+                Mark { start: 0, end: 3, bold: true, ..Mark::default() },
+                Mark { start: 4, end: 7, italic: true, color: "red".into(), ..Mark::default() },
+            ]
+        );
     }
 
     #[test]

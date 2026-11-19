@@ -27,15 +27,35 @@ export interface Category {
 export const NOTE_COLORS = ["yellow", "pink", "green", "blue", "purple"] as const;
 export type NoteColor = (typeof NOTE_COLORS)[number];
 
-export const NOTE_MIN_W = 150;
+export const NOTE_MIN_W = 190;
 export const NOTE_MIN_H = 90;
 export const NOTE_FONT_MIN = 10;
 export const NOTE_FONT_MAX = 32;
+
+/** 메모 글자색. 빈 문자열은 기본색이다. */
+export const INK_COLORS = ["red", "orange", "green", "blue", "purple"] as const;
+export type InkColor = (typeof INK_COLORS)[number];
+
+/** 글의 한 구간에 입힌 서식. 위치는 문자열 인덱스(UTF-16 단위)다. */
+export interface Mark {
+  start: number;
+  end: number;
+  bold: boolean;
+  italic: boolean;
+  color: InkColor | "";
+}
+
+/** 서식이 있는 글 */
+export interface Rich {
+  text: string;
+  marks: Mark[];
+}
 
 export interface NoteItem {
   id: string;
   text: string;
   done: boolean;
+  marks: Mark[];
 }
 
 export interface Note {
@@ -53,6 +73,8 @@ export interface Note {
   kind: "text" | "list";
   items: NoteItem[];
   fontSize: number;
+  /** text 의 어느 부분이 굵은지·기울었는지·무슨 색인지 */
+  marks: Mark[];
 }
 
 export type TileSize = "s" | "m" | "l";
