@@ -1,0 +1,66 @@
+name: DeskBoard Windows Build
+
+on:
+  push:
+    branches: ["main", "claude/magical-albattani-ylxgx6"]
+    paths: ["deskboard/**", ".github/workflows/deskboard-windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: deskboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: deskboard/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: deskboard/src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # 백엔드가 컴파일될 때 화면 빌드 결과물(dist)을 찾으므로 먼저 만들어 둔다
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run Rust tests
+        run: cargo test
+        working-directory: deskboard/src-tauri
+
+      - name: Build Windows installer (NSIS)
+        run: npm run tauri build
+
+      - name: Upload installer artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskBoard-windows-installer
+          path: deskboard/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      # 실제 바탕화면에서 Win+D(바탕화면 보기) 동작을 확인한다
+      - name: Desktop behaviour smoke test
+        run: pwsh scripts/smoke-desktop.ps1 -Exe src-tauri/target/release/deskboard.exe -Screenshot widget-on-desktop.png
+
+      - name: Upload smoke test screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeskBoard-smoke-screenshot-${{ matrix.os }}
+          path: deskboard/widget-on-desktop.png
+          if-no-files-found: ignore
