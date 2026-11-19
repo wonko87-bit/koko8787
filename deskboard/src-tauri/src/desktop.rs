@@ -8,7 +8,10 @@
 //! 바탕화면이 올라왔는지는 맨 아래에 둔 보이지 않는 표식 창으로 판단한다.
 //! 셸의 바탕화면 창이 표식 창보다 위에 있으면 바탕화면 보기 상태다.
 
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering::Relaxed};
+use std::sync::OnceLock;
 use windows::core::w;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
@@ -159,13 +162,23 @@ unsafe fn evaluate() {
         Some(desktop) => {
             if !was_raised || !is_above(widget, desktop) {
                 RAISED.store(true, Relaxed);
-                lift_above(widget, desktop);
+                set_order(widget, HWND_TOPMOST);
+                log(|| {
+                    format!(
+                        "desktop {:?} [{}] is raised (was_raised={was_raised}) -> widget above it: {}, topmost: {}",
+                        desktop.0,
+                        class_name(desktop),
+                        is_above(widget, desktop),
+                        is_topmost(widget),
+                    )
+                });
             }
         }
         None if was_raised => {
             RAISED.store(false, Relaxed);
             set_order(widget, HWND_NOTOPMOST);
             set_order(widget, HWND_BOTTOM);
+            log(|| format!("desktop is back down -> widget topmost: {}", is_topmost(widget)));
         }
         None => {}
     }
@@ -204,11 +217,19 @@ unsafe fn process_of(window: HWND) -> u32 {
     process
 }
 
-unsafe fn is_desktop_class(window: HWND) -> bool {
-    let mut buffer = [0u16; 32];
+unsafe fn class_name(window: HWND) -> String {
+    let mut buffer = [0u16; 64];
     let len = GetClassNameW(window, &mut buffer) as usize;
-    let name = String::from_utf16_lossy(&buffer[..len.min(buffer.len())]);
+    String::from_utf16_lossy(&buffer[..len.min(buffer.len())])
+}
+
+unsafe fn is_desktop_class(window: HWND) -> bool {
+    let name = class_name(window);
     name == "WorkerW" || name == "Progman"
+}
+
+unsafe fn is_topmost(window: HWND) -> bool {
+    GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0
 }
 
 unsafe fn covers_a_screen(window: HWND) -> bool {
@@ -230,24 +251,22 @@ unsafe fn is_above(window: HWND, other: HWND) -> bool {
     false
 }
 
-/// 위젯을 "항상 위" 묶음의 맨 아래에 끼운다. 올라온 바탕화면보다는 위,
-/// 작업 표시줄 같은 다른 "항상 위" 창보다는 아래가 된다.
-unsafe fn lift_above(widget: HWND, desktop: HWND) {
-    set_order(widget, HWND_TOPMOST);
-    let mut current = GetWindow(desktop, GW_HWNDPREV).ok();
-    for _ in 0..4096 {
-        let Some(window) = current else { return };
-        let topmost = GetWindowLongPtrW(window, GWL_EXSTYLE) & WS_EX_TOPMOST.0 as isize != 0;
-        if topmost && window != widget {
-            set_order(widget, window);
-            return;
-        }
-        current = GetWindow(window, GW_HWNDPREV).ok();
-    }
-}
-
 unsafe fn set_order(window: HWND, insert_after: HWND) {
     MOVING_SELF.store(true, Relaxed);
-    let _ = SetWindowPos(window, Some(insert_after), 0, 0, 0, 0, Z_ONLY);
+    if let Err(e) = SetWindowPos(window, Some(insert_after), 0, 0, 0, 0, Z_ONLY) {
+        log(|| format!("SetWindowPos(insert_after={:?}) failed: {e}", insert_after.0));
+    }
     MOVING_SELF.store(false, Relaxed);
+}
+
+/// 환경 변수 DESKBOARD_LOG 에 파일 경로를 주면 창 순서를 바꿀 때마다 한 줄씩 남긴다.
+/// 바탕화면 보기 동작은 Windows 판마다 달라서, 안 보인다는 제보가 왔을 때 원인을 볼 수 있게 해 둔다.
+fn log(message: impl FnOnce() -> String) {
+    static PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
+    let Some(path) = PATH.get_or_init(|| std::env::var_os("DESKBOARD_LOG").map(PathBuf::from)) else {
+        return;
+    };
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{}", message());
+    }
 }

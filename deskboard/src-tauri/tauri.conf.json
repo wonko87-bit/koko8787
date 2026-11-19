@@ -26,6 +26,7 @@
         "maximizable": false,
         "resizable": false,
         "visible": false,
+        "focus": false,
         "dragDropEnabled": false
       }
     ],
