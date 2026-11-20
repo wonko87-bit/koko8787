@@ -95,15 +95,16 @@ function normalize(d) {
   d = d && typeof d === 'object' ? d : base;
   d.settings = Object.assign(base.settings, d.settings || {});
   for (const k of ['days', 'weeks', 'months']) if (!d[k] || typeof d[k] !== 'object') d[k] = {};
+  if (!d.settings.deviceId) d.settings.deviceId = PlannerSync.newDeviceId();
   return d;
 }
 async function loadData() {
   try {
-    if (invoke) {
-      const s = await invoke('load_data');
-      return normalize(s ? JSON.parse(s) : null);
-    }
-    return normalize(JSON.parse(localStorage.getItem(LS_KEY) || 'null'));
+    const raw = invoke ? await invoke('load_data') : localStorage.getItem(LS_KEY);
+    const d = normalize(raw ? JSON.parse(raw) : null);
+    // 동기화용 구조로 변환 (칸마다 수정 도장). 변환 전 원본은 한 번만 보관
+    if (PlannerSync.migrate(d) && raw && invoke) invoke('backup_once', { json: raw, name: 'before-sync-v2' }).catch(() => {});
+    return d;
   } catch (e) {
     console.error(e);
     toast('데이터를 읽지 못해 빈 플래너로 시작합니다');
@@ -130,9 +131,19 @@ function compact(d) {
   }
   return out;
 }
+/** 지난번 이후 바뀐 칸에 수정 도장을 찍는다. 바뀐 칸 수를 돌려줌 */
+function stampNow() {
+  const r = PlannerSync.stamp(state.data, state.lastFlat || {}, state.data.settings.deviceId, Date.now());
+  state.lastFlat = r.flat;
+  return r.changed.length;
+}
 async function persistNow() {
   clearTimeout(state.saveTimer);
   state.saveTimer = null;
+  if (stampNow()) scheduleSync();
+  await writeData();
+}
+async function writeData() {
   const json = JSON.stringify(compact(state.data));
   try {
     if (invoke) await invoke('save_data', { json });
@@ -807,6 +818,20 @@ async function openSettings() {
       h('button', { class: 'pill-btn', onclick: () => invoke('open_data_dir').catch((e) => toast(String(e))) }, '폴더 열기')));
   }
 
+  if (sync.available) {
+    const st = h('small', null, sync.connected
+      ? `연결됨 · ${sync.last ? '마지막 동기화 ' + agoText(sync.last) : '아직 동기화 전'}`
+      : '노트북·태블릿 간 플래너를 내 Google 드라이브(앱 전용 숨김 공간)로 맞춰요');
+    const btns = h('div', { style: 'display:flex;gap:6px' });
+    if (sync.connected) {
+      btns.append(h('button', { class: 'pill-btn', onclick: () => { syncNow(); closeModal(); } }, '지금 동기화'));
+      btns.append(h('button', { class: 'pill-btn danger', onclick: async () => { closeModal(); await disconnectGoogle(); } }, '연결 해제'));
+    } else {
+      btns.append(h('button', { class: 'pill-btn primary', onclick: () => { closeModal(); connectGoogle(); } }, 'Google 계정 연결'));
+    }
+    body.append(h('div', { class: 'set-row' }, h('div', { class: 'lbl' }, h('b', null, '기기 간 동기화 (Google 드라이브)'), st), btns));
+  }
+
   // 사용자 휴일
   const list = h('div', { class: 'hol-list' });
   const paintHol = () => {
@@ -842,6 +867,7 @@ async function openSettings() {
     try {
       const d = normalize(JSON.parse(await f.text()));
       if (!(await confirmBox('불러온 백업으로 현재 데이터를 바꿀까요?'))) return;
+      d.settings.deviceId = state.data.settings.deviceId;
       snapshot(); state.data = d; markDirty(); closeModal(); render(); toast('백업을 불러왔어요');
     } catch (e) { toast('백업 파일을 읽지 못했어요'); }
   };
@@ -965,6 +991,143 @@ function download(name, text, type) {
   document.body.append(a); a.click(); a.remove();
 }
 
+/* ───────────────────────── sync (Google 드라이브) ───────────────────────── */
+const sync = { available: false, connected: false, busy: false, again: false, last: 0, state: 'off', error: '', timer: null };
+const SYNC_DELAY = 5000;
+const SYNC_INTERVAL = 5 * 60 * 1000;
+
+async function initSync() {
+  if (!invoke) return;
+  try {
+    const st = await invoke('sync_status');
+    sync.available = st.available;
+    sync.connected = st.connected;
+  } catch (e) { sync.available = false; }
+  if (!sync.available) return paintSync();
+  setSyncState(sync.connected ? 'ok' : 'off');
+  if (sync.connected) syncNow();
+  setInterval(() => { if (sync.connected && !document.hidden) syncNow(); }, SYNC_INTERVAL);
+  setInterval(paintSync, 30000);
+}
+function scheduleSync() {
+  if (!sync.connected) return;
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(syncNow, SYNC_DELAY);
+}
+function setSyncState(st, err) {
+  sync.state = st;
+  sync.error = err || '';
+  paintSync();
+}
+function agoText(t) {
+  if (!t) return '';
+  const s = Math.round((Date.now() - t) / 1000);
+  if (s < 60) return '방금';
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  const d = new Date(t);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function paintSync() {
+  const b = $('#syncBtn');
+  if (!b) return;
+  b.hidden = !sync.available;
+  if (!sync.available) return;
+  const st = sync.state;
+  b.dataset.state = st;
+  const label = { off: '동기화 꺼짐', busy: '동기화 중', ok: '동기화됨', error: '오프라인', login: '다시 로그인' }[st];
+  $('.sync-label', b).textContent = st === 'ok' && sync.last ? `동기화됨 · ${agoText(sync.last)}` : label;
+  b.title = {
+    off: 'Google 드라이브 동기화가 꺼져 있어요. 눌러서 설정 열기',
+    busy: '동기화 중…',
+    ok: `마지막 동기화 ${sync.last ? new Date(sync.last).toLocaleTimeString('ko-KR') : '-'}\n누르면 지금 동기화`,
+    error: `동기화하지 못했어요. 연결되면 자동으로 다시 시도해요.\n${sync.error}`,
+    login: 'Google 로그인이 풀렸어요. 눌러서 다시 로그인',
+  }[st];
+}
+
+/** 받기 → 칸 단위 병합 → 로컬 반영 → 올리기 */
+async function syncNow() {
+  if (!sync.connected) return;
+  if (sync.busy) { sync.again = true; return; }
+  sync.busy = true;
+  clearTimeout(sync.timer);
+  setSyncState('busy');
+  try {
+    const docs = await invoke('drive_pull');
+    let remote = {};
+    for (const txt of docs) {
+      try {
+        const doc = JSON.parse(txt);
+        if (doc && doc.cells) remote = PlannerSync.mergeCells(remote, doc.cells, Date.now()).cells;
+      } catch (e) { /* 깨진 파일은 무시하고 덮어씀 */ }
+    }
+    // 여기부터 반영까지는 await 없이 한 번에 (그 사이 입력이 끼어들지 않게)
+    stampNow();
+    const m = PlannerSync.mergeCells(PlannerSync.toCells(state.data), remote, Date.now());
+    if (m.localChanged) applyMerged(m.cells);
+    if (m.localChanged) await writeData();
+    if (m.remoteChanged || docs.length !== 1) {
+      await invoke('drive_push', { content: JSON.stringify({ format: 'planner-sync', v: 1, updated: Date.now(), cells: m.cells }) });
+    }
+    sync.last = Date.now();
+    setSyncState('ok');
+  } catch (e) {
+    const msg = String(e);
+    if (msg.includes('LOGIN_REQUIRED')) { sync.connected = false; setSyncState('login'); }
+    else setSyncState('error', msg);
+  } finally {
+    sync.busy = false;
+    if (sync.again) { sync.again = false; scheduleSync(); }
+  }
+}
+
+function applyMerged(cells) {
+  const next = PlannerSync.fromCells(cells, state.data);
+  next.version = 2;
+  state.data = next;
+  state.lastFlat = PlannerSync.flatten(next);
+  const typing = document.activeElement && document.activeElement.closest('#view input, #view textarea, #drawer input');
+  if (typing) state.pendingRender = true;
+  else {
+    render(false);
+    if (state.drawerKey) openDrawer(state.drawerKey);
+  }
+}
+document.addEventListener('focusout', () => {
+  setTimeout(() => {
+    if (!state.pendingRender) return;
+    if (document.activeElement && document.activeElement.closest('#view input, #view textarea, #drawer input')) return;
+    state.pendingRender = false;
+    render(false);
+  }, 0);
+});
+
+async function connectGoogle() {
+  toast('브라우저에서 Google 로그인을 마쳐 주세요');
+  setSyncState('busy');
+  try {
+    await invoke('google_login');
+    sync.connected = true;
+    toast('Google 드라이브와 연결됐어요');
+    await syncNow();
+  } catch (e) {
+    setSyncState(sync.connected ? 'ok' : 'off');
+    toast('연결하지 못했어요: ' + e);
+  }
+}
+async function disconnectGoogle() {
+  if (!(await confirmBox('이 기기의 동기화를 끌까요? 이 기기와 드라이브의 플래너 데이터는 그대로 남아요.'))) return;
+  try { await invoke('google_logout'); } catch (e) { /* ignore */ }
+  sync.connected = false;
+  setSyncState('off');
+  toast('동기화를 껐어요');
+}
+function onSyncButton() {
+  if (sync.state === 'login') return connectGoogle();
+  if (!sync.connected) return openSettings();
+  syncNow();
+}
+
 /* ───────────────────────── global events ───────────────────────── */
 function bindChrome() {
   $$('#viewSeg button').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.view; render(); }));
@@ -978,6 +1141,7 @@ function bindChrome() {
     markDirty(); applyTheme();
   };
   $('#settingsBtn').onclick = openSettings;
+  $('#syncBtn').onclick = onSyncButton;
   $('#exportBtn').onclick = openExport;
   let resizeTimer = null;
   window.addEventListener('resize', () => {
@@ -1025,16 +1189,19 @@ function bindChrome() {
     TAURI.event.listen('window-shown', () => {
       const nowKey = dkey(today());
       if (nowKey !== lastDay) { lastDay = nowKey; state.cursor = today(); render(); }
+      if (sync.connected && Date.now() - sync.last > 30000) syncNow();
     });
   }
 }
 
 (async function init() {
   state.data = await loadData();
+  state.lastFlat = PlannerSync.flatten(state.data);
   applyScale();
   if (window.PLANNER_PREVIEW && window.PLANNER_SEED && !Object.keys(state.data.days).length) { window.PLANNER_SEED(state.data); markDirty(); setTimeout(() => toast('미리보기용 예시 데이터가 들어 있어요'), 600); }
   applyTheme();
   bindChrome();
   render();
   document.fonts && document.fonts.ready.then(updateSeg);
+  initSync();
 })();

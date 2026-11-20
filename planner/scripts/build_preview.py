@@ -18,6 +18,7 @@ window.PLANNER_SEED = function (D) {
 """
 html = html.replace('<link rel="stylesheet" href="style.css" />', f"<style>\n{css}\n</style>")
 html = html.replace('<script src="holidays.js"></script>', "<script>\n" + (src/"holidays.js").read_text(encoding="utf-8") + "\n" + seed + "\n</script>")
+html = html.replace('<script src="sync.js"></script>', "<script>\n" + (src/"sync.js").read_text(encoding="utf-8") + "\n</script>")
 html = html.replace('<script src="app.js"></script>', "<script>\n" + (src/"app.js").read_text(encoding="utf-8") + "\n</script>")
 html = html.replace("<title>Planner</title>", "<title>Planner 미리보기</title>")
 out = pathlib.Path(__file__).resolve().parent.parent / "preview" / "planner-preview.html"
