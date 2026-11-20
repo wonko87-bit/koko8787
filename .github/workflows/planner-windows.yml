@@ -10,7 +10,10 @@ jobs:
   build:
     runs-on: windows-latest
     env:
-      HAS_SECRETS: ${{ secrets.PLANNER_GOOGLE_CLIENT_ID != '' && secrets.PLANNER_GOOGLE_CLIENT_SECRET != '' }}
+      # 저장소 Secrets에 넣는 것이 원칙이지만, Variables에 넣어도 동작하게 함
+      G_ID: ${{ secrets.PLANNER_GOOGLE_CLIENT_ID || vars.PLANNER_GOOGLE_CLIENT_ID }}
+      G_SECRET: ${{ secrets.PLANNER_GOOGLE_CLIENT_SECRET || vars.PLANNER_GOOGLE_CLIENT_SECRET }}
+      HAS_SECRETS: ${{ (secrets.PLANNER_GOOGLE_CLIENT_ID || vars.PLANNER_GOOGLE_CLIENT_ID) != '' && (secrets.PLANNER_GOOGLE_CLIENT_SECRET || vars.PLANNER_GOOGLE_CLIENT_SECRET) != '' }}
     defaults:
       run:
         working-directory: planner
@@ -28,6 +31,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: planner/src-tauri
+
+      - name: OAuth settings check (values are never printed)
+        shell: bash
+        run: |
+          echo "::notice title=OAuth 설정 확인::client_id secrets=${{ secrets.PLANNER_GOOGLE_CLIENT_ID != '' }} vars=${{ vars.PLANNER_GOOGLE_CLIENT_ID != '' }} / client_secret secrets=${{ secrets.PLANNER_GOOGLE_CLIENT_SECRET != '' }} vars=${{ vars.PLANNER_GOOGLE_CLIENT_SECRET != '' }} / sync build=${{ env.HAS_SECRETS }}"
 
       - name: Install Tauri CLI
         run: npm ci
@@ -60,8 +68,8 @@ jobs:
       - name: Build sync-enabled installer
         if: ${{ env.HAS_SECRETS == 'true' }}
         env:
-          PLANNER_GOOGLE_CLIENT_ID: ${{ secrets.PLANNER_GOOGLE_CLIENT_ID }}
-          PLANNER_GOOGLE_CLIENT_SECRET: ${{ secrets.PLANNER_GOOGLE_CLIENT_SECRET }}
+          PLANNER_GOOGLE_CLIENT_ID: ${{ env.G_ID }}
+          PLANNER_GOOGLE_CLIENT_SECRET: ${{ env.G_SECRET }}
         run: npx tauri build
 
       - name: Collect sync-enabled artifacts
