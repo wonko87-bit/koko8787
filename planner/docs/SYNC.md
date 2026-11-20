@@ -99,6 +99,7 @@ TaskBridge용 프로젝트와 **분리된 새 프로젝트**를 권장합니다.
    → 표시되는 클라이언트 ID·보안 비밀 복사
 7. GitHub 저장소 → Settings → Secrets and variables → Actions 에
    `PLANNER_GOOGLE_CLIENT_ID`, `PLANNER_GOOGLE_CLIENT_SECRET` 등록
+   (이름 앞의 `PLANNER_`를 꼭 붙일 것. 접두어 없는 `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`은 TaskBridge 안드로이드 빌드용 시크릿)
 
 > 2025년부터 콘솔 메뉴가 바뀌어 예전 "OAuth 동의 화면"은 **Google 인증 플랫폼**의 브랜딩 · 대상 · 데이터 액세스 · 클라이언트로 나뉘었습니다.
 
