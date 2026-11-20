@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planner</title>
+<style>
+  body { font-family: 'Malgun Gothic', system-ui, sans-serif; display: flex; justify-content: center; align-items: center;
+         height: 100vh; margin: 0; background: #F2F4F8; color: #1B2433; }
+  p { font-size: 16px; }
+</style>
+</head>
+<body>
+<p id="msg">Planner로 돌아가는 중...</p>
+<script>
+  // Google 로그인 결과를 앱으로 넘겨주는 중계 페이지
+  // state 형식: "d.<포트>.<임의값>" → 데스크톱 앱의 로컬 수신기, "a.<임의값>" → 안드로이드 딥링크
+  var p = new URLSearchParams(window.location.search);
+  var code = p.get('code') || '';
+  var state = p.get('state') || '';
+  var error = p.get('error') || '';
+  var q = (error ? 'error=' + encodeURIComponent(error) : 'code=' + encodeURIComponent(code)) + '&state=' + encodeURIComponent(state);
+  var m = /^d\.(\d{4,5})\./.exec(state);
+  var target = null;
+  if (m && +m[1] >= 1024 && +m[1] <= 65535) target = 'http://127.0.0.1:' + m[1] + '/callback?' + q;
+  else if (/^a\./.test(state)) target = 'planner://auth?' + q;
+  if (target) window.location.replace(target);
+  else document.getElementById('msg').textContent = '잘못된 요청입니다. 앱에서 다시 로그인해 주세요.';
+</script>
+</body>
+</html>

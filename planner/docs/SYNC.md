@@ -86,6 +86,11 @@ TaskBridge용 프로젝트와 **분리된 새 프로젝트**를 권장합니다.
 2. ☰ 메뉴 → API 및 서비스 → 라이브러리 → **Google Drive API** → 사용
 3. ☰ 메뉴 → **Google 인증 플랫폼**(Google Auth Platform). "아직 구성되지 않음"이 보이면 **시작하기**
    → 앱 이름 `Planner`, 지원 이메일 → 대상 **외부** → 연락처 이메일 → 정책 동의 → 만들기
+   → **브랜딩**에서 아래를 채우고 저장 (앱 게시 버튼이 비활성일 때 필요한 항목. 버튼에 마우스를 올리면 빠진 항목이 표시됨)
+   - 애플리케이션 홈페이지: `https://wonko87-bit.github.io/koko8787/planner/`
+   - 개인정보처리방침 링크: `https://wonko87-bit.github.io/koko8787/planner/privacy/`
+   - 승인된 도메인: `wonko87-bit.github.io`
+   (이 페이지들은 저장소 `docs/` 폴더의 GitHub Pages로, main에 병합된 뒤에 열립니다)
 4. Google 인증 플랫폼 → **데이터 액세스** → 범위 추가 또는 삭제 → `drive.appdata` 검색해 체크
    (목록에 없으면 아래 "직접 범위 추가"에 `https://www.googleapis.com/auth/drive.appdata` 입력) → 업데이트 → 저장
 5. Google 인증 플랫폼 → **대상** → 게시 상태 "테스트 중" 옆 **앱 게시** → 확인 (프로덕션)
