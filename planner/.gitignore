@@ -1,0 +1,11 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+target-win/
+preview/
+# 실제 일정 데이터·백업은 절대 저장소에 올리지 않음
+planner-data.json
+planner-data.json.tmp
+backups/
+exports/
+*.xlsx

@@ -1,0 +1,60 @@
+name: Planner Windows Build
+
+on:
+  push:
+    branches: ["main", "claude/planner**"]
+    paths: ["planner/**", ".github/workflows/planner-windows.yml"]
+  pull_request:
+    paths: ["planner/**", ".github/workflows/planner-windows.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: planner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: planner/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: planner/src-tauri
+
+      - name: Install Tauri CLI
+        run: npm ci
+
+      - name: Check frontend syntax
+        run: |
+          node --check src/app.js
+          node --check src/holidays.js
+
+      - name: Run Rust tests
+        run: cargo test --release
+        working-directory: planner/src-tauri
+
+      - name: Build Windows installer (NSIS)
+        run: npx tauri build
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item src-tauri/target/release/bundle/nsis/*.exe out/
+          Copy-Item src-tauri/target/release/planner.exe out/Planner-portable.exe
+          Get-ChildItem out | Format-Table Name, Length
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planner-windows
+          path: planner/out/*.exe
+          if-no-files-found: error

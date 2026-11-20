@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Planner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" class="logo" aria-hidden="true">
+        <rect x="2" y="4" width="28" height="26" rx="7" fill="var(--navy)"/>
+        <rect x="2" y="4" width="28" height="8" rx="4" fill="var(--accent)"/>
+        <rect x="9" y="1.5" width="3" height="6" rx="1.5" fill="var(--navy)"/>
+        <rect x="20" y="1.5" width="3" height="6" rx="1.5" fill="var(--navy)"/>
+        <path d="M10 20.5l4 4 8-8" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Planner</span>
+    </div>
+
+    <nav class="seg" id="viewSeg">
+      <button data-view="week">주간</button>
+      <button data-view="month">월간</button>
+      <button data-view="year">연간</button>
+      <span class="seg-ink"></span>
+    </nav>
+
+    <div class="period">
+      <button class="icon-btn" id="prevBtn" title="이전 (Alt+←)">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="period-title" id="periodTitle"></div>
+      <button class="icon-btn" id="nextBtn" title="다음 (Alt+→)">
+        <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="pill-btn" id="todayBtn" title="오늘로 (T)">오늘</button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="rate" id="rateBox" title="완료율">
+      <svg viewBox="0 0 36 36" class="ring">
+        <circle cx="18" cy="18" r="15" class="ring-bg"/>
+        <circle cx="18" cy="18" r="15" class="ring-fg" id="ringFg"/>
+      </svg>
+      <div class="rate-text"><b id="rateNum">–</b><small id="rateSub">완료</small></div>
+    </div>
+
+    <button class="icon-btn" id="themeBtn" title="테마 전환">
+      <svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+    </button>
+    <button class="icon-btn" id="exportBtn" title="엑셀로 내보내기">
+      <svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+    </button>
+    <button class="icon-btn" id="settingsBtn" title="설정">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <main id="view"></main>
+
+  <div id="drawer" class="drawer" hidden></div>
+  <div id="modal" class="modal" hidden></div>
+  <div id="popover" class="popover" hidden></div>
+  <div id="toasts" class="toasts"></div>
+
+  <script src="holidays.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
