@@ -1,0 +1,15 @@
+{
+  "name": "planner",
+  "private": true,
+  "version": "1.1.0",
+  "description": "주간·월간 할일/일정 플래너 (Tauri)",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "tauri build",
+    "dev": "tauri dev",
+    "preview": "python3 scripts/build_preview.py"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.6"
+  }
+}
