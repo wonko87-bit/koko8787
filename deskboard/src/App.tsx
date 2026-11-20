@@ -9,14 +9,19 @@ import { ContextMenu } from "./components/Menu";
 import type { MenuState } from "./components/Menu";
 import { NoteBoard } from "./components/Notes";
 import { SettingsPanel } from "./components/Settings";
-import { Shortcuts } from "./components/Shortcuts";
+import { matchesTile, Shortcuts } from "./components/Shortcuts";
 import { useTileIcons } from "./tileIcons";
-import type { Board, Category, Note, Tile } from "./types";
+import type { Board, Category, Note, Page, Tile } from "./types";
 
 interface Toast {
   text: string;
   kind: "error" | "info";
+  /** 알림에 붙는 단추 (지운 것 되돌리기) */
+  action?: { label: string; run: () => void };
 }
+
+/** 지운 것을 되돌릴 수 있게 알림을 띄워 두는 시간 */
+const UNDO_MS = 8000;
 
 const categoryAt = (x: number, y: number) =>
   document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-category-id]")?.dataset.categoryId ?? null;
@@ -24,6 +29,7 @@ const categoryAt = (x: number, y: number) =>
 type Dialog =
   | { type: "tile"; tile?: Tile; categoryId: string }
   | { type: "category"; category?: Category }
+  | { type: "page"; page?: Page }
   | { type: "confirm"; title: string; message: string; confirmLabel: string; onConfirm: () => void };
 
 const EDGES: ResizeEdge[] = ["North", "South", "East", "West", "NorthEast", "NorthWest", "SouthEast", "SouthWest"];
@@ -40,6 +46,8 @@ export default function App() {
   const [fileDropCategoryId, setFileDropCategoryId] = useState<string | null>(null);
   const [update, setUpdate] = useState<AvailableUpdate | null>(null);
   const [installing, setInstalling] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
   const [liveSplit, setLiveSplit] = useState<number | null>(null);
   const notesRef = useRef<HTMLDivElement>(null);
@@ -52,6 +60,50 @@ export default function App() {
     setBoard((current) => (current ? apply(current) : current));
   }, []);
   const showError = useCallback((e: unknown) => setToast({ text: String(e), kind: "error" }), []);
+  /** 방금 지운 것을 잠깐 동안 되돌릴 수 있게 한다. */
+  const offerUndo = useCallback(
+    (text: string, restore: (board: Board) => Board) =>
+      setToast({
+        text,
+        kind: "info",
+        action: {
+          label: "되돌리기",
+          run: () => {
+            change(restore);
+            setToast(null);
+          },
+        },
+      }),
+    [change],
+  );
+
+  // 되돌리기 알림이 떠 있는 동안에는 Ctrl+Z 로도 되돌린다 (글을 쓰는 중의 Ctrl+Z 는 글자 되돌리기로 둔다).
+  useEffect(() => {
+    const undo = toast?.action;
+    if (!undo) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.key.toLowerCase() !== "z") return;
+      if ((e.target as HTMLElement | null)?.closest("input, textarea, [contenteditable]")) return;
+      e.preventDefault();
+      undo.run();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toast]);
+
+  // 단축키나 트레이로 불러오면 바로 타자를 쳐서 바로가기를 찾을 수 있게 찾기 칸에 커서를 둔다.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    api.onSummon(() => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    }).then((unlisten) => (cancelled ? unlisten() : (stop = unlisten)), () => {});
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
 
   useEffect(() => {
     api.loadBoard().then(
@@ -112,7 +164,7 @@ export default function App() {
 
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(null), toast.kind === "error" ? 6000 : 3500);
+    const timer = setTimeout(() => setToast(null), toast.action ? UNDO_MS : toast.kind === "error" ? 6000 : 3500);
     return () => clearTimeout(timer);
   }, [toast]);
 
@@ -156,17 +208,10 @@ export default function App() {
   );
   const removeNote = useCallback(
     (note: Note) => {
-      const remove = () => change((b) => ops.removeNote(b, note.id));
-      if (ops.isNoteEmpty(note)) return remove();
-      setDialog({
-        type: "confirm",
-        title: "메모 떼기",
-        message: "이 메모를 떼어 버릴까요? 적어 둔 내용은 되돌릴 수 없습니다.",
-        confirmLabel: "떼기",
-        onConfirm: remove,
-      });
+      change((b) => ops.removeNote(b, note.id));
+      if (!ops.isNoteEmpty(note)) offerUndo("메모를 뗐습니다.", (b) => ops.restoreNote(b, note));
     },
-    [change],
+    [change, offerUndo],
   );
 
   if (loadError) return <div className="widget fatal">보드를 불러오지 못했습니다: {loadError}</div>;
@@ -199,21 +244,21 @@ export default function App() {
         {
           label: "삭제",
           danger: true,
-          onSelect: () =>
-            setDialog({
-              type: "confirm",
-              title: "바로가기 삭제",
-              message: `'${tile.name}' 바로가기를 삭제할까요? 원본 파일·폴더는 그대로 남습니다.`,
-              confirmLabel: "삭제",
-              onConfirm: () => change((b) => ops.removeTile(b, tile.id)),
-            }),
+          onSelect: () => {
+            const index = categories.find((c) => c.id === categoryId)?.tiles.findIndex((t) => t.id === tile.id) ?? 0;
+            change((b) => ops.removeTile(b, tile.id));
+            offerUndo(`'${tile.name}' 바로가기를 지웠습니다.`, (b) => ops.restoreTile(b, tile, categoryId, index));
+          },
         },
       ],
     });
 
   const categoryMenu = (at: { x: number; y: number }, category: Category) => {
     const index = categories.findIndex((c) => c.id === category.id);
-    const remove = () => change((b) => ops.removeCategory(b, category.id));
+    const remove = () => {
+      change((b) => ops.removeCategory(b, category.id));
+      offerUndo(`'${category.name}' 카테고리를 지웠습니다.`, (b) => ops.restoreCategory(b, category, index));
+    };
     setMenu({
       ...at,
       items: [
@@ -228,24 +273,62 @@ export default function App() {
         {
           label: "카테고리 삭제",
           danger: true,
-          onSelect: () =>
-            category.tiles.length === 0
-              ? remove()
-              : setDialog({
-                  type: "confirm",
-                  title: "카테고리 삭제",
-                  message: `'${category.name}' 카테고리와 안에 있는 바로가기 ${category.tiles.length}개를 삭제할까요?`,
-                  confirmLabel: "삭제",
-                  onConfirm: remove,
-                }),
+          onSelect: remove,
         },
       ],
     });
   };
 
+  // ---- 메모판 페이지 ----
+  const pageNotes = board.notes.filter((n) => n.page === settings.page);
+
+  const pageMenu = (at: { x: number; y: number }, page: Page) => {
+    const index = board.pages.findIndex((p) => p.id === page.id);
+    const notesOnPage = board.notes.filter((n) => n.page === page.id);
+    setMenu({
+      ...at,
+      items: [
+        { label: "이름 바꾸기…", onSelect: () => setDialog({ type: "page", page }) },
+        { label: "왼쪽으로", disabled: index === 0, onSelect: () => change((b) => ops.shiftPage(b, page.id, -1)) },
+        {
+          label: "오른쪽으로",
+          disabled: index === board.pages.length - 1,
+          onSelect: () => change((b) => ops.shiftPage(b, page.id, 1)),
+        },
+        {
+          label: notesOnPage.length > 0 ? `페이지 삭제 (메모 ${notesOnPage.length}장 포함)` : "페이지 삭제",
+          danger: true,
+          disabled: board.pages.length <= 1,
+          onSelect: () => {
+            change((b) => ops.removePage(b, page.id));
+            offerUndo(`'${page.name}' 페이지를 지웠습니다.`, (b) => ops.restorePage(b, page, index, notesOnPage));
+          },
+        },
+      ],
+    });
+  };
+
+  /** 메모 띠를 우클릭하면 다른 페이지로 보낼 수 있다. */
+  const noteBarMenu = (at: { x: number; y: number }, note: Note) => {
+    const others = board.pages.filter((p) => p.id !== note.page);
+    if (others.length === 0) return;
+    setMenu({
+      ...at,
+      items: others.map((p) => ({
+        label: `'${p.name}' 페이지로 보내기`,
+        onSelect: () => changeNote(note.id, { page: p.id }),
+      })),
+    });
+  };
+
+  // ---- 바로가기 찾기 ----
+  const firstMatch = query.trim()
+    ? categories.flatMap((c) => c.tiles).find((t) => matchesTile(t, query))
+    : undefined;
+
   // ---- 위젯 배치 ----
   const beginMove = (e: MouseEvent) => {
-    if (locked || e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
+    if (locked || e.button !== 0 || (e.target as HTMLElement).closest("button, input")) return;
     e.preventDefault();
     api.startMove().catch(() => {});
   };
@@ -373,6 +456,27 @@ export default function App() {
         <button className="text-button" onClick={() => addNote()}>
           <PlusIcon /> 메모
         </button>
+        <input
+          ref={searchRef}
+          className="search"
+          type="search"
+          value={query}
+          placeholder="바로가기 찾기"
+          aria-label="바로가기 찾기"
+          spellCheck={false}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            // 한글을 조합하는 중의 Enter 는 글자를 확정하는 것이다.
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === "Enter" && firstMatch) {
+              launch(firstMatch);
+              setQuery("");
+            } else if (e.key === "Escape") {
+              setQuery("");
+              e.currentTarget.blur();
+            }
+          }}
+        />
         <span className="header-hint">
           {locked ? "" : "여기를 끌어 이동 · 가장자리를 끌어 크기 조절 · 가운데 선으로 영역 조절"}
         </span>
@@ -405,6 +509,7 @@ export default function App() {
           tileSize={settings.tileSize}
           iconFor={iconFor}
           fileDropCategoryId={fileDropCategoryId}
+          query={query}
           onLaunch={launch}
           onTileMenu={tileMenu}
           onCategoryMenu={categoryMenu}
@@ -416,7 +521,9 @@ export default function App() {
         />
         <div className="splitter" onPointerDown={beginSplit} />
         <NoteBoard
-          notes={board.notes}
+          notes={pageNotes}
+          pages={board.pages}
+          activePage={settings.page}
           focusId={focusNoteId}
           boardRef={notesRef}
           onAdd={addNote}
@@ -425,6 +532,10 @@ export default function App() {
           onSwitchKind={switchNoteKind}
           onRemove={removeNote}
           onRaise={raiseNote}
+          onBarMenu={noteBarMenu}
+          onSelectPage={(page) => change((b) => ops.patchSettings(b, { page }))}
+          onAddPage={() => setDialog({ type: "page" })}
+          onPageMenu={pageMenu}
         />
       </div>
 
@@ -440,6 +551,7 @@ export default function App() {
           onInstallUpdate={installUpdate}
           onExport={exportBoard}
           onImport={importBoard}
+          onOpenBackups={() => api.openBackupFolder().catch(showError)}
           onResetWindow={() => api.resetWindow().catch(showError)}
           onQuit={quit}
           onClose={closeSettings}
@@ -453,6 +565,19 @@ export default function App() {
           categoryId={dialog.categoryId}
           onSave={(categoryId, tile) => {
             change((b) => ops.saveTile(b, categoryId, tile));
+            closeDialog();
+          }}
+          onClose={closeDialog}
+        />
+      )}
+      {dialog?.type === "page" && (
+        <NameDialog
+          title={dialog.page ? "페이지 이름 바꾸기" : "페이지 추가"}
+          initial={dialog.page?.name ?? ""}
+          confirmLabel={dialog.page ? "저장" : "추가"}
+          onSubmit={(name) => {
+            const page = dialog.page;
+            change((b) => (page ? ops.renamePage(b, page.id, name) : ops.addPage(b, name)));
             closeDialog();
           }}
           onClose={closeDialog}
@@ -487,7 +612,18 @@ export default function App() {
       {menu && <ContextMenu menu={menu} onClose={closeMenu} />}
       {toast && (
         <div className={`toast ${toast.kind}`} role={toast.kind === "error" ? "alert" : "status"} onClick={() => setToast(null)}>
-          {toast.text}
+          <span>{toast.text}</span>
+          {toast.action && (
+            <button
+              className="toast-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                toast.action?.run();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
     </div>

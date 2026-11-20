@@ -122,15 +122,16 @@ pub fn sync_visibility(show: impl FnOnce()) {
 }
 
 /// 위젯을 다른 창들 위로 불러온다. 이미 불러와 있으면 도로 내려보낸다. 창을 만든 스레드에서 부른다.
-pub fn toggle_summon() {
+/// 불러왔으면 true, 내려보냈으면 false 를 돌려준다.
+pub fn toggle_summon() -> bool {
     unsafe {
         let widget = hwnd(&WIDGET);
         if widget.is_invalid() {
-            return;
+            return false;
         }
         if SUMMONED.load(Relaxed) {
             dismiss(true);
-            return;
+            return false;
         }
         RETURN_TO.store(GetForegroundWindow().0 as isize, Relaxed);
         SUMMONED.store(true, Relaxed);
@@ -145,6 +146,7 @@ pub fn toggle_summon() {
         let focused = GetForegroundWindow() == widget;
         SUMMON_TOOK_FOCUS.store(focused, Relaxed);
         log(|| format!("summoned (took the focus: {focused}, always on top: {})", is_topmost(widget)));
+        true
     }
 }
 

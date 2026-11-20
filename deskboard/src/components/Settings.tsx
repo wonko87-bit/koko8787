@@ -39,6 +39,7 @@ interface Props {
   onInstallUpdate: () => void;
   onExport: () => void;
   onImport: () => void;
+  onOpenBackups: () => void;
   onResetWindow: () => void;
   onQuit: () => void;
   onClose: () => void;
@@ -46,7 +47,7 @@ interface Props {
 
 export function SettingsPanel(props: Props) {
   const { settings, updateVersion, onChange, onCheckUpdate, onInstallUpdate } = props;
-  const { onExport, onImport, onResetWindow, onQuit, onClose } = props;
+  const { onExport, onImport, onOpenBackups, onResetWindow, onQuit, onClose } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [version, setVersion] = useState("");
   const [fonts, setFonts] = useState<string[]>([]);
@@ -228,6 +229,12 @@ export function SettingsPanel(props: Props) {
         <button onClick={onExport}>내보내기…</button>
         <button onClick={onImport}>가져오기…</button>
       </div>
+      <p className="settings-note">
+        하루 한 번 자동으로 백업해 2주 치를 보관합니다.{" "}
+        <button className="link-button" onClick={onOpenBackups}>
+          백업 폴더 열기
+        </button>
+      </p>
       <div className="settings-actions">
         <button onClick={onResetWindow}>위치·크기 초기화</button>
         <button className="danger" onClick={onQuit}>

@@ -13,6 +13,8 @@ interface Props {
   iconFor: (tile: Tile) => string | null;
   /** 탐색기에서 끌어온 파일이 놓일 카테고리 */
   fileDropCategoryId: string | null;
+  /** 찾는 말. 비어 있지 않으면 맞는 타일만 보인다. */
+  query: string;
   onLaunch: (tile: Tile) => void;
   onTileMenu: (at: { x: number; y: number }, tile: Tile, categoryId: string) => void;
   onCategoryMenu: (at: { x: number; y: number }, category: Category) => void;
@@ -40,6 +42,14 @@ function spotAt(x: number, y: number): DropSpot | null {
   return { categoryId, beforeTileId: next?.dataset.tileId ?? null };
 }
 
+/** 타일 이름이나 대상의 마지막 이름(파일·폴더 이름)에 찾는 말이 들어 있는가. 대소문자는 가리지 않는다. */
+export function matchesTile(tile: Tile, query: string): boolean {
+  const wanted = query.trim().toLowerCase();
+  if (!wanted) return true;
+  const leaf = tile.target.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "";
+  return tile.name.toLowerCase().includes(wanted) || leaf.toLowerCase().includes(wanted);
+}
+
 function TileFace({ tile, icon, glyphSize }: { tile: Tile; icon: string | null; glyphSize: number }) {
   if (tile.icon.startsWith("emoji:")) return <span className="tile-emoji">{tile.icon.slice(6)}</span>;
   if (icon) return <img className="tile-image" src={icon} alt="" draggable={false} />;
@@ -51,7 +61,13 @@ function TileFace({ tile, icon, glyphSize }: { tile: Tile; icon: string | null; 
 }
 
 export function Shortcuts(props: Props) {
-  const { categories, tileSize, iconFor, fileDropCategoryId } = props;
+  const { tileSize, iconFor, fileDropCategoryId, query } = props;
+  const searching = query.trim() !== "";
+  // 찾는 중에는 맞는 타일만, 그런 타일이 있는 카테고리만 남긴다. 맨 처음 것이 Enter 로 열린다.
+  const categories = searching
+    ? props.categories.map((c) => ({ ...c, tiles: c.tiles.filter((t) => matchesTile(t, query)) })).filter((c) => c.tiles.length > 0)
+    : props.categories;
+  const firstMatch = searching ? categories[0]?.tiles[0]?.id : undefined;
   const { onLaunch, onTileMenu, onCategoryMenu, onAddTile, onAddCategory, onMoveTile } = props;
   const [drag, setDrag] = useState<{ id: string; name: string; x: number; y: number } | null>(null);
   const [spot, setSpot] = useState<DropSpot | null>(null);
@@ -134,6 +150,7 @@ export function Shortcuts(props: Props) {
                   "tile",
                   drag?.id === tile.id ? "dragging" : "",
                   spot?.beforeTileId === tile.id && drag?.id !== tile.id ? "drop-before" : "",
+                  tile.id === firstMatch ? "first-match" : "",
                 ].join(" ")}
                 onPointerDown={beginDrag(tile)}
                 onClick={() => launch(tile)}
@@ -149,7 +166,7 @@ export function Shortcuts(props: Props) {
                 <span className="tile-name">{tile.name}</span>
               </div>
             ))}
-            {category.tiles.length === 0 && (
+            {category.tiles.length === 0 && !searching && (
               <button className="tiles-empty" onClick={() => onAddTile(category.id)}>
                 <PlusIcon /> 바로가기 추가
               </button>
@@ -157,9 +174,12 @@ export function Shortcuts(props: Props) {
           </div>
         </section>
       ))}
-      <button className="add-category" onClick={onAddCategory}>
-        <PlusIcon /> 카테고리 추가
-      </button>
+      {searching && categories.length === 0 && <p className="no-match">‘{query.trim()}’ 와 맞는 바로가기가 없습니다</p>}
+      {!searching && (
+        <button className="add-category" onClick={onAddCategory}>
+          <PlusIcon /> 카테고리 추가
+        </button>
+      )}
       {drag && (
         <div className="drag-ghost" style={{ left: drag.x + 12, top: drag.y + 12 }}>
           {drag.name}

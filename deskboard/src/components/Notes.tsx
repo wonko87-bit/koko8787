@@ -1,9 +1,10 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
-import { newBox, newItem } from "../board";
+import { newBox, newItem, snap } from "../board";
 import { INK_HEX } from "../richText";
-import { INK_COLORS, NOTE_COLORS, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "../types";
-import type { InkColor, Note, NoteItem, TextBox } from "../types";
+import { BOX_MIN_W, INK_COLORS, NOTE_COLORS, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "../types";
+import type { InkColor, Note, NoteItem, Page, TextBox } from "../types";
+import { PlusIcon } from "./icons";
 import { ChecklistIcon, CloseIcon, TextIcon } from "./icons";
 import { format, RichText } from "./RichText";
 
@@ -92,6 +93,8 @@ function Checklist({ note, onChange }: { note: Note; onChange: (id: string, patc
 
 /** 글상자가 글을 쓸 수 있으려면 오른쪽에 최소한 이만큼의 폭은 있어야 한다. */
 const BOX_MIN_ROOM = 90;
+/** 다른 글상자의 왼쪽 끝·윗줄과 이만큼 안으로 가까우면 거기에 맞춰 붙인다. */
+const SNAP_WITHIN = 6;
 
 /** 메모의 지금 내용을 보고 바꿀 것을 정한다. 연달아 일어나는 변경(글상자를 비우고 바로 다른 곳을 클릭 등)이 서로를 덮어쓰지 않게 한다. */
 type UpdateNote = (id: string, change: (note: Note) => Partial<Note>) => void;
@@ -105,6 +108,9 @@ function NoteCanvas({ note, focusFirst, onUpdate }: { note: Note; focusFirst: bo
   const [focusId, setFocusId] = useState<string | null>(focusFirst ? (note.boxes[0]?.id ?? null) : null);
   // 끄는 동안에는 화면에서만 움직이고, 손을 뗄 때 한 번 저장한다.
   const [moving, setMoving] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [sizing, setSizing] = useState<{ id: string; w: number } | null>(null);
+  /** 줄을 맞추고 있는 자리. 끄는 동안 가는 선으로 보여 준다. */
+  const [guides, setGuides] = useState<{ x: number | null; y: number | null }>({ x: null, y: null });
   /** 빈 곳에서 누르기 시작했는지. 글상자 안에서 글자를 끌어 선택하다 빈 곳에서 뗀 것은 클릭으로 치지 않는다. */
   const pressedOnEmpty = useRef(false);
 
@@ -123,9 +129,14 @@ function NoteCanvas({ note, focusFirst, onUpdate }: { note: Note; focusFirst: bo
     handle.setPointerCapture(e.pointerId);
     const start = { px: e.clientX, py: e.clientY };
     let latest: { x: number; y: number } | null = null;
+    // 다른 글상자들의 왼쪽 끝과 윗줄에 맞춰 붙는다.
+    const others = note.boxes.filter((b) => b.id !== box.id);
     const move = (ev: PointerEvent) => {
-      latest = { x: Math.max(0, box.x + ev.clientX - start.px), y: Math.max(0, box.y + ev.clientY - start.py) };
+      const x = snap(Math.max(0, box.x + ev.clientX - start.px), others.map((b) => b.x), SNAP_WITHIN);
+      const y = snap(Math.max(0, box.y + ev.clientY - start.py), others.map((b) => b.y), SNAP_WITHIN);
+      latest = { x: x.value, y: y.value };
       setMoving({ id: box.id, ...latest });
+      setGuides({ x: x.guide, y: y.guide });
     };
     const end = () => {
       handle.removeEventListener("pointermove", move);
@@ -134,6 +145,33 @@ function NoteCanvas({ note, focusFirst, onUpdate }: { note: Note; focusFirst: bo
       const to = latest;
       if (to) editBoxes((boxes) => boxes.map((b) => (b.id === box.id ? { ...b, x: Math.round(to.x), y: Math.round(to.y) } : b)));
       setMoving(null);
+      setGuides({ x: null, y: null });
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", end);
+    handle.addEventListener("pointercancel", end);
+  };
+
+  const beginSize = (box: TextBox) => (e: ReactPointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    // 폭을 정한 적이 없으면 지금 보이는 폭에서 시작한다.
+    const startWidth = box.w > 0 ? box.w : (handle.parentElement?.offsetWidth ?? BOX_MIN_W);
+    let latest: number | null = null;
+    const move = (ev: PointerEvent) => {
+      latest = Math.max(BOX_MIN_W, Math.round(startWidth + ev.clientX - startX));
+      setSizing({ id: box.id, w: latest });
+    };
+    const end = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", end);
+      handle.removeEventListener("pointercancel", end);
+      const w = latest;
+      if (w !== null) editBoxes((boxes) => boxes.map((b) => (b.id === box.id ? { ...b, w } : b)));
+      setSizing(null);
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", end);
@@ -151,23 +189,32 @@ function NoteCanvas({ note, focusFirst, onUpdate }: { note: Note; focusFirst: bo
         const el = e.currentTarget;
         const area = el.getBoundingClientRect();
         // 클릭한 자리에 첫 줄이 오게 한다. 오른쪽 끝에 너무 붙으면 글 쓸 폭이 없으니 조금 당겨 놓는다.
+        // 이미 있는 글상자의 왼쪽 끝·윗줄 근처를 눌렀으면 거기에 맞춰 줄을 세운다.
         const box = newBox({
-          x: Math.min(e.clientX - area.left - 4, el.clientWidth - BOX_MIN_ROOM) + el.scrollLeft,
-          y: e.clientY - area.top + el.scrollTop - note.fontSize * 0.8,
+          x: snap(Math.min(e.clientX - area.left - 4, el.clientWidth - BOX_MIN_ROOM) + el.scrollLeft, note.boxes.map((b) => b.x), SNAP_WITHIN).value,
+          y: snap(e.clientY - area.top + el.scrollTop - note.fontSize * 0.8, note.boxes.map((b) => b.y), SNAP_WITHIN).value,
         });
         editBoxes((boxes) => [...boxes, box]);
         setFocusId(box.id);
       }}
     >
       {note.boxes.length === 0 && <p className="canvas-hint">아무 데나 클릭해서 적으세요</p>}
+      {guides.x !== null && <div className="guide guide-x" style={{ left: guides.x }} />}
+      {guides.y !== null && <div className="guide guide-y" style={{ top: guides.y }} />}
       {note.boxes.map((box) => {
         const at = moving?.id === box.id ? moving : box;
+        const width = sizing?.id === box.id ? sizing.w : box.w;
         return (
           <div
             key={box.id}
             className="box"
-            // 메모지 오른쪽 끝에서 줄을 바꾸되, 끝에 붙은 글상자도 최소한의 폭은 갖는다 (넘치면 메모지 안에서 스크롤된다).
-            style={{ left: at.x, top: at.y, maxWidth: `max(${BOX_MIN_ROOM}px, calc(100% - ${at.x}px - 4px))` }}
+            // 폭을 정하지 않은 글상자는 메모지 오른쪽 끝에서 줄을 바꾸되, 끝에 붙어 있어도 최소한의 폭은 갖는다
+            // (넘치면 메모지 안에서 스크롤된다).
+            style={{
+              left: at.x,
+              top: at.y,
+              ...(width > 0 ? { width } : { maxWidth: `max(${BOX_MIN_ROOM}px, calc(100% - ${at.x}px - 4px))` }),
+            }}
           >
             <div className="box-grip" title="끌어서 옮기기" onPointerDown={beginMove(box)} />
             <RichText
@@ -178,6 +225,12 @@ function NoteCanvas({ note, focusFirst, onUpdate }: { note: Note; focusFirst: bo
               }}
               onChange={(rich) => editBoxes((boxes) => boxes.map((b) => (b.id === box.id ? { ...b, ...rich } : b)))}
               onBlur={() => editBoxes((boxes) => boxes.filter((b) => b.id !== box.id || b.text.trim() !== ""))}
+            />
+            <div
+              className="box-width"
+              title="끌어서 폭 조절 (더블클릭하면 내용에 맞춤)"
+              onPointerDown={beginSize(box)}
+              onDoubleClick={() => editBoxes((boxes) => boxes.map((b) => (b.id === box.id ? { ...b, w: 0 } : b)))}
             />
           </div>
         );
@@ -194,10 +247,12 @@ interface CardProps {
   onSwitchKind: (id: string) => void;
   onRemove: (note: Note) => void;
   onRaise: (id: string) => void;
+  /** 띠를 우클릭했을 때 (다른 페이지로 보내기 등) */
+  onBarMenu: (at: { x: number; y: number }, note: Note) => void;
 }
 
 const NoteCard = memo(function NoteCard(props: CardProps) {
-  const { note, focusOnMount, onChange, onUpdate, onSwitchKind, onRemove, onRaise } = props;
+  const { note, focusOnMount, onChange, onUpdate, onSwitchKind, onRemove, onRaise, onBarMenu } = props;
   // 끄는 동안에는 화면에서만 움직이고, 손을 뗄 때 한 번 저장한다.
   const [live, setLive] = useState<Partial<Note> | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -240,7 +295,15 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
       style={{ left: shown.x, top: shown.y, width: shown.w, height: shown.h, zIndex: note.z }}
       onPointerDownCapture={() => onRaise(note.id)}
     >
-      <div className="note-bar" title="끌어서 옮기기" onPointerDown={beginDrag("move")}>
+      <div
+        className="note-bar"
+        title="끌어서 옮기기"
+        onPointerDown={beginDrag("move")}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onBarMenu({ x: e.clientX, y: e.clientY }, note);
+        }}
+      >
         <div className="note-tools">
           <button
             className={`note-tool note-swatch note-${note.color}`}
@@ -335,7 +398,10 @@ const NoteCard = memo(function NoteCard(props: CardProps) {
 });
 
 interface BoardProps {
+  /** 지금 페이지에 붙은 메모들 */
   notes: Note[];
+  pages: Page[];
+  activePage: string;
   /** 방금 만든 메모. 바로 글을 쓸 수 있게 커서를 넣는다. */
   focusId: string | null;
   boardRef: RefObject<HTMLDivElement>;
@@ -345,34 +411,63 @@ interface BoardProps {
   onSwitchKind: (id: string) => void;
   onRemove: (note: Note) => void;
   onRaise: (id: string) => void;
+  onBarMenu: (at: { x: number; y: number }, note: Note) => void;
+  onSelectPage: (id: string) => void;
+  onAddPage: () => void;
+  onPageMenu: (at: { x: number; y: number }, page: Page) => void;
 }
 
 export function NoteBoard(props: BoardProps) {
-  const { notes, focusId, boardRef, onAdd, onChange, onUpdate, onSwitchKind, onRemove, onRaise } = props;
+  const { notes, pages, activePage, focusId, boardRef, onAdd, onChange, onUpdate, onSwitchKind, onRemove, onRaise } = props;
+  const { onBarMenu, onSelectPage, onAddPage, onPageMenu } = props;
   return (
-    <div
-      ref={boardRef}
-      className="notes"
-      onDoubleClick={(e) => {
-        if (e.target !== e.currentTarget) return;
-        const el = e.currentTarget;
-        const box = el.getBoundingClientRect();
-        onAdd({ x: e.clientX - box.left + el.scrollLeft - 24, y: e.clientY - box.top + el.scrollTop - 12 });
-      }}
-    >
-      {notes.length === 0 && <p className="notes-empty">빈 곳을 더블클릭하면 메모가 붙습니다</p>}
-      {notes.map((note) => (
-        <NoteCard
-          key={note.id}
-          note={note}
-          focusOnMount={note.id === focusId}
-          onChange={onChange}
-          onUpdate={onUpdate}
-          onSwitchKind={onSwitchKind}
-          onRemove={onRemove}
-          onRaise={onRaise}
-        />
-      ))}
+    <div className="notes-pane">
+      <div className="pages" role="tablist">
+        {pages.map((page) => (
+          <button
+            key={page.id}
+            role="tab"
+            aria-selected={page.id === activePage}
+            className={page.id === activePage ? "page current" : "page"}
+            title={`${page.name} (우클릭: 이름 바꾸기 · 순서 · 삭제)`}
+            onClick={() => onSelectPage(page.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onPageMenu({ x: e.clientX, y: e.clientY }, page);
+            }}
+          >
+            {page.name}
+          </button>
+        ))}
+        <button className="page-add" title="페이지 추가" aria-label="페이지 추가" onClick={onAddPage}>
+          <PlusIcon />
+        </button>
+      </div>
+      <div
+        ref={boardRef}
+        className="notes"
+        onDoubleClick={(e) => {
+          if (e.target !== e.currentTarget) return;
+          const el = e.currentTarget;
+          const box = el.getBoundingClientRect();
+          onAdd({ x: e.clientX - box.left + el.scrollLeft - 24, y: e.clientY - box.top + el.scrollTop - 12 });
+        }}
+      >
+        {notes.length === 0 && <p className="notes-empty">빈 곳을 더블클릭하면 메모가 붙습니다</p>}
+        {notes.map((note) => (
+          <NoteCard
+            key={note.id}
+            note={note}
+            focusOnMount={note.id === focusId}
+            onChange={onChange}
+            onUpdate={onUpdate}
+            onSwitchKind={onSwitchKind}
+            onRemove={onRemove}
+            onRaise={onRaise}
+            onBarMenu={onBarMenu}
+          />
+        ))}
+      </div>
     </div>
   );
 }

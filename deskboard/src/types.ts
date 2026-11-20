@@ -63,6 +63,17 @@ export interface TextBox extends Rich {
   id: string;
   x: number;
   y: number;
+  /** 사용자가 정한 폭. 0 이면 내용에 맞춘다. */
+  w: number;
+}
+
+/** 폭을 정한 글상자의 가장 좁은 폭 */
+export const BOX_MIN_W = 40;
+
+/** 메모판의 한 페이지(탭). 메모는 저마다 한 페이지에 붙어 있다. */
+export interface Page {
+  id: string;
+  name: string;
 }
 
 /** 글상자를 따로 놓지 않았을 때의 자리 */
@@ -87,6 +98,8 @@ export interface Note {
   marks: Mark[];
   /** 글 메모의 내용. 메모지 안 아무 데나 놓을 수 있는 글상자들이다. */
   boxes: TextBox[];
+  /** 이 메모가 붙어 있는 페이지 */
+  page: string;
 }
 
 export type TileSize = "s" | "m" | "l";
@@ -114,11 +127,15 @@ export interface Settings {
   hotkey: string;
   /** 시작할 때 새 버전이 있는지 확인한다 */
   checkUpdates: boolean;
+  /** 지금 보고 있는 메모판 페이지 */
+  page: string;
 }
 
 export interface Board {
   version: number;
   categories: Category[];
+  /** 메모판의 페이지들. 언제나 하나 이상 있다. */
+  pages: Page[];
   notes: Note[];
   settings: Settings;
 }

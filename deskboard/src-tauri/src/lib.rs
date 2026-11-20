@@ -71,6 +71,15 @@ fn import_board(app: AppHandle, store: State<'_, Store>, path: String) -> Result
     Ok(board)
 }
 
+/// 자동 백업이 쌓이는 폴더의 경로
+#[tauri::command]
+fn backup_dir(store: State<'_, Store>) -> String {
+    let dir = store.backup_dir();
+    // 아직 백업이 한 번도 없었어도 폴더를 열어 볼 수 있게 만들어 둔다.
+    let _ = std::fs::create_dir_all(&dir);
+    dir.to_string_lossy().into_owned()
+}
+
 /// 불러오기 단축키를 바꾼다. 다른 프로그램이 쓰고 있어 등록하지 못하면 예전 단축키로 되돌리고 알린다.
 #[tauri::command]
 fn set_hotkey(app: AppHandle, store: State<'_, Store>, hotkey: String) -> Result<(), String> {
@@ -92,9 +101,17 @@ fn apply_hotkey(app: &AppHandle, hotkey: &str) -> Result<(), String> {
 }
 
 /// 위젯을 다른 창들 위로 불러온다 (이미 불러와 있으면 내려보낸다).
+/// 불러왔을 때는 화면에 알려서, 바로 타자를 쳐 바로가기를 찾을 수 있게 한다.
 fn toggle_summon(app: &AppHandle) {
     #[cfg(windows)]
-    let _ = app.run_on_main_thread(desktop::toggle_summon);
+    {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if desktop::toggle_summon() {
+                let _ = tauri::Emitter::emit(&handle, "summoned", ());
+            }
+        });
+    }
     #[cfg(not(windows))]
     let _ = app;
 }
@@ -244,6 +261,7 @@ pub fn run() {
             list_fonts,
             export_board,
             import_board,
+            backup_dir,
             set_hotkey,
             reset_window,
             quit_app,
