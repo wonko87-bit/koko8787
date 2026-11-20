@@ -82,13 +82,20 @@ Google ──▶ https://wonko87-bit.github.io/koko8787/auth/planner/callback/?c
 TaskBridge용 프로젝트와 **분리된 새 프로젝트**를 권장합니다. 캘린더처럼 민감한 권한이 섞인 프로젝트는 "프로덕션"
 게시에 검수가 필요해서, 테스트 상태로 두면 로그인이 **7일마다 풀립니다**.
 
-1. Google Cloud 콘솔 → 새 프로젝트 `Planner`
-2. API 및 서비스 → 라이브러리 → **Google Drive API** 사용 설정
-3. OAuth 동의 화면 → 외부 → 앱 이름 `Planner`, 범위에 `.../auth/drive.appdata` 추가 → **앱 게시(프로덕션)**
-4. 사용자 인증 정보 → OAuth 클라이언트 ID → **웹 애플리케이션**
-   → 승인된 리디렉션 URI: `https://wonko87-bit.github.io/koko8787/auth/planner/callback/`
-5. GitHub 저장소 → Settings → Secrets and variables → Actions 에
+1. Google Cloud 콘솔 → 맨 위 프로젝트 선택에서 **새 프로젝트** `Planner` 만들고 선택
+2. ☰ 메뉴 → API 및 서비스 → 라이브러리 → **Google Drive API** → 사용
+3. ☰ 메뉴 → **Google 인증 플랫폼**(Google Auth Platform). "아직 구성되지 않음"이 보이면 **시작하기**
+   → 앱 이름 `Planner`, 지원 이메일 → 대상 **외부** → 연락처 이메일 → 정책 동의 → 만들기
+4. Google 인증 플랫폼 → **데이터 액세스** → 범위 추가 또는 삭제 → `drive.appdata` 검색해 체크
+   (목록에 없으면 아래 "직접 범위 추가"에 `https://www.googleapis.com/auth/drive.appdata` 입력) → 업데이트 → 저장
+5. Google 인증 플랫폼 → **대상** → 게시 상태 "테스트 중" 옆 **앱 게시** → 확인 (프로덕션)
+6. Google 인증 플랫폼 → **클라이언트** → 클라이언트 만들기 → 유형 **웹 애플리케이션**
+   → 승인된 리디렉션 URI: `https://wonko87-bit.github.io/koko8787/auth/planner/callback/` → 만들기
+   → 표시되는 클라이언트 ID·보안 비밀 복사
+7. GitHub 저장소 → Settings → Secrets and variables → Actions 에
    `PLANNER_GOOGLE_CLIENT_ID`, `PLANNER_GOOGLE_CLIENT_SECRET` 등록
+
+> 2025년부터 콘솔 메뉴가 바뀌어 예전 "OAuth 동의 화면"은 **Google 인증 플랫폼**의 브랜딩 · 대상 · 데이터 액세스 · 클라이언트로 나뉘었습니다.
 
 ## 6. 단계별 계획
 
