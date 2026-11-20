@@ -41,6 +41,7 @@ npm run preview        # 화면만 한 장짜리 HTML로 묶기 → preview/plan
 - GitHub Actions **Planner Windows Build** 워크플로가 `planner/**` 변경 때마다 테스트를 돌리고 설치 파일 두 종류를 만듭니다.
   - `Planner-windows-local`: 동기화 없음 (회사 PC용)
   - `Planner-windows-sync`: 동기화 포함 (개인용). 저장소 시크릿 `PLANNER_GOOGLE_CLIENT_ID` / `PLANNER_GOOGLE_CLIENT_SECRET`이 있을 때만 만들어짐
+    (Settings → Secrets and variables → **Actions → Repository secrets**에 등록. Environment·Codespaces·Dependabot 시크릿은 이 빌드에서 보이지 않음)
 - 로컬에서 동기화 빌드를 하려면 위 두 환경 변수를 설정한 뒤 `npx tauri build`
 
 ## 설계 결정 (인수인계용)
