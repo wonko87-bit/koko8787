@@ -80,8 +80,17 @@ DAYS = [dt.date(YEAR, 1, 1) + dt.timedelta(n) for n in range(366 if calendar.isl
 NDAYS = len(DAYS)
 
 
+WEEK_START = 6            # 주 시작 요일: 6 = 일요일, 0 = 월요일
+COLS = [(WEEK_START + i) % 7 for i in range(7)]   # 달력 열 순서(요일 번호)
+
+
 def monday(d):
-    return d - dt.timedelta(d.weekday())
+    """d가 속한 주의 시작일 (WEEK_START 기준)"""
+    return d - dt.timedelta((d.weekday() - WEEK_START) % 7)
+
+
+def col_color(i, base):
+    return RED if COLS[i] == 6 else BLUE if COLS[i] == 5 else base
 
 
 WEEKS = sorted({monday(d) for d in DAYS})
@@ -96,7 +105,9 @@ def wkey(d):
 
 
 def wlabel(d):
-    return "W%02d" % monday(d).isocalendar()[1]
+    if WEEK_START == 0:                      # 월요일 시작: ISO 주차
+        return "W%02d" % monday(d).isocalendar()[1]
+    return "W%02d" % ((monday(d) - WEEKS[0]).days // 7 + 1)   # 1월 1일이 든 주가 W01
 
 
 def in_year(d):
@@ -385,14 +396,14 @@ class Painter:
         wkw = 17 if wk else 0
         cw = (w - wkw) / 7.0
         for i in range(7):
-            col = RED if i == 6 else BLUE if i == 5 else SUB
-            self.text(x + wkw + cw * i + cw / 2, y + 7.5, WD_KO[i], "M", 6.2, col, "c")
+            col = col_color(i, SUB)
+            self.text(x + wkw + cw * i + cw / 2, y + 7.5, WD_KO[COLS[i]], "M", 6.2, col, "c")
         y += 10
         self.hl(x, x + w, y, RULE, 0.5)
         first = dt.date(YEAR, m, 1)
         start = monday(first)
         nd = calendar.monthrange(YEAR, m)[1]
-        nrows = (first.weekday() + nd + 6) // 7
+        nrows = ((first - start).days + nd + 6) // 7
         for r in range(nrows):
             mon = start + dt.timedelta(7 * r)
             if wk:
@@ -835,13 +846,13 @@ def page_month(p, m):
     first = dt.date(YEAR, m, 1)
     start = monday(first)
     nd = calendar.monthrange(YEAR, m)[1]
-    nrows = (first.weekday() + nd + 6) // 7
+    nrows = ((first - start).days + nd + 6) // 7
     rh = (BH - hh) / float(nrows)
     p.box(X0, BT, gw, hh, fill=ACC_L)
     p.ctext(X0, BT, wkw, hh, "주", "M", 6.4, ACC_M)
     for i in range(7):
-        col = RED if i == 6 else BLUE if i == 5 else ACC
-        p.ctext(X0 + wkw + i * cw, BT, cw, hh, WD_KO[i], "B", 8, col)
+        col = col_color(i, ACC)
+        p.ctext(X0 + wkw + i * cw, BT, cw, hh, WD_KO[COLS[i]], "B", 8, col)
     for r in range(nrows):
         mon = start + dt.timedelta(7 * r)
         y = BT + hh + r * rh
@@ -1010,7 +1021,6 @@ def page_week(p, mon):
     key = wkey(mon)
     sun = mon + dt.timedelta(6)
     rep = mon if in_year(mon) else sun          # 이 주를 대표하는 2027년 날짜
-    thu = mon + dt.timedelta(3)
     m = rep.month
     lab = wlabel(mon)
     p.start(key, "%s · %s" % (lab, week_range_str(mon)), 1)
@@ -1018,7 +1028,7 @@ def page_week(p, mon):
               (lab, key)], month=m)
     p.text(X0, TOP + 26, lab, "B", 22, INK)
     x = X0 + p.tw(lab, "B", 22) + 10
-    p.text(x, TOP + 17, "WEEKLY PLAN · %d" % thu.year, "SB", 7.2, ACC, cs=1.4)
+    p.text(x, TOP + 17, "WEEKLY PLAN · %d" % (YEAR if WEEK_START else (mon + dt.timedelta(3)).year), "SB", 7.2, ACC, cs=1.4)
     p.text(x, TOP + 30, week_range_str(mon), "SB", 9.6, INK)
     p.hl(X0, X1, TOP + HDR, INK, 1.1)
     i = WEEKS.index(mon)
@@ -1280,12 +1290,12 @@ def page_day(p, d):
         ok = in_year(dd)
         if dd == d:
             p.box(cx + 2, TOP + 4, cw - 4, 32, fill=ACC, r=6)
-            p.text(cx + cw / 2, TOP + 15, WD_KO[i], "M", 6.4, WHITE, "c")
+            p.text(cx + cw / 2, TOP + 15, WD_KO[COLS[i]], "M", 6.4, WHITE, "c")
             p.text(cx + cw / 2, TOP + 29.5, str(dd.day), "B", 11.5, WHITE, "c")
         else:
             c2 = day_color(dd, SUB) if ok else RULE
             p.box(cx + 2, TOP + 4, cw - 4, 32, fill=TINT, r=6)
-            p.text(cx + cw / 2, TOP + 15, WD_KO[i], "M", 6.4, c2 if ok else RULE, "c")
+            p.text(cx + cw / 2, TOP + 15, WD_KO[COLS[i]], "M", 6.4, c2 if ok else RULE, "c")
             p.text(cx + cw / 2, TOP + 29.5, str(dd.day), "SB", 11.5, c2, "c")
         if ok:
             p.link(cx, TOP + 2, cw, 36, dkey(dd))
@@ -1593,7 +1603,7 @@ def build(out, font_dir):
                 page_quarter(p, quarter(d.month))
             page_month(p, d.month)
             page_monthplan(p, d.month)
-        if d.weekday() == 0 or d == DAYS[0]:
+        if d == monday(d) or d == DAYS[0]:
             page_week(p, monday(d))
         page_day(p, d)
     p.outline.append((0, "도구 · 프로젝트", "anniv"))
