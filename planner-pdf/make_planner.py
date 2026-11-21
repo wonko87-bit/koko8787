@@ -1681,10 +1681,8 @@ def page_note(p, no):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-def build(year, out, font_dir):
-    configure(year)
-    tmp = out + ".tmp"
-    p = Painter(tmp, font_dir)
+def compose(p):
+    """가로형 페이지 순서"""
     page_cover(p)
     page_index(p)
     page_year(p)
@@ -1713,6 +1711,13 @@ def build(year, out, font_dir):
     page_notes_index(p)
     for no in range(1, 31):
         page_note(p, no)
+
+
+def build(year, out, font_dir, compose_fn=None):
+    configure(year)
+    tmp = out + ".tmp"
+    p = Painter(tmp, font_dir)
+    (compose_fn or compose)(p)
     p.c.save()
 
     # ── 링크·목차 후처리: 뷰어 호환성이 가장 넓은 '명시적 페이지 목적지'로 기록 ──
