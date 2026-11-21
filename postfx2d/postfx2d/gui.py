@@ -29,6 +29,32 @@ ACCENT = "#ffb020"
 ACCENT2 = "#e8364f"
 LINE = "#323845"
 
+# ---------------------------------------------------------------- 해상도 대응
+# UI 배율: Windows 디스플레이 배율(DPI)을 자동으로 따르고, 설정에서 직접 지정할 수도 있다.
+# 1080p 100% → 1.0,  1440p 125% → 1.25,  4K 150% → 1.5,  4K 200% → 2.0
+UI = 1.0
+UI_CHOICES = ["자동", "100%", "125%", "150%", "175%", "200%"]
+
+
+def S(v):
+    """설계 기준(96 DPI) 픽셀 → 현재 화면 픽셀."""
+    return int(round(v * UI))
+
+
+def detect_scale(root: tk.Tk) -> float:
+    pref = settings.load().get("ui_scale", "자동")
+    if pref != "자동":
+        try:
+            return int(pref.rstrip("%")) / 100
+        except ValueError:
+            pass
+    try:
+        dpi = root.winfo_fpixels("1i")
+    except tk.TclError:
+        dpi = 96.0
+    return min(max(round(dpi / 96 * 4) / 4, 1.0), 3.0)     # 0.25 단위로 반올림
+
+
 CLASS_COLORS = {"W1": "#ff8c00", "W2": "#28aa3c", "W3": "#1e5ae6",
                 "W4": "#963cc8", "GLOBAL": "#e61414"}
 
@@ -36,9 +62,15 @@ CLASS_COLORS = {"W1": "#ff8c00", "W2": "#28aa3c", "W3": "#1e5ae6",
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+        global UI
+        UI = detect_scale(self)
+        self.tk.call("tk", "scaling", UI * 96 / 72)      # 글꼴(pt)도 같은 배율로
         self.title(f"{APP}  ·  2D 해석결과 후처리")
-        self.geometry("1360x820")
-        self.minsize(1000, 640)
+        # 창 크기: 기준 1360x820 을 배율만큼 키우되, 화면의 90% 를 넘지 않게 + 가운데 배치
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        w, h = min(S(1360), int(sw * 0.9)), min(S(820), int(sh * 0.88))
+        self.geometry(f"{w}x{h}+{(sw - w) // 2}+{max((sh - h) // 2 - S(20), 0)}")
+        self.minsize(min(S(1000), w), min(S(640), h))
         self.configure(bg=BG)
         self.src: np.ndarray | None = None
         self.result: core.Result | None = None
@@ -87,7 +119,7 @@ class App(tk.Tk):
         st.configure("Title.TLabel", background=BG, foreground=FG, font=("Segoe UI Semibold", 15))
         st.configure("Sub.TLabel", background=BG, foreground=MUTED, font=("Segoe UI", 9))
         st.configure("TButton", background=CARD, foreground=FG, borderwidth=0,
-                     padding=(12, 7), focusthickness=0)
+                     padding=(S(12), S(7)), focusthickness=0)
         st.map("TButton", background=[("active", "#323946"), ("disabled", PANEL)],
                foreground=[("disabled", MUTED)])
         st.configure("Accent.TButton", background=ACCENT, foreground="#111",
@@ -100,53 +132,66 @@ class App(tk.Tk):
                      background=CARD, borderwidth=0)
         st.configure("Horizontal.TScale", background=PANEL, troughcolor=CARD)
         st.configure("Treeview", background=CARD, fieldbackground=CARD, foreground=FG,
-                     rowheight=26, borderwidth=0)
+                     rowheight=S(26), borderwidth=0)
         st.configure("Treeview.Heading", background=PANEL, foreground=MUTED,
                      font=("Segoe UI Semibold", 9), borderwidth=0)
         st.map("Treeview", background=[("selected", "#3a4252")])
         st.configure("TNotebook", background=PANEL, borderwidth=0)
-        st.configure("TNotebook.Tab", background=PANEL, foreground=MUTED, padding=(14, 6))
+        st.configure("TNotebook.Tab", background=PANEL, foreground=MUTED, padding=(S(14), S(6)))
         st.map("TNotebook.Tab", background=[("selected", CARD)], foreground=[("selected", FG)])
         st.configure("TEntry", fieldbackground=CARD, foreground=FG, insertcolor=FG, borderwidth=0)
         st.configure("TCheckbutton", background=PANEL, foreground=FG, indicatorcolor=CARD)
         st.map("TCheckbutton", background=[("active", PANEL)],
                indicatorcolor=[("selected", ACCENT)])
+        # 고해상도에서 작게 남는 고정 크기 요소들도 배율 적용
+        st.configure("TCombobox", arrowsize=S(14), padding=S(3))
+        st.configure("TSpinbox", arrowsize=S(12), padding=S(2))
+        st.configure("TCheckbutton", indicatorsize=S(13), indicatormargin=S(3))
+        st.configure("Vertical.TScrollbar", arrowsize=S(14), width=S(14))
+        st.configure("Horizontal.TScale", sliderlength=S(30), sliderthickness=S(15))
+        st.configure("Horizontal.TProgressbar", thickness=S(14))
         st.configure("Horizontal.TProgressbar", background=ACCENT, troughcolor=CARD, borderwidth=0)
 
     # ------------------------------------------------------------ layout
     def _build(self):
-        top = ttk.Frame(self, style="Bg.TFrame", padding=(18, 12, 18, 8))
+        top = ttk.Frame(self, style="Bg.TFrame", padding=(S(18), S(12), S(18), S(8)))
         top.pack(fill="x")
-        dot = tk.Canvas(top, width=22, height=22, bg=BG, highlightthickness=0)
-        dot.create_oval(2, 2, 20, 20, fill=ACCENT, outline="")
-        dot.create_oval(8, 8, 14, 14, fill=ACCENT2, outline="")
-        dot.pack(side="left", padx=(0, 10))
+        dot = tk.Canvas(top, width=S(22), height=S(22), bg=BG, highlightthickness=0)
+        dot.create_oval(S(2), S(2), S(20), S(20), fill=ACCENT, outline="")
+        dot.create_oval(S(8), S(8), S(14), S(14), fill=ACCENT2, outline="")
+        dot.pack(side="left", padx=(S(0), S(10)))
         ttk.Label(top, text=APP, style="Title.TLabel").pack(side="left")
         ttk.Label(top, text=f"  v{VERSION}  ·  2D 해석결과 이미지 후처리",
-                  style="Sub.TLabel").pack(side="left", pady=(5, 0))
+                  style="Sub.TLabel").pack(side="left", pady=(S(5), S(0)))
+        self.ui_choice = ttk.Combobox(top, state="readonly", width=6, values=UI_CHOICES)
+        self.ui_choice.set(settings.load().get("ui_scale", "자동"))
+        self.ui_choice.pack(side="right")
+        self.ui_choice.bind("<<ComboboxSelected>>", lambda e: self._on_ui_scale())
+        ttk.Label(top, text=f"UI 크기 (현재 {UI * 100:.0f}%)", style="Sub.TLabel").pack(
+            side="right", padx=(0, S(6)))
 
-        body = ttk.Frame(self, style="Bg.TFrame", padding=(18, 0, 18, 0))
+        body = ttk.Frame(self, style="Bg.TFrame", padding=(S(18), S(0), S(18), S(0)))
         body.pack(fill="both", expand=True)
 
         # --- 왼쪽 사이드바
-        side = ttk.Frame(body, padding=16, width=290)
+        side = ttk.Frame(body, padding=S(16), width=S(290))
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
 
         ttk.Label(side, text="입력", style="H.TLabel").pack(anchor="w")
         ttk.Button(side, text="📋  클립보드 붙여넣기  (Ctrl+V)",
-                   command=self.paste).pack(fill="x", pady=(8, 4))
+                   command=self.paste).pack(fill="x", pady=(S(8), S(4)))
         ttk.Button(side, text="📂  이미지 파일 열기  (Ctrl+O)",
                    command=self.open_file).pack(fill="x")
 
-        ttk.Label(side, text="모드", style="H.TLabel").pack(anchor="w", pady=(20, 6))
+        ttk.Label(side, text="모드", style="H.TLabel").pack(anchor="w", pady=(S(20), S(6)))
         self.mode = ttk.Combobox(side, state="readonly",
                                  values=["1. 최소안전율부위", "2. 전계 값 읽기 (Rainbow map)"])
         self.mode.current(0)
         self.mode.pack(fill="x")
         self.mode.bind("<<ComboboxSelected>>", lambda e: self._on_mode())
 
-        ttk.Label(side, text="옵션", style="H.TLabel").pack(anchor="w", pady=(20, 6))
+        ttk.Label(side, text="옵션", style="H.TLabel").pack(anchor="w", pady=(S(20), S(6)))
         self.opt_host = ttk.Frame(side)
         self.opt_host.pack(fill="x")
         self.opt1 = ttk.Frame(self.opt_host)
@@ -166,17 +211,17 @@ class App(tk.Tk):
 
         self.btn_run = ttk.Button(side, text="▶  분석 실행", style="Accent.TButton",
                                   command=self.run)
-        self.btn_run.pack(fill="x", pady=(22, 6))
+        self.btn_run.pack(fill="x", pady=(S(22), S(6)))
         self.btn_redraw = ttk.Button(side, text="↻  표 수정값으로 다시 그리기",
                                      command=self.redraw)
         self.btn_redraw.pack(fill="x")
         self.progress = ttk.Progressbar(side, mode="indeterminate")
-        self.progress.pack(fill="x", pady=(10, 0))
+        self.progress.pack(fill="x", pady=(S(10), S(0)))
         side = side_main
 
-        ttk.Label(side, text="출력", style="H.TLabel").pack(anchor="w", pady=(20, 6))
+        ttk.Label(side, text="출력", style="H.TLabel").pack(anchor="w", pady=(S(20), S(6)))
         ttk.Button(side, text="💾  PNG + CSV 저장  (Ctrl+S)",
-                   command=self.save).pack(fill="x", pady=(0, 4))
+                   command=self.save).pack(fill="x", pady=(S(0), S(4)))
         ttk.Button(side, text="📄  결과 이미지 클립보드 복사",
                    command=self.copy_result).pack(fill="x")
 
@@ -185,32 +230,32 @@ class App(tk.Tk):
         self.legend1 = legend
         ttk.Label(legend, text="점 색상 범례", style="Muted.TLabel").pack(anchor="w")
         for k, c in CLASS_COLORS.items():
-            row = ttk.Frame(legend); row.pack(anchor="w", pady=1)
-            cv = tk.Canvas(row, width=12, height=12, bg=PANEL, highlightthickness=0)
-            cv.create_oval(1, 1, 11, 11, fill=c, outline="")
-            cv.pack(side="left", padx=(0, 6))
+            row = ttk.Frame(legend); row.pack(anchor="w", pady=S(1))
+            cv = tk.Canvas(row, width=S(12), height=S(12), bg=PANEL, highlightthickness=0)
+            cv.create_oval(S(1), S(1), S(11), S(11), fill=c, outline="")
+            cv.pack(side="left", padx=(S(0), S(6)))
             ttk.Label(row, text=core.POINT_CLASSES[k]["label"],
                       style="Muted.TLabel").pack(side="left")
 
         # --- 가운데: 뷰어 + 테이블
         main = ttk.Frame(body, style="Bg.TFrame")
-        main.pack(side="left", fill="both", expand=True, padx=(14, 0))
+        main.pack(side="left", fill="both", expand=True, padx=(S(14), S(0)))
 
-        viewer = ttk.Frame(main, padding=1)
+        viewer = ttk.Frame(main, padding=S(1))
         viewer.pack(fill="both", expand=True)
-        bar = ttk.Frame(viewer, padding=(12, 8))
+        bar = ttk.Frame(viewer, padding=(S(12), S(8)))
         bar.pack(fill="x")
         self.lbl_view = ttk.Label(bar, text="미리보기", style="H.TLabel")
         self.lbl_view.pack(side="left")
         zbar = ttk.Frame(bar)
-        zbar.pack(side="left", padx=(18, 0))
+        zbar.pack(side="left", padx=(S(18), S(0)))
         ttk.Button(zbar, text="－", width=3, command=lambda: self.zoom_by(0.8)).pack(side="left")
         self.lbl_zoom = ttk.Label(zbar, text="맞춤", width=6, anchor="center",
                                   style="Muted.TLabel")
-        self.lbl_zoom.pack(side="left", padx=2)
+        self.lbl_zoom.pack(side="left", padx=S(2))
         ttk.Button(zbar, text="＋", width=3, command=lambda: self.zoom_by(1.25)).pack(side="left")
-        ttk.Button(zbar, text="맞춤 (Ctrl+0)", command=self.zoom_fit).pack(side="left", padx=(4, 0))
-        ttk.Label(zbar, text="화질", style="Muted.TLabel").pack(side="left", padx=(14, 4))
+        ttk.Button(zbar, text="맞춤 (Ctrl+0)", command=self.zoom_fit).pack(side="left", padx=(S(4), S(0)))
+        ttk.Label(zbar, text="화질", style="Muted.TLabel").pack(side="left", padx=(S(14), S(4)))
         self.quality = ttk.Combobox(zbar, state="readonly", width=16, values=enhance.OPTIONS)
         self.quality.current(0)
         self.quality.pack(side="left")
@@ -234,8 +279,8 @@ class App(tk.Tk):
         self.canvas.bind("<B2-Motion>", self._pan_move)
         self.canvas.bind("<ButtonRelease-2>", lambda e: self._pan_end())
 
-        tables = self.tables = ttk.Notebook(main, height=210)
-        tables.pack(fill="x", pady=(12, 0))
+        tables = self.tables = ttk.Notebook(main, height=S(210))
+        tables.pack(fill="x", pady=(S(12), S(0)))
         self.tree_sum = self._tree(tables, ["그룹", "점 개수", "최소 안전율", "구분",
                                             "하이라이트", "X(px)", "Y(px)", "인덱스"])
         tables.add(self.tree_sum.master, text="  요약 (그룹별 최소)  ")
@@ -247,7 +292,7 @@ class App(tk.Tk):
         tables.add(self.tree_fld.master, text="  전계 측정점  (우클릭: 삭제)  ")
         tables.tab(2, state="hidden")
 
-        self.status = ttk.Label(self, style="Sub.TLabel", padding=(20, 6))
+        self.status = ttk.Label(self, style="Sub.TLabel", padding=(S(20), S(6)))
         self.status.pack(fill="x")
 
     def _build_opt2(self, f):
@@ -256,37 +301,37 @@ class App(tk.Tk):
         self.v_unit = tk.StringVar(value="V/m")
         for text, var in (("최소값 (컬러맵 아래 끝)", self.v_vmin),
                           ("최대값 (컬러맵 위 끝)", self.v_vmax), ("단위", self.v_unit)):
-            row = ttk.Frame(f); row.pack(fill="x", pady=3)
+            row = ttk.Frame(f); row.pack(fill="x", pady=S(3))
             ttk.Label(row, text=text).pack(side="left")
             ttk.Entry(row, textvariable=var, width=10, justify="right").pack(side="right")
             var.trace_add("write", lambda *_: self._refresh_field())
-        ttk.Label(f, text="컬러맵", style="Muted.TLabel").pack(anchor="w", pady=(8, 2))
+        ttk.Label(f, text="컬러맵", style="Muted.TLabel").pack(anchor="w", pady=(S(8), S(2)))
         self.cmap = ttk.Combobox(f, state="readonly", values=fmap.COLORMAPS)
         self.cmap.current(0)
         self.cmap.pack(fill="x")
         self.cmap.bind("<<ComboboxSelected>>", lambda e: self._on_cmap())
-        self.lut_preview = tk.Canvas(f, height=14, bg=PANEL, highlightthickness=0)
-        self.lut_preview.pack(fill="x", pady=(6, 0))
+        self.lut_preview = tk.Canvas(f, height=S(14), bg=PANEL, highlightthickness=0)
+        self.lut_preview.pack(fill="x", pady=(S(6), S(0)))
         self.lut_preview.bind("<Configure>", lambda e: self._draw_lut_preview())
         self.lbl_legend = ttk.Label(f, text="", style="Muted.TLabel")
         self.lbl_legend.pack(anchor="w")
-        row = ttk.Frame(f); row.pack(fill="x", pady=(4, 0))
+        row = ttk.Frame(f); row.pack(fill="x", pady=(S(4), S(0)))
         self.btn_legend = ttk.Button(row, text="🎯 범례 지정", command=self.start_legend_pick)
-        self.btn_legend.pack(side="left", fill="x", expand=True, padx=(0, 3))
+        self.btn_legend.pack(side="left", fill="x", expand=True, padx=(S(0), S(3)))
         ttk.Button(row, text="⟲ 범례 초기화", command=self.reset_legend).pack(
-            side="left", fill="x", expand=True, padx=(3, 0))
+            side="left", fill="x", expand=True, padx=(S(3), S(0)))
         self.v_log = tk.BooleanVar(value=False)
         ttk.Checkbutton(f, text="로그 스케일", variable=self.v_log,
-                        command=self._refresh_field).pack(anchor="w", pady=(8, 0))
-        row = ttk.Frame(f); row.pack(fill="x", pady=(10, 0))
+                        command=self._refresh_field).pack(anchor="w", pady=(S(8), S(0)))
+        row = ttk.Frame(f); row.pack(fill="x", pady=(S(10), S(0)))
         ttk.Button(row, text="↶ 되돌리기", command=self.undo_reading).pack(
-            side="left", fill="x", expand=True, padx=(0, 3))
+            side="left", fill="x", expand=True, padx=(S(0), S(3)))
         ttk.Button(row, text="✕ 모두 지우기", command=self.clear_readings).pack(
-            side="left", fill="x", expand=True, padx=(3, 0))
-        ttk.Label(f, style="Muted.TLabel", justify="left", wraplength=250, text=(
+            side="left", fill="x", expand=True, padx=(S(3), S(0)))
+        ttk.Label(f, style="Muted.TLabel", justify="left", wraplength=S(250), text=(
             "클릭: 측정 · 우클릭: 삭제 · 휠: 확대/축소 · 드래그: 이동\n"
             "정확도↑: 범례 지정 → 컬러바 최소 끝→최대 끝 드래그"
-        )).pack(anchor="w", pady=(10, 0))
+        )).pack(anchor="w", pady=(S(10), S(0)))
 
     # ------------------------------------------------------------ mode 2
     def is_field(self):
@@ -406,11 +451,11 @@ class App(tk.Tk):
         lut = self._current_lut()
         w = max(c.winfo_width(), 10)
         if lut is None:
-            c.create_text(w / 2, 7, text="범례 미지정", fill=MUTED, font=("Segoe UI", 8))
+            c.create_text(w / 2, S(7), text="범례 미지정", fill=MUTED, font=("Segoe UI", 8))
             return
         for i in range(w):
             b, g, r = lut[int(i / (w - 1) * (len(lut) - 1))]
-            c.create_line(i, 0, i, 14, fill=f"#{r:02x}{g:02x}{b:02x}")
+            c.create_line(i, 0, i, S(14), fill=f"#{r:02x}{g:02x}{b:02x}")
 
     def _img_xy(self, ex, ey):
         sc, ox, oy = self._view
@@ -504,8 +549,8 @@ class App(tk.Tk):
             return
         if self._drag:
             self.canvas.delete("drag")
-            self.canvas.create_line(*self._drag, e.x, e.y, fill="#ffffff", width=3, tags="drag")
-            self.canvas.create_line(*self._drag, e.x, e.y, fill=ACCENT, width=1,
+            self.canvas.create_line(*self._drag, e.x, e.y, fill="#ffffff", width=S(3), tags="drag")
+            self.canvas.create_line(*self._drag, e.x, e.y, fill=ACCENT, width=S(1),
                                     dash=(4, 2), tags="drag")
 
     def _on_release(self, e):
@@ -540,7 +585,7 @@ class App(tk.Tk):
         k = min(range(len(self.readings)),
                 key=lambda i: (self.readings[i].x - xy[0]) ** 2 + (self.readings[i].y - xy[1]) ** 2)
         r = self.readings[k]
-        if ((r.x - xy[0]) ** 2 + (r.y - xy[1]) ** 2) ** 0.5 * sc < 20:
+        if ((r.x - xy[0]) ** 2 + (r.y - xy[1]) ** 2) ** 0.5 * sc < S(20):
             self.readings.pop(k)
             self._fill_field_table()
             self._show()
@@ -621,12 +666,12 @@ class App(tk.Tk):
         return self._enhanced(self.result.image)[0]
 
     def _spin(self, parent, text, var, lo, hi):
-        f = ttk.Frame(parent); f.pack(fill="x", pady=3)
+        f = ttk.Frame(parent); f.pack(fill="x", pady=S(3))
         ttk.Label(f, text=text).pack(side="left")
         ttk.Spinbox(f, from_=lo, to=hi, textvariable=var, width=6).pack(side="right")
 
     def _slider(self, parent, text, var, lo, hi):
-        f = ttk.Frame(parent); f.pack(fill="x", pady=3)
+        f = ttk.Frame(parent); f.pack(fill="x", pady=S(3))
         head = ttk.Frame(f); head.pack(fill="x")
         ttk.Label(head, text=text).pack(side="left")
         val = ttk.Label(head, text=f"{var.get():.2f}", style="Muted.TLabel")
@@ -802,9 +847,9 @@ class App(tk.Tk):
         self.canvas.delete("all")
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         if self.src is None:
-            self.canvas.create_text(cw / 2, ch / 2 - 12, fill=MUTED, font=("Segoe UI", 13),
+            self.canvas.create_text(cw / 2, ch / 2 - S(12), fill=MUTED, font=("Segoe UI", 13),
                                     text="Ctrl+V 로 해석결과 캡처를 붙여넣으세요")
-            self.canvas.create_text(cw / 2, ch / 2 + 16, fill="#5d6574", font=("Segoe UI", 10),
+            self.canvas.create_text(cw / 2, ch / 2 + S(16), fill="#5d6574", font=("Segoe UI", 10),
                                     text="또는 Ctrl+O 로 이미지 파일 열기")
             return
         if self.is_field():
@@ -822,9 +867,10 @@ class App(tk.Tk):
         oy = ch / 2 - h * sc / 2 + self._pan[1]
         # 이미지가 화면 밖으로 완전히 벗어나지 않도록 이동 범위 제한
         if self._zoom > 1.0:
-            ax, ay = cw - w * sc - 40, ch - h * sc - 40
-            ox = min(max(ox, min(ax, 40)), max(ax, 40))
-            oy = min(max(oy, min(ay, 40)), max(ay, 40))
+            m = S(40)
+            ax, ay = cw - w * sc - m, ch - h * sc - m
+            ox = min(max(ox, min(ax, m)), max(ax, m))
+            oy = min(max(oy, min(ay, m)), max(ay, m))
             self._pan = [ox - (cw / 2 - w * sc / 2), oy - (ch / 2 - h * sc / 2)]
         # 보이는 부분만 잘라서 확대 (큰 배율에서도 빠르게)
         ix0, iy0 = max(int(-ox / sc), 0), max(int(-oy / sc), 0)
@@ -855,13 +901,14 @@ class App(tk.Tk):
         for k, r in enumerate(self.readings, 1):
             x, y = ox + r.x * sc, oy + r.y * sc
             col = "#111111" if r.reliable else "#e8364f"
-            self.canvas.create_oval(x - 6, y - 6, x + 6, y + 6, outline="#ffffff", width=3)
-            self.canvas.create_oval(x - 6, y - 6, x + 6, y + 6, outline=col, width=1)
+            r6 = S(6)
+            self.canvas.create_oval(x - r6, y - r6, x + r6, y + r6, outline="#ffffff", width=S(3))
+            self.canvas.create_oval(x - r6, y - r6, x + r6, y + r6, outline=col, width=S(1))
             text = f"#{k}  {fmap.fmt(r.value)} {unit}" + ("" if r.reliable else " ?")
-            t = self.canvas.create_text(x + 12, y - 12, text=text, anchor="w",
+            t = self.canvas.create_text(x + S(12), y - S(12), text=text, anchor="w",
                                         fill=col, font=("Segoe UI Semibold", 9))
             bx = self.canvas.bbox(t)
-            bg = self.canvas.create_rectangle(bx[0] - 4, bx[1] - 2, bx[2] + 4, bx[3] + 2,
+            bg = self.canvas.create_rectangle(bx[0] - S(4), bx[1] - S(2), bx[2] + S(4), bx[3] + S(2),
                                               fill="#ffffff", outline=col)
             self.canvas.tag_raise(t, bg)
 
@@ -905,6 +952,12 @@ class App(tk.Tk):
 
     def set_status(self, text):
         self.status.configure(text=text)
+
+    def _on_ui_scale(self):
+        choice = self.ui_choice.get()
+        settings.update(ui_scale=choice)
+        messagebox.showinfo(APP, f"UI 크기를 '{choice}' 로 저장했습니다.\n"
+                                 "프로그램을 다시 시작하면 적용됩니다.")
 
 
 def main():
