@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""2027 하이퍼링크 플래너 PDF 생성기 (삼성노트 · 갤럭시탭 가로 화면용).
+"""하이퍼링크 플래너 PDF 생성기 (삼성노트 · 갤럭시탭 가로 화면용).
 
-    python3 make_planner.py [출력.pdf]
+    python3 make_planner.py [연도 ...]      # 생략하면 2027–2030 전부
+    → <연도>-planner.pdf
 
 필요: reportlab, pikepdf, korean_lunar_calendar
 폰트: Pretendard TTF 4종(Regular/Medium/SemiBold/Bold)을 ./fonts 또는
@@ -19,7 +20,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-YEAR = 2027
 
 # ── 페이지 규격 (갤럭시탭 울트라 가로 16:10, 화면 폭에 맞추면 1pt ≈ 실제 1pt) ──
 W, H = 900, 540
@@ -39,10 +39,13 @@ SUB = HexColor("#6B7280")
 FAINT = HexColor("#A3A9B3")
 RULE = HexColor("#C3C8D1")
 RULE_L = HexColor("#E1E4EA")
-ACC = HexColor("#29476B")
-ACC_M = HexColor("#8FA5C0")
-ACC_L = HexColor("#EAEFF6")
-TINT = HexColor("#F5F6F9")
+# 연도별 테마: (강조색, 중간, 옅은 배경, 면 배경, 피라미드 위 3단)
+THEMES = {
+    2027: ("네이비", "#29476B", "#8FA5C0", "#EAEFF6", "#F5F6F9", ("#DCE5F0", "#B9C9DD", "#6E8BAE")),
+    2028: ("포레스트", "#2C5B4B", "#93B4A7", "#E7F1EC", "#F4F7F5", ("#DAE9E2", "#B3CFC4", "#6B9987")),
+    2029: ("플럼", "#58407A", "#AD9DC5", "#F0ECF6", "#F7F6F9", ("#E4DDEF", "#C7B9DD", "#8F79B1")),
+    2030: ("모카", "#6A4A36", "#BFA895", "#F4EEE8", "#F8F6F3", ("#EADFD5", "#D6C2B1", "#A68569")),
+}
 RED = HexColor("#C0392B")
 BLUE = HexColor("#2F6DB5")
 WHITE = HexColor("#FFFFFF")
@@ -53,8 +56,10 @@ WD_EN = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SU
 MON_EN = ["", "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY",
           "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"]
 
-# ── 2027년 공휴일 (우주항공청 「2027년 월력요항」 기준, 대체공휴일 7일) ──
-HOLIDAYS = {
+# ── 공휴일 ──
+# 2027년은 우주항공청 「2027년 월력요항」(대체공휴일 7일)과 대조해 검증한다.
+# 2028년 이후는 월력요항 발표 전이므로 2026년 11월 현행 규정으로 계산한 예정값이다.
+OFFICIAL_HOLIDAYS = {2027: {
     (1, 1): "신정",
     (2, 6): "설날 연휴", (2, 7): "설날", (2, 8): "설날 연휴", (2, 9): "대체공휴일",
     (3, 1): "삼일절",
@@ -65,19 +70,88 @@ HOLIDAYS = {
     (9, 14): "추석 연휴", (9, 15): "추석", (9, 16): "추석 연휴",
     (10, 3): "개천절", (10, 4): "대체공휴일", (10, 9): "한글날", (10, 11): "대체공휴일",
     (12, 25): "성탄절", (12, 27): "대체공휴일",
-}
-# 24절기 (태양 황경 계산값, 한국 표준시 기준)
-TERMS = {(1, 5): '소한', (1, 20): '대한', (2, 4): '입춘', (2, 19): '우수', (3, 6): '경칩',
-         (3, 21): '춘분', (4, 5): '청명', (4, 20): '곡우', (5, 6): '입하', (5, 21): '소만',
-         (6, 6): '망종', (6, 21): '하지', (7, 7): '소서', (7, 23): '대서', (8, 8): '입추',
-         (8, 23): '처서', (9, 8): '백로', (9, 23): '추분', (10, 8): '한로', (10, 24): '상강',
-         (11, 8): '입동', (11, 22): '소설', (12, 7): '대설', (12, 22): '동지'}
-# 기념일(쉬는 날 아님)
-MEMOS = {(2, 21): "정월대보름", (4, 5): "식목일", (5, 8): "어버이날", (5, 15): "스승의날",
-         (6, 9): "단오", (10, 1): "국군의날"}
+}}
+FIXED_HOLIDAYS = {(1, 1): "신정", (3, 1): "삼일절", (5, 1): "노동절", (5, 5): "어린이날", (6, 6): "현충일",
+                  (7, 17): "제헌절", (8, 15): "광복절", (10, 3): "개천절", (10, 9): "한글날", (12, 25): "성탄절"}
+# 임기만료 선거일(공직선거법 제34조로 계산한 법정 공휴일)
+ELECTIONS = {2028: {(4, 12): "국회의원선거"}, 2030: {(3, 27): "대통령선거", (6, 12): "지방선거"}}
+# 토·일·다른 공휴일과 겹치면 대체공휴일이 붙는 날 (설·추석 연휴는 일요일·다른 공휴일과 겹칠 때만)
+SUB_WEEKEND = {"삼일절", "노동절", "어린이날", "부처님오신날", "제헌절", "광복절", "개천절", "한글날", "성탄절"}
 
-DAYS = [dt.date(YEAR, 1, 1) + dt.timedelta(n) for n in range(366 if calendar.isleap(YEAR) else 365)]
-NDAYS = len(DAYS)
+
+def lunar_to_solar(y, m, d):
+    k = KoreanLunarCalendar()
+    k.setLunarDate(y, m, d, False)
+    return dt.date.fromisoformat(k.SolarIsoFormat())
+
+
+def compute_holidays(year):
+    one = dt.timedelta(1)
+    names = {}
+
+    def add(d, n):
+        if d.year == year:
+            names.setdefault(d, []).append(n)
+
+    for (m, d), n in FIXED_HOLIDAYS.items():
+        add(dt.date(year, m, d), n)
+    for lm, ld, n in ((1, 1, "설날"), (8, 15, "추석")):
+        base = lunar_to_solar(year, lm, ld)
+        add(base - one, n + " 연휴")
+        add(base, n)
+        add(base + one, n + " 연휴")
+    add(lunar_to_solar(year, 4, 8), "부처님오신날")
+    for (m, d), n in ELECTIONS.get(year, {}).items():
+        add(dt.date(year, m, d), n)
+    subs = set()
+    for d in sorted(names):
+        ns = names[d]
+        if any(n in SUB_WEEKEND for n in ns):
+            need = d.weekday() >= 5 or len(ns) > 1
+        elif any(n.startswith(("설날", "추석")) for n in ns):
+            need = d.weekday() == 6 or len(ns) > 1
+        else:
+            need = False
+        if need:
+            x = d + one
+            while x.weekday() >= 5 or x in names or x in subs:
+                x += one
+            subs.add(x)
+    out = {(d.month, d.day): " · ".join(ns) for d, ns in names.items()}
+    out.update({(d.month, d.day): "대체공휴일" for d in subs if d.year == year})
+    return out
+
+
+# 24절기 (태양 황경 계산값, 한국 표준시 기준)
+TERMS_BY_YEAR = {
+    2027: {(1, 5): '소한', (1, 20): '대한', (2, 4): '입춘', (2, 19): '우수', (3, 6): '경칩', (3, 21): '춘분', (4, 5): '청명', (4, 20): '곡우', (5, 6): '입하', (5, 21): '소만', (6, 6): '망종', (6, 21): '하지', (7, 7): '소서', (7, 23): '대서', (8, 8): '입추', (8, 23): '처서', (9, 8): '백로', (9, 23): '추분', (10, 8): '한로', (10, 24): '상강', (11, 8): '입동', (11, 22): '소설', (12, 7): '대설', (12, 22): '동지'},
+    2028: {(1, 6): '소한', (1, 20): '대한', (2, 4): '입춘', (2, 19): '우수', (3, 5): '경칩', (3, 20): '춘분', (4, 4): '청명', (4, 19): '곡우', (5, 5): '입하', (5, 20): '소만', (6, 5): '망종', (6, 21): '하지', (7, 6): '소서', (7, 22): '대서', (8, 7): '입추', (8, 22): '처서', (9, 7): '백로', (9, 22): '추분', (10, 8): '한로', (10, 23): '상강', (11, 7): '입동', (11, 22): '소설', (12, 6): '대설', (12, 21): '동지'},
+    2029: {(1, 5): '소한', (1, 20): '대한', (2, 3): '입춘', (2, 18): '우수', (3, 5): '경칩', (3, 20): '춘분', (4, 4): '청명', (4, 20): '곡우', (5, 5): '입하', (5, 21): '소만', (6, 5): '망종', (6, 21): '하지', (7, 7): '소서', (7, 22): '대서', (8, 7): '입추', (8, 23): '처서', (9, 7): '백로', (9, 23): '추분', (10, 8): '한로', (10, 23): '상강', (11, 7): '입동', (11, 22): '소설', (12, 7): '대설', (12, 21): '동지'},
+    # 2030년 우수는 계산상 2월 18일 23:59:40 무렵이라 공식 발표에서 19일로 나올 수 있다.
+    2030: {(1, 5): '소한', (1, 20): '대한', (2, 4): '입춘', (2, 18): '우수', (3, 5): '경칩', (3, 20): '춘분', (4, 5): '청명', (4, 20): '곡우', (5, 5): '입하', (5, 21): '소만', (6, 5): '망종', (6, 21): '하지', (7, 7): '소서', (7, 23): '대서', (8, 7): '입추', (8, 23): '처서', (9, 7): '백로', (9, 23): '추분', (10, 8): '한로', (10, 23): '상강', (11, 7): '입동', (11, 22): '소설', (12, 7): '대설', (12, 22): '동지'},
+}
+# 기념일(쉬는 날 아님)
+FIXED_MEMOS = {(4, 5): "식목일", (5, 8): "어버이날", (5, 15): "스승의날", (10, 1): "국군의날"}
+
+
+def configure(year):
+    """연도에 따라 달라지는 전역값(날짜·공휴일·테마)을 설정"""
+    global YEAR, DAYS, NDAYS, WEEKS, HOLIDAYS, TERMS, MEMOS, ACC, ACC_M, ACC_L, TINT, PYR
+    YEAR = year
+    DAYS = [dt.date(year, 1, 1) + dt.timedelta(n) for n in range(366 if calendar.isleap(year) else 365)]
+    NDAYS = len(DAYS)
+    WEEKS = sorted({monday(d) for d in DAYS})
+    HOLIDAYS = compute_holidays(year)
+    if year in OFFICIAL_HOLIDAYS and HOLIDAYS != OFFICIAL_HOLIDAYS[year]:
+        raise SystemExit("%d년 공휴일 계산이 공식 자료와 다릅니다" % year)
+    TERMS = TERMS_BY_YEAR.get(year, {})
+    MEMOS = dict(FIXED_MEMOS)
+    for lm, ld, n in ((1, 15, "정월대보름"), (5, 5, "단오")):
+        d = lunar_to_solar(year, lm, ld)
+        MEMOS[(d.month, d.day)] = n
+    name, acc, acc_m, acc_l, tint, pyr = THEMES.get(year) or THEMES[2027 + (year - 2027) % 4]
+    ACC, ACC_M, ACC_L, TINT = HexColor(acc), HexColor(acc_m), HexColor(acc_l), HexColor(tint)
+    PYR = [HexColor(c) for c in pyr] + [ACC]
 
 
 WEEK_START = 6            # 주 시작 요일: 6 = 일요일, 0 = 월요일
@@ -91,9 +165,6 @@ def monday(d):
 
 def col_color(i, base):
     return RED if COLS[i] == 6 else BLUE if COLS[i] == 5 else base
-
-
-WEEKS = sorted({monday(d) for d in DAYS})
 
 
 def dkey(d):
@@ -148,6 +219,25 @@ def lunar_str(d, prefix="음 "):
 
 def quarter(m):
     return (m - 1) // 3 + 1
+
+
+SHORT = {"부처님오신날": "석가탄신", "국회의원선거": "총선", "대통령선거": "대선", "지방선거": "지선"}
+
+
+def long_breaks():
+    """공휴일이 낀 3일 이상 연휴: [(이름, 시작일, 끝일)]"""
+    out, run = [], []
+    for d in DAYS + [None]:
+        if d is not None and (d.weekday() >= 5 or is_hol(d)):
+            run.append(d)
+            continue
+        hol = [HOLIDAYS[(x.month, x.day)] for x in run if is_hol(x)]
+        if len(run) >= 3 and hol:
+            real = [h for h in hol if h != "대체공휴일"] or hol
+            name = real[0].split(" · ")[0].replace(" 연휴", "")
+            out.append((SHORT.get(name, name), run[0], run[-1]))
+        run = []
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -379,7 +469,9 @@ class Painter:
         self.chev(x + w / 2, top + h / 2, 3.6, right, ACC, 1.3)
         self.link(x, top, w, h, key)
 
-    def pill(self, x, top, w, h, label, key, fill=ACC_L, color=ACC, font="SB", size=8, stroke=None):
+    def pill(self, x, top, w, h, label, key, fill=None, color=None, font="SB", size=8, stroke=None):
+        fill = ACC_L if fill is None else fill
+        color = ACC if color is None else color
         self.box(x, top, w, h, fill=fill, stroke=stroke, r=h / 2 if h <= 20 else 6, lw=0.5)
         self.ctext(x, top, w, h, label, font, size, color)
         self.link(x, top, w, h, key)
@@ -430,8 +522,8 @@ def page_cover(p):
     p.box(0, 0, 300, H, fill=ACC)
     p.text(40, 70, "PLANNER", "SB", 11, WHITE, cs=6)
     p.text(40, 88, "DAILY · WEEKLY · MONTHLY · YEARLY", "M", 6.6, ACC_M, cs=1.6)
-    p.text(36, 300, "20", "B", 150, WHITE)
-    p.text(36, 430, "27", "B", 150, WHITE)
+    p.text(36, 300, str(YEAR)[:2], "B", 150, WHITE)
+    p.text(36, 430, str(YEAR)[2:], "B", 150, WHITE)
     p.text(40, 500, "한 해를 설계하고, 하루를 완성하다", "M", 9, ACC_M, cs=0.6)
 
     x = 350
@@ -520,21 +612,23 @@ def page_index(p):
     p.box(X0, y, lw, BB - y, fill=TINT, r=6)
     p.text(X0 + 10, y + 16, "달력 표기", "B", 8, ACC)
     p.text(X0 + 10, y + 31, "빨강", "SB", 7.6, RED)
-    p.text(X0 + 32, y + 31, "일요일 · 공휴일 · 대체공휴일", "R", 7.6, SUB)
+    p.text(X0 + 32, y + 31, "일요일 · 공휴일", "R", 7.6, SUB)
     p.text(X0 + 10, y + 44, "파랑", "SB", 7.6, BLUE)
     p.text(X0 + 32, y + 44, "토요일", "R", 7.6, SUB)
     p.text(X0 + 10, y + 57, "음", "SB", 7.6, SUB)
-    p.text(X0 + 32, y + 57, "음력 날짜 · 24절기 · 기념일 표기", "R", 7.6, SUB)
-    p.text(X0 + lw / 2 + 14, y + 16, "%d 연휴" % YEAR, "B", 8, ACC)
-    breaks = [("설날", (2, 6), (2, 9)), ("노동절", (5, 1), (5, 3)), ("제헌절", (7, 17), (7, 19)),
-              ("광복절", (8, 14), (8, 16)), ("추석", (9, 14), (9, 16)), ("개천절", (10, 2), (10, 4)),
-              ("한글날", (10, 9), (10, 11)), ("성탄절", (12, 25), (12, 27))]
-    for i, (name, a, b) in enumerate(breaks):
-        bx = X0 + lw / 2 + 14 + (i % 2) * 58
+    p.text(X0 + 32, y + 57, "음력 · 절기 · 기념일", "R", 7.6, SUB)
+    bx0 = X0 + 128
+    p.text(bx0, y + 16, "%d 연휴 (3일 이상)" % YEAR, "B", 8, ACC)
+    for i, (name, a, b) in enumerate(long_breaks()[:12]):
+        bx = bx0 + (i % 2) * 66
         by = y + 22 + (i // 2) * 12.5
         p.text(bx, by + 9, name, "SB", 6.4, RED)
-        p.text(bx + 22, by + 9, "%d.%d–%d" % (a[0], a[1], b[1]), "R", 6.4, SUB)
-        p.link(bx - 2, by, 56, 12.5, dkey(dt.date(YEAR, a[0], a[1])))
+        rng = "%d.%d–%d" % (a.month, a.day, b.day) if a.month == b.month else \
+            "%d.%d–%d.%d" % (a.month, a.day, b.month, b.day)
+        p.text(bx + 28, by + 9, rng, "R", 6.4, SUB)
+        p.link(bx - 2, by, 64, 12.5, dkey(a))
+    if YEAR not in OFFICIAL_HOLIDAYS:
+        p.text(X0 + 10, BB - 8, "※ 공휴일은 2026년 11월 현행 법령으로 계산한 예정값입니다.", "R", 6.2, FAINT)
 
     # 가운데: 연간/분기/월
     mx = X0 + lw + 20
@@ -677,7 +771,7 @@ def page_mission(p):
     py0 = y + 22
     ph = BB - py0
     tiers = [("일일 과업", "일간"), ("중간 목표", "분기 · 월 · 주"), ("장기 목표", "연간 목표"), ("핵심 가치", "가치 · 사명")]
-    fills = [HexColor("#DCE5F0"), HexColor("#B9C9DD"), HexColor("#6E8BAE"), ACC]
+    fills = PYR
     c = p.c
     cx = x + 96
     half = 92
@@ -1587,7 +1681,8 @@ def page_note(p, no):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-def build(out, font_dir):
+def build(year, out, font_dir):
+    configure(year)
     tmp = out + ".tmp"
     p = Painter(tmp, font_dir)
     page_cover(p)
@@ -1663,6 +1758,7 @@ def build(out, font_dir):
 
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "%d-planner.pdf" % YEAR)
     fonts = os.environ.get("PLANNER_FONT_DIR", os.path.join(here, "fonts"))
-    build(out, fonts)
+    years = [int(a) for a in sys.argv[1:]] or sorted(THEMES)
+    for year in years:
+        build(year, os.path.join(here, "%d-planner.pdf" % year), fonts)
