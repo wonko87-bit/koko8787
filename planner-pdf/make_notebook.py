@@ -284,7 +284,7 @@ def t_lined(pitch):
 
 def t_margin(p, x, y, w, h):
     lines(p, x, y, w, h, 7 * MM)
-    p.vl(x + 30 * MM, TOP - 2, y + h, RED, 0.8)
+    p.vl(x + 30 * MM, y, y + h, RED, 0.8)
 
 
 def t_blank(p, x, y, w, h):
