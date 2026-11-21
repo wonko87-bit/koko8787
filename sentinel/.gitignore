@@ -1,0 +1,12 @@
+# Android / Gradle
+.gradle/
+build/
+*/build/
+local.properties
+captures/
+.idea/
+*.iml
+.DS_Store
+
+# Firebase (실제 설정은 커밋하지 않음)
+google-services.json

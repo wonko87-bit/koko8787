@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Device Owner(DPC) 정책 선언. 실제 강제력은 DevicePolicyManager API로 실행. -->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <force-lock />
+        <watch-login />
+        <disable-keyguard-features />
+    </uses-policies>
+</device-admin>

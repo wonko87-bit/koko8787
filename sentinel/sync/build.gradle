@@ -1,0 +1,45 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Firebase 설정은 google-services.json 대신 값 주입으로 처리(옵셔널).
+// 값이 없으면 동기화가 자동 비활성 → json 없이도 빌드/실행 정상.
+def fbAppId    = (project.findProperty('SENTINEL_FB_APP_ID')    ?: System.getenv('SENTINEL_FB_APP_ID')    ?: '')
+def fbApiKey   = (project.findProperty('SENTINEL_FB_API_KEY')   ?: System.getenv('SENTINEL_FB_API_KEY')   ?: '')
+def fbProject  = (project.findProperty('SENTINEL_FB_PROJECT_ID')?: System.getenv('SENTINEL_FB_PROJECT_ID')?: '')
+
+android {
+    namespace 'com.sentinel.sync'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 26
+        buildConfigField "String", "FB_APP_ID",     "\"${fbAppId}\""
+        buildConfigField "String", "FB_API_KEY",    "\"${fbApiKey}\""
+        buildConfigField "String", "FB_PROJECT_ID", "\"${fbProject}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation project(':core')
+
+    implementation platform('com.google.firebase:firebase-bom:33.1.2')
+    implementation 'com.google.firebase:firebase-firestore'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1'
+    implementation 'androidx.core:core-ktx:1.13.1'
+}

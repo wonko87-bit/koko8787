@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose가 실제 UI를 그리므로 액티비티 테마는 창 껍데기만 담당. -->
+    <style name="Theme.Sentinel" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/sentinel_bg</item>
+        <item name="android:statusBarColor">@color/sentinel_bg</item>
+        <item name="android:navigationBarColor">@color/sentinel_bg</item>
+    </style>
+</resources>
