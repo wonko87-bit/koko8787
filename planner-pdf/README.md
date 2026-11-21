@@ -22,3 +22,14 @@ python3 make_planner.py 2027 2028 2029 2030
 ```
 
 주 시작 요일(`WEEK_START`), 테마(`THEMES`), 공휴일 규칙, 페이지 크기는 `make_planner.py` 상단에서 바꿀 수 있습니다.
+
+## 노트 · 간지 템플릿
+
+`notebook-templates.pdf` (37쪽): 표지 → 목차 → 간지 10장 → 템플릿 목록 → 노트 템플릿 24종(각 1장).
+템플릿 페이지를 삼성노트에서 복사해 원하는 간지 뒤에 붙여 쓰는 용도입니다.
+
+```bash
+python3 make_notebook.py
+```
+
+간지 수·색(`SEC`)과 템플릿 목록(`TEMPLATES`)은 `make_notebook.py` 에서 바꿀 수 있습니다.
