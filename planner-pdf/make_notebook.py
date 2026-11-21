@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""간지 + 노트 템플릿 PDF 생성기 (삼성노트 · 갤럭시탭 가로 화면용).
+"""간지 + 노트 템플릿 PDF 생성기 (삼성노트 · 갤럭시탭 세로 화면용).
 
     python3 make_notebook.py [출력.pdf]      # 기본: notebook-templates.pdf
 
 구성: 표지 → 목차 → 간지 10장 → 템플릿 목록 → 노트 템플릿 24종(각 1장)
 템플릿 페이지를 삼성노트에서 복사해 원하는 간지 뒤에 붙여 쓰는 용도.
-화면 폭(약 31.7cm)에 맞춰 보면 1pt ≈ 실제 1pt 이므로 줄 간격은 실제 mm 로 잡았다.
+화면 폭(약 19cm)에 맞춰 보면 1pt ≈ 실제 1pt 이므로 줄 간격은 실제 mm 로 잡았다.
 
 필요: reportlab, pikepdf / 폰트: Pretendard (make_planner.py 와 같은 위치)
 """
@@ -20,15 +20,15 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 MM = 72 / 25.4
-W, H = 900, 540
+W, H = 540, 864           # 세로 16:10
 TABW = 28                 # 오른쪽 간지 탭 폭
 NAVH = 22                 # 상단 바 높이
 X0, X1 = 14, W - TABW - 10
-CW = X1 - X0              # 848pt ≈ 299mm
+CW = X1 - X0              # 488pt ≈ 172mm
 TOP = NAVH + 8            # 필기 영역 시작
 BB = H - 10               # 필기 영역 끝
 HEAD = 24                 # TITLE/DATE 머리줄 높이
-BODY = TOP + HEAD         # 본문 시작 (높이 476pt ≈ 168mm)
+BODY = TOP + HEAD         # 본문 시작 (높이 800pt ≈ 282mm)
 BT = TOP + 50             # 목차·간지 등 '제목 있는 페이지'의 본문 시작
 
 INK = HexColor("#262A33")
@@ -317,7 +317,7 @@ def t_dot(p, x, y, w, h, step=5 * MM):
 
 
 def t_cornell(p, x, y, w, h):
-    cue, summ = 60 * MM, 40 * MM
+    cue, summ = 55 * MM, 50 * MM
     lines(p, x, y, w, h - summ, 8 * MM)
     lines(p, x, y + h - summ, w, summ, 8 * MM)
     p.vl(x + cue, y, y + h - summ, UI, 0.9)
@@ -367,24 +367,22 @@ def t_vocab(p, x, y, w, h):
 
 
 def t_wongo(p, x, y, w, h):
-    cols, gutter = 20, 18
-    cell = (w - gutter) / (2 * cols)
+    cols = 20
+    cell = w / cols
     gap = cell * 0.3
     rows = int((h - 8 + gap) / (cell + gap))
     th = rows * cell + (rows - 1) * gap
     oy = y + (h - th) / 2
-    for half in range(2):
-        hx = x + half * (cols * cell + gutter)
-        p.box(hx - 3, oy - 4, cols * cell + 6, th + 8, stroke=WONGO, lw=1.0)
-        for r in range(rows):
-            ry = oy + r * (cell + gap)
-            p.hl(hx, hx + cols * cell, ry, WONGO, 0.5)
-            p.hl(hx, hx + cols * cell, ry + cell, WONGO, 0.5)
-            for k in range(cols + 1):
-                p.vl(hx + k * cell, ry, ry + cell, WONGO, 0.5)
-    mx = x + cols * cell + gutter / 2
-    p.text(mx, oy + th / 2 - 4, "%d" % (cols * rows), "M", 5.4, WONGO, "c")
-    p.text(mx, oy + th / 2 + 5, "자", "M", 5.4, WONGO, "c")
+    hx = x
+    p.box(hx - 3, oy - 4, cols * cell + 6, th + 8, stroke=WONGO, lw=1.0)
+    for r in range(rows):
+        ry = oy + r * (cell + gap)
+        p.hl(hx, hx + cols * cell, ry, WONGO, 0.5)
+        p.hl(hx, hx + cols * cell, ry + cell, WONGO, 0.5)
+        for k in range(cols + 1):
+            p.vl(hx + k * cell, ry, ry + cell, WONGO, 0.5)
+        if (r + 1) % 5 == 0:
+            p.text(hx + cols * cell + 5, ry + cell - 1, "%d" % ((r + 1) * cols), "M", 4.6, WONGO)
 
 
 def t_music(p, x, y, w, h):
@@ -430,11 +428,11 @@ def cell_rows(p, x, y, w, h, cols, color, strip=0, model=False, halves=1, gap_ra
 
 
 def t_hanja(p, x, y, w, h):
-    cell_rows(p, x, y, w, h, cols=19, color=HANJA, strip=5 * MM, model=True, gap_ratio=0.12)
+    cell_rows(p, x, y, w, h, cols=int(w / (15 * MM)), color=HANJA, strip=5 * MM, model=True, gap_ratio=0.12)
 
 
 def t_kids(p, x, y, w, h):
-    cell_rows(p, x, y, w, h, cols=10, color=GREEN, halves=2)
+    cell_rows(p, x, y, w, h, cols=10, color=GREEN, halves=1)
 
 
 def t_math(p, x, y, w, h):
@@ -483,16 +481,16 @@ def t_calli(p, x, y, w, h):
         p.hl(x, x + w, yy + gh, LINE_L, 0.5)
 
 
-def t_story(p, x, y, w, h):
-    gx, gy = 16, 18
-    cw = (w - 2 * gx) / 3
+def t_story(p, x, y, w, h, cols=2, rows=4):
+    gx, gy = 16, 16
+    cw = (w - (cols - 1) * gx) / cols
     fh = cw * 9 / 16
     lh = 16
     ch = 12 + fh + 2 * lh
-    oy = y + (h - (2 * ch + gy)) / 2
-    for i in range(6):
-        cx = x + (i % 3) * (cw + gx)
-        cy = oy + (i // 3) * (ch + gy)
+    oy = y + (h - (rows * ch + (rows - 1) * gy)) / 2
+    for i in range(cols * rows):
+        cx = x + (i % cols) * (cw + gx)
+        cy = oy + (i // cols) * (ch + gy)
         p.text(cx, cy + 8, "#%d" % (i + 1), "B", 7, UI)
         p.text(cx + cw, cy + 8, "장면 · 시간", "M", 5.6, FAINT, "r")
         p.box(cx, cy + 12, cw, fh, stroke=GRID_D, r=3, lw=0.8)
@@ -503,57 +501,55 @@ def t_story(p, x, y, w, h):
 def t_diary(p, x, y, w, h):
     y0 = TOP + 2
     cx = x
-    for lab, lw in [("년", 44), ("월", 30), ("일", 30), ("요일", 30)]:
+    for lab, lw in [("년", 40), ("월", 26), ("일", 26), ("요일", 26)]:
         p.hl(cx, cx + lw, y0 + 14, RULE, 0.6)
         p.text(cx + lw + 3, y0 + 12, lab, "M", 7.6, SUB)
-        cx += lw + 3 + p.tw(lab, "M", 7.6) + 10
-    wx = X1 - 250
+        cx += lw + 3 + p.tw(lab, "M", 7.6) + 8
+    wx = X1 - 226
     p.text(wx, y0 + 12, "날씨", "SB", 7.6, SUB)
     for i, lab in enumerate(["맑음", "구름", "흐림", "비", "눈"]):
-        bx = wx + 30 + i * 44
+        bx = wx + 26 + i * 40
         p.circle(bx + 4, y0 + 9.5, 4, stroke=RULE, lw=0.7)
         p.text(bx + 11, y0 + 12, lab, "R", 7.2, SUB)
     ty = y0 + 34
     p.text(x, ty, "제목", "SB", 7.6, SUB)
     p.hl(x + 26, X1, ty + 2, RULE, 0.6)
     top = ty + 12
-    bh = BB - top
-    lw = w * 0.48
-    p.box(x, top, lw, bh, stroke=GRID_D, r=6, lw=0.8)
+    dh = (BB - top) * 0.46
+    p.box(x, top, w, dh, stroke=GRID_D, r=6, lw=0.8)
     p.text(x + 8, top + 12, "그림", "M", 6.2, FAINT)
-    rx = x + lw + 14
-    rw = x + w - rx
+    gy = top + dh + 12
     cols = 12
-    cell = rw / cols
-    rows = int(bh / cell)
-    oy = top + (bh - rows * cell) / 2
+    cell = w / cols
+    rows = int((BB - gy) / cell)
     for r in range(rows + 1):
-        p.hl(rx, rx + rw, oy + r * cell, GREEN if r in (0, rows) else HexColor("#A9CDB8"), 0.55)
+        p.hl(x, x + w, gy + r * cell, GREEN if r in (0, rows) else HexColor("#A9CDB8"), 0.55)
     for k in range(cols + 1):
-        p.vl(rx + k * cell, oy, oy + rows * cell, GREEN if k in (0, cols) else HexColor("#A9CDB8"), 0.55)
+        p.vl(x + k * cell, gy, gy + rows * cell, GREEN if k in (0, cols) else HexColor("#A9CDB8"), 0.55)
 
 
 def t_wrong(p, x, y, w, h):
     y0 = TOP + 2
-    fields = [("과목", 90), ("단원", 170), ("출처 · 쪽", 150), ("날짜", 90)]
-    cx = x
-    for lab, fw in fields:
-        p.text(cx, y0 + 12, lab, "SB", 7.2, SUB)
-        lw_ = p.tw(lab, "SB", 7.2) + 6
-        p.hl(cx + lw_, cx + lw_ + fw, y0 + 14, RULE, 0.6)
-        cx += lw_ + fw + 16
-    top = y0 + 24
-    bh = BB - top
-    lw = w * 0.6
-    ph = bh * 0.42
-    p.box(x, top, lw, ph, stroke=GRID_D, r=5, lw=0.8)
+    rows = [[("과목", 0.34), ("단원", 0.66)], [("출처 · 쪽", 0.62), ("날짜", 0.38)]]
+    for r, row in enumerate(rows):
+        cx = x
+        ry = y0 + r * 20
+        for lab, frac in row:
+            fw = w * frac
+            p.text(cx, ry + 12, lab, "SB", 7.2, SUB)
+            p.hl(cx + p.tw(lab, "SB", 7.2) + 6, cx + fw - 14, ry + 14, RULE, 0.6)
+            cx += fw
+    top = y0 + 46
+    ph = (BB - top) * 0.3
+    p.box(x, top, w, ph, stroke=GRID_D, r=5, lw=0.8)
     p.box(x, top, 40, 15, fill=UI, r=4)
     p.ctext(x, top, 40, 15, "문제", "B", 7.2, WHITE)
-    sy = top + ph + 8
-    p.text(x, sy + 10, "풀이", "B", 7.6, UI)
-    p.hl(x, x + lw, sy + 13.5, UI, 0.9)
-    p.grid(x, sy + 16, lw, BB - sy - 16, 5 * MM, GRID_L, 0.4)
-    rx = x + lw + 16
+    top += ph + 10
+    lw = w * 0.58
+    p.text(x, top + 10, "풀이", "B", 7.6, UI)
+    p.hl(x, x + lw, top + 13.5, UI, 0.9)
+    p.grid(x, top + 16, lw, BB - top - 16, 5 * MM, GRID_L, 0.4)
+    rx = x + lw + 14
     rw = x + w - rx
     yy = top
     p.section(rx, yy, rw, "틀린 이유", "WHY")
@@ -563,20 +559,20 @@ def t_wrong(p, x, y, w, h):
         bx = rx + (i % 2) * (rw / 2)
         by = yy + (i // 2) * 17
         p.check(bx, by + 2, 9)
-        p.text(bx + 14, by + 10, r, "R", 7.4, INK)
+        p.text(bx + 14, by + 10, r, "R", 7.2, INK)
     yy += 3 * 17 + 8
-    p.section(rx, yy, rw, "핵심 개념 · 공식", "KEY POINT")
-    lines(p, rx, yy + 14, rw, 6 * 20, 20, LINE)
-    yy += 14 + 6 * 20 + 10
+    p.section(rx, yy, rw, "핵심 개념 · 공식", "KEY")
+    lines(p, rx, yy + 14, rw, 7 * 20, 20, LINE)
+    yy += 14 + 7 * 20 + 10
     p.section(rx, yy, rw, "다시 풀기", "REVIEW")
     yy += 20
-    bw = (rw - 2 * 8) / 3
+    bw = (rw - 2 * 6) / 3
     for i in range(3):
-        bx = rx + i * (bw + 8)
+        bx = rx + i * (bw + 6)
         p.box(bx, yy, bw, 34, fill=TINT, r=5)
-        p.check(bx + 7, yy + 7, 9)
-        p.text(bx + 21, yy + 15, "%d차" % (i + 1), "SB", 7.4, UI)
-        p.text(bx + 7, yy + 28, "   /   ", "M", 7, FAINT)
+        p.check(bx + 6, yy + 7, 9)
+        p.text(bx + 19, yy + 15, "%d차" % (i + 1), "SB", 7.2, UI)
+        p.text(bx + 6, yy + 28, "   /   ", "M", 7, FAINT)
     yy += 34 + 12
     p.section(rx, yy, rw, "메모", "NOTE")
     t_dot(p, rx, yy + 16, rw, BB - yy - 16)
@@ -594,36 +590,37 @@ def t_meeting(p, x, y, w, h):
             p.hl(cx + p.tw(lab, "SB", 7.4) + 6, cx + fw - 14, ry + 15, RULE, 0.6)
             cx += fw
     top = y0 + 66
-    lw = w * 0.58
-    p.section(x, top, lw, "논의 내용", "DISCUSSION")
-    lines(p, x, top + 14, lw, BB - top - 14, 8 * MM)
-    rx = x + lw + 16
-    rw = x + w - rx
-    mid = top + (BB - top) * 0.42
-    p.section(rx, top, rw, "결정 사항", "DECISIONS")
-    lines(p, rx, top + 14, rw, mid - top - 14, 8 * MM)
-    p.section(rx, mid + 6, rw, "할 일", "ACTION ITEMS")
-    ty = mid + 20
-    p.box(rx, ty, rw, 13, fill=TINT)
-    p.text(rx + 9, ty + 9, "✓", "M", 6.6, SUB, "c")
-    p.text(rx + 24, ty + 9, "할 일", "M", 6.2, SUB)
-    p.text(rx + rw - 66, ty + 9, "담당", "M", 6.2, SUB, "c")
-    p.text(rx + rw - 22, ty + 9, "기한", "M", 6.2, SUB, "c")
+    avail = BB - top
+    dh = avail * 0.46
+    p.section(x, top, w, "논의 내용", "DISCUSSION")
+    lines(p, x, top + 14, w, dh - 14, 8 * MM)
+    top += dh + 8
+    eh = avail * 0.2
+    p.section(x, top, w, "결정 사항", "DECISIONS")
+    lines(p, x, top + 14, w, eh - 14, 8 * MM)
+    top += eh + 8
+    p.section(x, top, w, "할 일", "ACTION ITEMS")
+    ty = top + 16
+    p.box(x, ty, w, 13, fill=TINT)
+    p.text(x + 9, ty + 9, "✓", "M", 6.6, SUB, "c")
+    p.text(x + 24, ty + 9, "할 일", "M", 6.2, SUB)
+    p.text(x + w - 96, ty + 9, "담당", "M", 6.2, SUB, "c")
+    p.text(x + w - 32, ty + 9, "기한", "M", 6.2, SUB, "c")
     ty += 13
     rh = 8 * MM
     n = int((BB - ty) / rh)
     for r in range(n):
-        p.check(rx + 4.5, ty + r * rh + (rh - 9) / 2, 9)
-        p.hl(rx, rx + rw, ty + (r + 1) * rh, LINE, 0.5)
-    for vx in (rx + 18, rx + rw - 88, rx + rw - 44):
+        p.check(x + 4.5, ty + r * rh + (rh - 9) / 2, 9)
+        p.hl(x, x + w, ty + (r + 1) * rh, LINE, 0.5)
+    for vx in (x + 18, x + w - 128, x + w - 64):
         p.vl(vx, ty - 13, ty + n * rh, LINE_L, 0.5)
 
 
-def t_todo(p, x, y, w, h):
+def t_todo(p, x, y, w, h, ncol=2):
     gap = 14
-    cw = (w - 2 * gap) / 3
+    cw = (w - (ncol - 1) * gap) / ncol
     rh = 8 * MM
-    for c in range(3):
+    for c in range(ncol):
         cx = x + c * (cw + gap)
         p.box(cx, y + 2, cw, 18, fill=TINT, r=4)
         p.text(cx + 6, y + 14, "목록", "SB", 6.6, FAINT)
@@ -645,21 +642,21 @@ TEMPLATES = [
     ("graph", "방안지", "1mm 공학용 모눈", t_graph, True),
     ("dot", "도트 노트", "5mm 점", t_dot, True),
     ("cornell", "코넬노트", "단서 · 필기 · 요약", t_cornell, True),
-    ("twocol", "펼침 줄노트", "좌우 2단 · 8mm", t_twocol, True),
+    ("twocol", "2단 줄노트", "좌우 2단 · 8mm", t_twocol, True),
     ("english", "영어노트", "4선 · 빨간 기준선", t_english, True),
     ("vocab", "단어장", "단어 · 뜻 2단", t_vocab, True),
-    ("wongo", "원고지", "20자 × 18줄 × 2면", t_wongo, True),
-    ("music", "오선지", "악보 · 9단", t_music, True),
+    ("wongo", "원고지", "20자 × 25줄", t_wongo, True),
+    ("music", "오선지", "악보 · 15단", t_music, True),
     ("hanja", "한자노트", "훈음 칸 · 십자 가이드", t_hanja, True),
-    ("kids", "칸노트", "10칸 × 2면 · 받아쓰기", t_kids, True),
+    ("kids", "칸노트", "10칸 · 받아쓰기", t_kids, True),
     ("math", "수학노트", "2단 · 연한 5mm 모눈", t_math, True),
     ("wrong", "오답노트", "문제 · 풀이 · 틀린 이유", t_wrong, False),
     ("iso", "아이소메트릭", "삼각 도트 5mm", t_iso, True),
     ("calli", "레터링 연습지", "4선 · 55° 사선", t_calli, True),
-    ("story", "스토리보드", "16:9 · 6컷", t_story, True),
+    ("story", "스토리보드", "16:9 · 8컷", t_story, True),
     ("diary", "그림일기", "그림 + 글 칸", t_diary, False),
     ("meeting", "회의록", "안건 · 결정 · 할 일", t_meeting, False),
-    ("todo", "체크리스트", "3단 할 일 목록", t_todo, True),
+    ("todo", "체크리스트", "2단 할 일 목록", t_todo, True),
 ]
 FORM_BBOX = (X0 - 2, H - BB - 2, X1 + 2, H - TOP + 6)
 
@@ -682,75 +679,75 @@ def template_form(p, t):
 def page_cover(p):
     p.start("cover", "표지")
     p.box(0, 0, W, H, fill=PAPER)
-    sw = 16
+    sw = 11
     for i, (main, light) in enumerate(SEC):
         p.box(W - (NSEC - i) * sw, 0, sw, H, fill=main)
-    lx, ly, lw, lh = 90, 120, 470, 270
+    lx, ly, lw, lh = 44, 210, 320, 300
     p.box(lx + 4, ly + 5, lw, lh, fill=HexColor("#E7E1D4"), r=10)
     p.box(lx, ly, lw, lh, fill=WHITE, stroke=HexColor("#D9D2C3"), r=10, lw=0.8)
-    p.box(lx, ly, lw, 64, fill=UI, r=10)
-    p.box(lx, ly + 50, lw, 14, fill=UI)
-    p.text(lx + 28, ly + 42, "NOTEBOOK", "B", 24, WHITE, cs=4)
-    p.text(lx + lw - 28, ly + 40, "간지 %d · 템플릿 %d" % (NSEC, len(TEMPLATES)), "M", 8.6,
-           HexColor("#B8C5D3"), "r")
+    p.box(lx, ly, lw, 70, fill=UI, r=10)
+    p.box(lx, ly + 56, lw, 14, fill=UI)
+    p.text(lx + 24, ly + 40, "NOTEBOOK", "B", 22, WHITE, cs=3.5)
+    p.text(lx + 24, ly + 58, "간지 %d · 템플릿 %d" % (NSEC, len(TEMPLATES)), "M", 8, HexColor("#B8C5D3"))
     for i, lab in enumerate(["과목 · 주제", "이름", "기간"]):
-        yy = ly + 110 + i * 46
-        p.text(lx + 28, yy, lab, "SB", 8.6, UI)
-        p.hl(lx + 100, lx + lw - 28, yy + 3, RULE, 0.8)
+        yy = ly + 118 + i * 58
+        p.text(lx + 24, yy, lab, "SB", 8.6, UI)
+        p.hl(lx + 24, lx + lw - 24, yy + 30, RULE, 0.8)
     bx = lx
     for lab, key, w in [("목차", "index", 100), ("노트 템플릿", "tmpl", 130)]:
-        p.pill(bx, ly + lh + 40, w, 32, lab, key, fill=UI, color=WHITE, size=9.4, r=8)
+        p.pill(bx, ly + lh + 44, w, 34, lab, key, fill=UI, color=WHITE, size=9.4, r=8)
         bx += w + 12
-    p.text(lx, ly + lh + 100, "링크는 삼성노트 ‘읽기 모드’(책 아이콘)를 켠 상태에서 눌러야 이동합니다.", "R", 7.8, SUB)
+    p.text(lx, ly + lh + 110, "링크는 삼성노트 ‘읽기 모드’(책 아이콘)를 켠 상태에서", "R", 7.8, SUB)
+    p.text(lx, ly + lh + 124, "눌러야 이동합니다.", "R", 7.8, SUB)
     p.end()
 
 
 def page_index(p):
     p.start("index", "목차")
     p.chrome(menu="index")
-    p.title("목차", "INDEX", "간지를 누르면 해당 섹션으로 이동 · 제목을 적어 두세요")
-    lw = 540
+    p.title("목차", "INDEX", "간지를 누르면 해당 섹션으로 이동")
     gx, gy = 12, 8
-    cw = (lw - gx) / 2
-    ch = (BB - BT - 4 * gy) / 5
+    cw = (CW - gx) / 2
+    ch = 62
     for i, (main, light) in enumerate(SEC):
         cx = X0 + (i // 5) * (cw + gx)
         cy = BT + (i % 5) * (ch + gy)
         p.box(cx, cy, cw, ch, fill=WHITE, stroke=RULE, r=7, lw=0.6)
-        p.box(cx, cy, 50, ch, fill=main, r=7)
-        p.box(cx + 40, cy, 10, ch, fill=main)
-        p.ctext(cx, cy, 50, ch, "%02d" % (i + 1), "B", 16, WHITE)
-        p.text(cx + 62, cy + 20, "제목", "SB", 6.4, FAINT)
-        p.hl(cx + 62, cx + cw - 26, cy + ch * 0.58, RULE, 0.7)
-        p.text(cx + 62, cy + ch - 10, "기간", "SB", 6.4, FAINT)
-        p.hl(cx + 84, cx + cw * 0.62, cy + ch - 8, RULE_L, 0.6)
-        p.chev(cx + cw - 13, cy + ch / 2, 3.4, True, main, 1.3)
+        p.box(cx, cy, 44, ch, fill=main, r=7)
+        p.box(cx + 34, cy, 10, ch, fill=main)
+        p.ctext(cx, cy, 44, ch, "%02d" % (i + 1), "B", 14, WHITE)
+        p.text(cx + 54, cy + 15, "제목", "SB", 6.2, FAINT)
+        p.hl(cx + 54, cx + cw - 24, cy + 36, RULE, 0.7)
+        p.text(cx + 54, cy + ch - 9, "기간", "SB", 6.2, FAINT)
+        p.hl(cx + 74, cx + cw * 0.7, cy + ch - 7, RULE_L, 0.6)
+        p.chev(cx + cw - 12, cy + ch / 2, 3.2, True, main, 1.3)
         p.link(cx, cy, cw, ch, "s%d" % (i + 1))
-    rx = X0 + lw + 16
-    rw = X1 - rx
-    p.pill(rx, BT, rw, 44, "노트 템플릿 %d종" % len(TEMPLATES), "tmpl", fill=UI, color=WHITE, size=10.5, r=8)
-    p.chev(rx + rw - 20, BT + 22, 3.8, True, WHITE, 1.4)
-    y = BT + 56
-    p.section(rx, y, rw, "바로가기", "TEMPLATES")
+    y = BT + 5 * (ch + gy) + 6
+    p.pill(X0, y, CW, 38, "노트 템플릿 %d종" % len(TEMPLATES), "tmpl", fill=UI, color=WHITE, size=10.5, r=8)
+    p.chev(X1 - 20, y + 19, 3.8, True, WHITE, 1.4)
+    y += 50
+    p.section(X0, y, CW, "바로가기", "TEMPLATES")
     y += 18
-    bw = (rw - 6) / 2
-    rh = 19
+    ncol, nrow = 3, 8
+    bw = (CW - (ncol - 1) * 6) / ncol
+    rh = 20
     for i, (key, name, sub, fn, head) in enumerate(TEMPLATES):
-        bx = rx + (i // 12) * (bw + 6)
-        by = y + (i % 12) * rh
+        bx = X0 + (i // nrow) * (bw + 6)
+        by = y + (i % nrow) * rh
         p.box(bx, by + 1, bw, rh - 3, fill=TINT, r=4)
-        p.text(bx + 7, by + 12.5, "%02d" % (i + 1), "B", 6.6, FAINT)
-        p.text(bx + 22, by + 12.5, name, "M", 7.4, INK)
+        p.text(bx + 7, by + 13, "%02d" % (i + 1), "B", 6.6, FAINT)
+        p.text(bx + 22, by + 13, name, "M", 7.4, INK)
         p.link(bx, by, bw, rh, "t_" + key)
-    y += 12 * rh + 10
-    p.box(rx, y, rw, BB - y, fill=UI_L, r=7)
+    y += nrow * rh + 10
+    p.box(X0, y, CW, BB - y, fill=UI_L, r=7)
     tips = ["템플릿에서 원하는 노트를 고릅니다.",
             "삼성노트에서 그 페이지를 복사해 간지 뒤에 붙입니다.",
-            "간지의 목차 칸에 내용·날짜를 적어 둡니다.",
-            "오른쪽 색 탭 = 간지 · 링크는 읽기 모드에서."]
-    p.text(rx + 10, y + 16, "사용법", "B", 8, UI)
+            "간지의 섹션 목차 칸에 내용과 날짜를 적어 둡니다.",
+            "오른쪽 색 탭을 누르면 간지로, 위쪽 ‘목차’·‘템플릿’은 해당 페이지로 갑니다.",
+            "링크는 읽기 모드(책 아이콘)에서 눌러야 이동합니다."]
+    p.text(X0 + 12, y + 18, "사용법", "B", 8.4, UI)
     for i, t in enumerate(tips):
-        p.text(rx + 10, y + 32 + i * 14, "%d. %s" % (i + 1, t), "R", 7, SUB)
+        p.text(X0 + 12, y + 36 + i * 15, "%d. %s" % (i + 1, t), "R", 7.4, SUB)
     p.end()
 
 
@@ -758,61 +755,61 @@ def page_divider(p, i):
     main, light = SEC[i - 1]
     p.start("s%d" % i, "간지 %02d" % i, 1)
     p.chrome(label="간지 %02d" % i, active=i)
-    pw = 290
-    p.box(X0, TOP, pw, BB - TOP, fill=main, r=10)
-    p.text(X0 + 26, TOP + 40, "SECTION", "SB", 10, WHITE, cs=5)
-    p.text(X0 + 20, TOP + 200, "%02d" % i, "B", 140, WHITE)
-    p.hl(X0 + 26, X0 + pw - 26, TOP + 250, light, 0.8)
-    p.text(X0 + 26, TOP + 274, "제목", "SB", 7.6, light)
-    p.hl(X0 + 26, X0 + pw - 26, TOP + 318, WHITE, 1.0)
-    p.text(X0 + 26, TOP + 346, "기간", "SB", 7.6, light)
-    p.hl(X0 + 56, X0 + pw - 26, TOP + 348, light, 0.8)
-    p.text(X0 + 26, BB - 22, "이 간지 뒤에 노트 페이지를 붙여 쓰세요", "R", 7.2, light)
+    ph = 300
+    p.box(X0, TOP, CW, ph, fill=main, r=10)
+    p.text(X0 + 24, TOP + 36, "SECTION", "SB", 10, WHITE, cs=5)
+    p.text(X0 + 16, TOP + 210, "%02d" % i, "B", 130, WHITE)
+    rx = X0 + 220
+    p.text(rx, TOP + 120, "제목", "SB", 7.6, light)
+    p.hl(rx, X1 - 24, TOP + 160, WHITE, 1.0)
+    p.hl(rx, X1 - 24, TOP + 196, light, 0.8)
+    p.text(rx, TOP + 228, "기간", "SB", 7.6, light)
+    p.hl(rx + 28, X1 - 24, TOP + 230, light, 0.8)
+    p.text(X0 + 24, TOP + ph - 18, "이 간지 뒤에 노트 페이지를 붙여 쓰세요", "R", 7.2, light)
 
-    rx = X0 + pw + 18
-    rw = X1 - rx
-    p.text(rx, TOP + 22, "섹션 목차", "B", 17, INK)
-    p.text(rx + p.tw("섹션 목차", "B", 17) + 10, TOP + 21, "CONTENTS", "SB", 7.2, main, cs=1.4)
-    nav_y = BB - 26
+    y = TOP + ph + 14
+    p.text(X0, y + 20, "섹션 목차", "B", 16, INK)
+    p.text(X0 + p.tw("섹션 목차", "B", 16) + 10, y + 19, "CONTENTS", "SB", 7.2, main, cs=1.4)
     bx = X1
-    for lab, key, w, right in [("다음 간지", "s%d" % (i + 1) if i < NSEC else None, 92, True),
-                               ("이전 간지", "s%d" % (i - 1) if i > 1 else None, 92, False)]:
+    for lab, key, w, right in [("다음 간지", "s%d" % (i + 1) if i < NSEC else None, 84, True),
+                               ("이전 간지", "s%d" % (i - 1) if i > 1 else None, 84, False)]:
         bx -= w
         if key:
-            p.pill(bx, TOP + 6, w, 24, ("   " if not right else "") + lab + ("   " if right else ""), key,
+            p.pill(bx, y + 4, w, 24, ("   " if not right else "") + lab + ("   " if right else ""), key,
                    fill=light, color=main, size=8, r=6)
-            p.chev(bx + (w - 12 if right else 12), TOP + 18, 2.8, right, main, 1.2)
+            p.chev(bx + (w - 12 if right else 12), y + 16, 2.8, right, main, 1.2)
         bx -= 8
-    ty = TOP + 42
-    p.hl(rx, X1, ty - 4, INK, 1.1)
+    ty = y + 38
+    p.hl(X0, X1, ty - 4, INK, 1.1)
     hh = 16
-    p.box(rx, ty, rw, hh, fill=light)
-    p.ctext(rx, ty, 34, hh, "No.", "SB", 6.8, main)
-    p.text(rx + 44, ty + 11, "내용", "SB", 6.8, main)
-    p.ctext(X1 - 70, ty, 70, hh, "날짜", "SB", 6.8, main)
+    p.box(X0, ty, CW, hh, fill=light)
+    p.ctext(X0, ty, 30, hh, "No.", "SB", 6.8, main)
+    p.text(X0 + 40, ty + 11, "내용", "SB", 6.8, main)
+    p.ctext(X1 - 64, ty, 64, hh, "날짜", "SB", 6.8, main)
     ty += hh
+    nav_y = BB - 26
     rh = 22
     n = int((nav_y - 8 - ty) / rh)
     for r in range(n):
-        p.text(rx + 17, ty + r * rh + 14.5, "%d" % (r + 1), "M", 7, FAINT, "c")
-        p.hl(rx, X1, ty + (r + 1) * rh, RULE_L, 0.6)
-    p.vl(rx + 34, ty - hh, ty + n * rh, RULE_L, 0.6)
-    p.vl(X1 - 70, ty - hh, ty + n * rh, RULE_L, 0.6)
-    p.pill(rx, nav_y, 70, 24, "목차", "index", fill=TINT, stroke=RULE, color=UI, size=8, r=6)
-    p.pill(rx + 78, nav_y, 100, 24, "노트 템플릿", "tmpl", fill=TINT, stroke=RULE, color=UI, size=8, r=6)
+        p.text(X0 + 15, ty + r * rh + 14.5, "%d" % (r + 1), "M", 7, FAINT, "c")
+        p.hl(X0, X1, ty + (r + 1) * rh, RULE_L, 0.6)
+    p.vl(X0 + 30, ty - hh, ty + n * rh, RULE_L, 0.6)
+    p.vl(X1 - 64, ty - hh, ty + n * rh, RULE_L, 0.6)
+    p.pill(X0, nav_y, 70, 24, "목차", "index", fill=TINT, stroke=RULE, color=UI, size=8, r=6)
+    p.pill(X0 + 78, nav_y, 100, 24, "노트 템플릿", "tmpl", fill=TINT, stroke=RULE, color=UI, size=8, r=6)
     p.end()
 
 
 def page_tmpl_list(p):
     p.start("tmpl", "노트 템플릿")
     p.chrome(menu="tmpl")
-    p.title("노트 템플릿", "NOTE TEMPLATES", "누르면 해당 노트로 이동 · 페이지를 복사해 간지 뒤에 붙여 쓰세요")
-    cols, gx, gy = 6, 10, 7
+    p.title("노트 템플릿", "NOTE TEMPLATES", "누르면 해당 노트로 이동")
+    cols, gx, gy = 6, 8, 16
     cw = (CW - (cols - 1) * gx) / cols
     fx0, fy0, fx1, fy1 = FORM_BBOX
     s = cw / (fx1 - fx0)
     ph = (fy1 - fy0) * s
-    ch = ph + 23
+    ch = ph + 24
     for i, t in enumerate(TEMPLATES):
         key, name, sub, fn, head = t
         cx = X0 + (i % cols) * (cw + gx)
@@ -824,10 +821,17 @@ def page_tmpl_list(p):
         c.scale(s, s)
         c.doForm(template_form(p, t))
         c.restoreState()
-        p.text(cx + 1, cy + ph + 11, "%02d" % (i + 1), "B", 7, FAINT)
-        p.text(cx + 15, cy + ph + 11, name, "SB", 7.8, INK)
-        p.text(cx + 15, cy + ph + 20, sub, "R", 6, SUB)
+        p.text(cx + 1, cy + ph + 11, "%02d" % (i + 1), "B", 6.6, FAINT)
+        p.text(cx + 13, cy + ph + 11, name, "SB", 7.4, INK)
+        p.text(cx + 1, cy + ph + 20.5, sub, "R", 5.6, SUB)
         p.link(cx, cy, cw, ch, "t_" + key)
+    y = BT + 4 * (ch + gy) + 4
+    p.box(X0, y, CW, BB - y, fill=UI_L, r=7)
+    p.text(X0 + 12, y + 18, "쓰는 법", "B", 8.4, UI)
+    for i, t in enumerate(["원하는 템플릿을 눌러 이동한 뒤, 삼성노트에서 그 페이지를 복사합니다.",
+                           "쓰려는 간지 뒤에 붙여 넣으면 됩니다. 원본 템플릿은 그대로 두세요.",
+                           "줄 간격은 화면 폭에 맞춰 볼 때 실제 mm 크기입니다."]):
+        p.text(X0 + 12, y + 36 + i * 15, "%d. %s" % (i + 1, t), "R", 7.4, SUB)
     p.end()
 
 
