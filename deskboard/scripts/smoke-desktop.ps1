@@ -7,6 +7,8 @@
 #   7) 단축키로 불러오면 다른 창 위로 올라오고, 다른 창을 쓰면 물러난다
 #   8) 다른 프로그램에서 끌어온 파일이 바로가기가 되고, 프로그램 타일에 실제 아이콘이 그려진다
 #   9) 타일을 끌어 순서를 바꿀 수 있다
+#  11) 불러온 뒤 바로 타자를 치면 바로가기를 찾고, Enter 로 연다
+#  12) 그날 처음 바꿀 때 보드의 백업이 남는다
 #  10) 불러온 위젯은 겹쳐 있는 탐색기 창에서 파일을 집어 오는 동안 위에 남아 있고, 놓으면 바로가기가 된다
 #   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯은 남아 있고, 새 바탕화면에서도 똑같이 동작한다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
@@ -66,6 +68,14 @@ public static class Win {
         keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 0, UIntPtr.Zero);
         keybd_event(0x44, 0, 0, UIntPtr.Zero); Thread.Sleep(60); keybd_event(0x44, 0, 2, UIntPtr.Zero);
         keybd_event(0x12, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero);
+    }
+    // 영문 대문자와 숫자로 된 글을 치고 Enter 를 누른다.
+    public static void TypeAndEnter(string text) {
+        foreach (char c in text) {
+            keybd_event((byte)c, 0, 0, UIntPtr.Zero); Thread.Sleep(40); keybd_event((byte)c, 0, 2, UIntPtr.Zero); Thread.Sleep(60);
+        }
+        Thread.Sleep(400);
+        keybd_event(0x0D, 0, 0, UIntPtr.Zero); Thread.Sleep(40); keybd_event(0x0D, 0, 2, UIntPtr.Zero);
     }
     // 사람이 끄는 것처럼 누른 채로 조금씩 움직였다가 뗀다.
     public static void Drag(int x, int y, int dx, int dy) {
@@ -330,6 +340,19 @@ try {
     Check "and it is no longer always-on-top" (-not [Win]::TopMost($widget))
     Check "and returns the focus to the window used before" (WaitFor { [Win]::GetForegroundWindow() -eq $cover } 3) (Describe ([Win]::GetForegroundWindow()))
 
+    # 11) 불러온 뒤 바로 타자를 쳐서 바로가기를 찾아 연다 ("cmd" 타일)
+    $consolesBeforeSearch = ConsoleWindows
+    [Win]::SummonHotkey()
+    WaitFor { (& $atProbe) -eq $widget } 5 | Out-Null
+    Start-Sleep -Milliseconds 600
+    [Win]::TypeAndEnter("CMD")
+    $foundBySearch = { ConsoleWindows | Where-Object { [Win]::IsWindowVisible($_) -and $consolesBeforeSearch -notcontains $_ } | Select-Object -First 1 }
+    Check "typing right after summoning finds a shortcut and Enter opens it" (WaitFor { $null -ne (& $foundBySearch) } 12)
+    Get-Process cmd -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $app.StartTime } | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    [Win]::Click($coverOnlyX, $coverOnlyY)
+    Check "after that the widget is back under other windows" (WaitFor { (& $atProbe) -eq $cover -and -not [Win]::TopMost($widget) } 6) (Describe (& $atProbe))
+
     # 8) 다른 프로그램에서 파일을 끌어다 놓기
     $dropFile = Join-Path $env:SystemRoot "explorer.exe"
     $source = OpenWindow "DeskBoardDragSource" 20 ($r.B + 30) 160 100 $dropFile
@@ -348,6 +371,11 @@ try {
     $tilesNow = @((& $readBoard).categories)[0].tiles
     Check "a file dragged in from another program becomes a tile" ($dropped -and $tilesNow[1].target -eq $dropFile -and $tilesNow[1].name -eq "explorer" -and $tilesNow[1].kind -eq "program") ($tilesNow | ConvertTo-Json -Compress)
     Stop-Process -Id ($script:started | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
+
+    # 12) 보드가 처음 바뀌기 직전의 내용이 백업으로 남는다
+    $backups = @(Get-ChildItem (Join-Path $dataDir "backups") -Filter "board-*.json" -ErrorAction SilentlyContinue)
+    $backupIsSeed = $backups.Count -eq 1 -and @((Get-Content $backups[0].FullName -Raw | ConvertFrom-Json).categories)[0].tiles.Count -eq 1
+    Check "the first change of the day leaves a backup of the board as it was" $backupIsSeed "$($backups.Count) backup file(s)"
 
     # 9) 타일 끌어 옮기기: 첫 타일(cmd)을 둘째 타일(explorer)의 오른쪽 절반에 놓으면 그 뒤로 간다.
     #    (타일 폭 78 + 간격 6 이므로 둘째 타일의 오른쪽 절반은 첫 타일 가운데에서 114픽셀쯤 오른쪽이다.)

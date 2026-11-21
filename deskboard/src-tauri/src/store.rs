@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// 자동 백업을 며칠 치 남겨 둘지
+const BACKUPS_KEPT: usize = 14;
+
 pub struct Store {
     path: PathBuf,
     board: Mutex<Board>,
@@ -32,6 +35,11 @@ impl Store {
         Store { path, board: Mutex::new(board) }
     }
 
+    /// 자동 백업이 쌓이는 폴더
+    pub fn backup_dir(&self) -> PathBuf {
+        backup_dir(&self.path)
+    }
+
     pub fn get(&self) -> Board {
         self.board.lock().unwrap().clone()
     }
@@ -41,11 +49,64 @@ impl Store {
         board.sanitize();
         let json = serde_json::to_string_pretty(&board).map_err(|e| e.to_string())?;
         let mut guard = self.board.lock().unwrap();
+        back_up_once_a_day(&self.path, &today());
         write_atomic(&self.path, json.as_bytes())
             .map_err(|e| format!("저장하지 못했습니다: {e}"))?;
         *guard = board;
         Ok(())
     }
+}
+
+fn backup_dir(board_file: &Path) -> PathBuf {
+    board_file.parent().unwrap_or(Path::new(".")).join("backups")
+}
+
+/// 그날 처음 저장하기 직전의 보드 파일을 `backups/board-YYYYMMDD.json` 으로 남겨 둔다.
+/// 실수로 지우거나 망가뜨린 내용을 "가져오기"로 되살릴 수 있게 하려는 것이다. 오래된 것은 지운다.
+pub fn back_up_once_a_day(board_file: &Path, today: &str) {
+    let dir = backup_dir(board_file);
+    let target = dir.join(format!("board-{today}.json"));
+    if target.exists() || !board_file.exists() {
+        return;
+    }
+    if fs::create_dir_all(&dir).is_err() || fs::copy(board_file, &target).is_err() {
+        return;
+    }
+    let mut backups: Vec<PathBuf> = fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|path| {
+            let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+            name.starts_with("board-") && name.ends_with(".json")
+        })
+        .collect();
+    // 이름에 날짜가 들어 있어 이름순이 곧 날짜순이다.
+    backups.sort();
+    for old in backups.iter().rev().skip(BACKUPS_KEPT) {
+        let _ = fs::remove_file(old);
+    }
+}
+
+/// 오늘 날짜를 YYYYMMDD 로 (UTC 기준).
+fn today() -> String {
+    let seconds = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    date_of_day((seconds / 86_400) as i64)
+}
+
+/// 1970-01-01 부터 센 날수를 YYYYMMDD 로 바꾼다.
+fn date_of_day(days_since_epoch: i64) -> String {
+    // Howard Hinnant 의 civil_from_days
+    let z = days_since_epoch + 719_468;
+    let era = z.div_euclid(146_097);
+    let day_of_era = z.rem_euclid(146_097);
+    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!("{year:04}{month:02}{day:02}")
 }
 
 /// 백업 파일의 내용을 보드로 읽는다. 아무 JSON 이나 빈 보드로 받아들이지 않도록 모양을 먼저 본다.
@@ -135,6 +196,62 @@ mod tests {
             .collect();
         assert_eq!(kept.len(), 1);
         assert_eq!(fs::read_to_string(kept[0].path()).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn days_are_turned_into_calendar_dates() {
+        assert_eq!(date_of_day(0), "19700101");
+        assert_eq!(date_of_day(59), "19700301");
+        assert_eq!(date_of_day(11_016), "20000229"); // 윤년
+        assert_eq!(date_of_day(20_777), "20261120");
+    }
+
+    #[test]
+    fn the_first_save_of_a_day_keeps_what_was_there_before() {
+        let dir = temp_dir("backup");
+        let path = dir.join("board.json");
+        back_up_once_a_day(&path, "20260101");
+        assert!(!dir.join("backups").exists(), "nothing to back up yet");
+
+        fs::write(&path, "first").unwrap();
+        back_up_once_a_day(&path, "20260101");
+        fs::write(&path, "second").unwrap();
+        back_up_once_a_day(&path, "20260101");
+        fs::write(&path, "third").unwrap();
+        back_up_once_a_day(&path, "20260102");
+
+        let read = |name: &str| fs::read_to_string(dir.join("backups").join(name)).unwrap();
+        assert_eq!(read("board-20260101.json"), "first");
+        assert_eq!(read("board-20260102.json"), "third");
+    }
+
+    #[test]
+    fn only_the_newest_backups_are_kept() {
+        let dir = temp_dir("backup-prune");
+        let path = dir.join("board.json");
+        fs::write(&path, "x").unwrap();
+        for day in 1..=20 {
+            back_up_once_a_day(&path, &format!("202601{day:02}"));
+        }
+        let mut names: Vec<String> = fs::read_dir(dir.join("backups"))
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names.len(), BACKUPS_KEPT);
+        assert_eq!(names.first().unwrap(), "board-20260107.json");
+        assert_eq!(names.last().unwrap(), "board-20260120.json");
+    }
+
+    #[test]
+    fn saving_through_the_store_makes_a_backup() {
+        let dir = temp_dir("backup-store");
+        let path = dir.join("board.json");
+        fs::write(&path, serde_json::to_string(&Board::starter()).unwrap()).unwrap();
+        let store = Store::open(path);
+        store.replace(Board::default()).unwrap();
+        let backups: Vec<_> = fs::read_dir(store.backup_dir()).unwrap().collect();
+        assert_eq!(backups.len(), 1);
     }
 
     #[test]

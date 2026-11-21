@@ -23,8 +23,18 @@ pub const DEFAULT_HOTKEY: &str = "Ctrl+Alt+D";
 pub struct Board {
     pub version: u32,
     pub categories: Vec<Category>,
+    /// 메모판의 페이지(탭)들. 언제나 하나 이상 있다.
+    pub pages: Vec<Page>,
     pub notes: Vec<Note>,
     pub settings: Settings,
+}
+
+/// 메모판의 한 페이지. 메모는 저마다 한 페이지에 붙어 있다.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Page {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -73,6 +83,8 @@ pub struct Note {
     /// 글 메모의 내용. 메모지 안 아무 데나 놓을 수 있는 글상자들이다.
     /// (예전 판은 글 전체를 text 에 두었다. 읽을 때 글상자 하나로 옮긴다.)
     pub boxes: Vec<TextBox>,
+    /// 이 메모가 붙어 있는 페이지
+    pub page: String,
 }
 
 /// 메모지 안의 글상자. 위치는 메모지 글 영역의 왼쪽 위 기준이다 (CSS px).
@@ -82,9 +94,14 @@ pub struct TextBox {
     pub id: String,
     pub x: f64,
     pub y: f64,
+    /// 사용자가 정한 폭. 0 이면 내용에 맞춘다.
+    pub w: f64,
     pub text: String,
     pub marks: Vec<Mark>,
 }
+
+/// 폭을 정한 글상자의 가장 좁은 폭
+pub const BOX_MIN_W: f64 = 40.0;
 
 /// 글상자를 따로 놓지 않았을 때의 자리 (예전 글 메모를 옮길 때도 여기에 둔다)
 pub const BOX_ORIGIN: (f64, f64) = (8.0, 6.0);
@@ -129,11 +146,19 @@ pub struct Settings {
     pub hotkey: String,
     /// 시작할 때 새 버전이 있는지 확인한다
     pub check_updates: bool,
+    /// 지금 보고 있는 메모판 페이지
+    pub page: String,
 }
 
 impl Default for Board {
     fn default() -> Self {
-        Board { version: 1, categories: Vec::new(), notes: Vec::new(), settings: Settings::default() }
+        Board {
+            version: 1,
+            categories: Vec::new(),
+            pages: Vec::new(),
+            notes: Vec::new(),
+            settings: Settings::default(),
+        }
     }
 }
 
@@ -153,6 +178,7 @@ impl Default for Note {
             font_size: 13.0,
             marks: Vec::new(),
             boxes: Vec::new(),
+            page: String::new(),
         }
     }
 }
@@ -168,6 +194,7 @@ impl Default for Settings {
             note_font: String::new(),
             hotkey: DEFAULT_HOTKEY.into(),
             check_updates: true,
+            page: String::new(),
         }
     }
 }
@@ -214,6 +241,21 @@ impl Board {
         if !THEMES.contains(&s.theme.as_str()) {
             s.theme = "dark".into();
         }
+        // 페이지는 언제나 하나 이상 있고, 모든 메모와 "지금 페이지"는 있는 페이지를 가리킨다.
+        self.pages.retain(|page| !page.id.is_empty());
+        if self.pages.is_empty() {
+            self.pages.push(Page { id: "page-1".into(), name: "메모".into() });
+        }
+        let first_page = self.pages[0].id.clone();
+        let known = |id: &str| self.pages.iter().any(|page| page.id == id);
+        if !known(&self.settings.page) {
+            self.settings.page = first_page.clone();
+        }
+        for note in &mut self.notes {
+            if !self.pages.iter().any(|page| page.id == note.page) {
+                note.page = first_page.clone();
+            }
+        }
         for note in &mut self.notes {
             let d = Note::default();
             note.x = clamp_or(note.x, 0.0, NOTE_MAX, d.x);
@@ -239,6 +281,7 @@ impl Board {
                         id: format!("{}-text", note.id),
                         x: BOX_ORIGIN.0,
                         y: BOX_ORIGIN.1,
+                        w: 0.0,
                         text: std::mem::take(&mut note.text),
                         marks: std::mem::take(&mut note.marks),
                     },
@@ -249,6 +292,7 @@ impl Board {
             for b in &mut note.boxes {
                 b.x = clamp_or(b.x, 0.0, NOTE_MAX, BOX_ORIGIN.0);
                 b.y = clamp_or(b.y, 0.0, NOTE_MAX, BOX_ORIGIN.1);
+                b.w = if b.w.is_finite() && b.w > 0.0 { b.w.clamp(BOX_MIN_W, NOTE_MAX) } else { 0.0 };
                 clean_marks(&b.text, &mut b.marks);
             }
         }
@@ -386,6 +430,41 @@ mod tests {
         let boxes = &board.notes[0].boxes;
         assert_eq!(boxes.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), ["a", "c"]);
         assert_eq!((boxes[1].x, boxes[1].y), (0.0, BOX_ORIGIN.1));
+    }
+
+    #[test]
+    fn boards_from_before_pages_get_one_page_holding_every_note() {
+        let mut board: Board =
+            serde_json::from_str(r#"{"notes":[{"id":"a"},{"id":"b","page":"gone"}],"settings":{"page":"gone"}}"#).unwrap();
+        board.sanitize();
+        assert_eq!(board.pages, vec![Page { id: "page-1".into(), name: "메모".into() }]);
+        assert!(board.notes.iter().all(|note| note.page == "page-1"));
+        assert_eq!(board.settings.page, "page-1");
+    }
+
+    #[test]
+    fn notes_keep_their_page_when_it_exists() {
+        let mut board = Board::starter();
+        board.pages.push(Page { id: "work".into(), name: "업무".into() });
+        board.notes[0].page = "work".into();
+        board.settings.page = "work".into();
+        board.sanitize();
+        assert_eq!(board.notes[0].page, "work");
+        assert_eq!(board.settings.page, "work");
+        assert_eq!(board.pages.len(), 2);
+    }
+
+    #[test]
+    fn text_box_width_is_automatic_or_at_least_the_minimum() {
+        let mut board = Board::starter();
+        let template = board.notes[0].boxes[0].clone();
+        board.notes[0].boxes = [0.0, -3.0, 5.0, 120.0, f64::NAN]
+            .iter()
+            .map(|w| TextBox { w: *w, ..template.clone() })
+            .collect();
+        board.sanitize();
+        let widths: Vec<f64> = board.notes[0].boxes.iter().map(|b| b.w).collect();
+        assert_eq!(widths, [0.0, 0.0, BOX_MIN_W, 120.0, 0.0]);
     }
 
     #[test]

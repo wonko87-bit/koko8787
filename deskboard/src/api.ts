@@ -53,12 +53,16 @@ export interface Api {
   exportBoard(): Promise<string | null>;
   /** 백업 파일을 골라 보드를 통째로 바꾼다. 취소하면 null */
   importBoard(): Promise<Board | null>;
+  /** 자동 백업이 쌓이는 폴더를 탐색기로 연다. */
+  openBackupFolder(): Promise<void>;
   setHotkey(hotkey: string): Promise<void>;
   /** 시작 프로그램에 등록되어 있는지. 알 수 없으면 null */
   getAutostart(): Promise<boolean | null>;
   setAutostart(enabled: boolean): Promise<boolean>;
   checkUpdate(): Promise<AvailableUpdate | null>;
   onFileDrop(handler: (drop: FileDrop) => void): Promise<() => void>;
+  /** 단축키나 트레이로 위젯을 불러왔을 때 */
+  onSummon(handler: () => void): Promise<() => void>;
   startMove(): Promise<void>;
   startResize(edge: ResizeEdge): Promise<void>;
   setResizable(resizable: boolean): Promise<void>;
@@ -91,8 +95,13 @@ const tauriApi: Api = {
     return path;
   },
   async importBoard() {
-    const path = await open({ multiple: false, directory: false, title: "보드 가져오기", filters: BACKUP_FILTER });
+    // 자동 백업 폴더에서 시작한다. 되살릴 때 고를 파일이 대개 거기 있다.
+    const defaultPath = await invoke<string>("backup_dir").catch(() => undefined);
+    const path = await open({ multiple: false, directory: false, title: "보드 가져오기", filters: BACKUP_FILTER, defaultPath });
     return path ? invoke<Board>("import_board", { path }) : null;
+  },
+  async openBackupFolder() {
+    await invoke("launch_target", { target: await invoke<string>("backup_dir"), elevated: false });
   },
   setHotkey: (hotkey) => invoke("set_hotkey", { hotkey }),
   getAutostart: () => autostart.isEnabled().catch(() => null),
@@ -120,6 +129,7 @@ const tauriApi: Api = {
       handler({ ...payload, x: payload.x / scale, y: payload.y / scale });
     });
   },
+  onSummon: (handler) => listen("summoned", () => handler()),
   startMove: () => getCurrentWindow().startDragging(),
   startResize: (edge) => getCurrentWindow().startResizeDragging(edge),
   setResizable: (resizable) => getCurrentWindow().setResizable(resizable),
@@ -144,8 +154,14 @@ const tile = (id: string, name: string, target: string, kind: TileKind, extra: o
   ...extra,
 });
 
+const PREVIEW_PAGES = [
+  { id: "p1", name: "메모" },
+  { id: "p2", name: "업무" },
+];
+
 const previewBoard: Board = {
   version: 1,
+  pages: PREVIEW_PAGES,
   categories: [
     {
       id: "c1",
@@ -180,12 +196,13 @@ const previewBoard: Board = {
       items: [],
       fontSize: 13,
       marks: [],
+      page: "p1",
       // 글상자를 두 줄 두 칸으로 놓은 메모
       boxes: [
-        { id: "b1", x: 8, y: 6, text: "오후 3시 회의", marks: [{ start: 0, end: 5, bold: true, italic: false, color: "red" }] },
-        { id: "b2", x: 120, y: 6, text: "2층 회의실", marks: [] },
-        { id: "b3", x: 8, y: 60, text: "자료 출력하기", marks: [] },
-        { id: "b4", x: 120, y: 60, text: "10부", marks: [] },
+        { id: "b1", x: 8, y: 6, w: 0, text: "오후 3시 회의", marks: [{ start: 0, end: 5, bold: true, italic: false, color: "red" }] },
+        { id: "b2", x: 120, y: 6, w: 0, text: "2층 회의실", marks: [] },
+        { id: "b3", x: 8, y: 60, w: 0, text: "자료 출력하기", marks: [] },
+        { id: "b4", x: 120, y: 60, w: 0, text: "10부", marks: [] },
       ],
     },
     {
@@ -205,6 +222,7 @@ const previewBoard: Board = {
       fontSize: 13,
       marks: [],
       boxes: [],
+      page: "p1",
     },
   ],
   settings: {
@@ -216,12 +234,14 @@ const previewBoard: Board = {
     noteFont: "",
     hotkey: "Ctrl+Alt+D",
     checkUpdates: true,
+    page: "p1",
   },
 };
 
 /** 미리보기에서 테스트가 밖에서 불러 쓸 수 있게 열어 둔 손잡이 */
 interface PreviewHooks {
   drop?: (drop: FileDrop) => void;
+  summon?: () => void;
   update?: string | null;
 }
 const hooks: PreviewHooks = ((window as unknown as { __deskboardPreview?: PreviewHooks }).__deskboardPreview ??= {});
@@ -261,10 +281,11 @@ const previewApi: Api = {
     return "C:\\backup\\deskboard.json";
   },
   async importBoard() {
-    const board: Board = { ...previewBoard, notes: [], settings: { ...previewBoard.settings, theme: "mint" } };
+    const board: Board = { ...previewBoard, pages: [PREVIEW_PAGES[0]], notes: [], settings: { ...previewBoard.settings, theme: "mint" } };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
     return board;
   },
+  openBackupFolder: async () => console.info("[preview] open backup folder"),
   async setHotkey(hotkey) {
     if (hotkey.includes("F12")) throw `단축키 ${hotkey} 를 등록하지 못했습니다. 다른 프로그램이 쓰고 있을 수 있습니다.`;
     console.info("[preview] hotkey", hotkey || "(none)");
@@ -283,6 +304,12 @@ const previewApi: Api = {
     hooks.drop = handler;
     return () => {
       hooks.drop = undefined;
+    };
+  },
+  async onSummon(handler) {
+    hooks.summon = handler;
+    return () => {
+      hooks.summon = undefined;
     };
   },
   startMove: async () => console.info("[preview] start move"),

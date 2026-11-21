@@ -2,7 +2,7 @@
 
 import { BOX_ORIGIN, NOTE_FONT_MAX, NOTE_FONT_MIN, NOTE_MIN_H, NOTE_MIN_W } from "./types";
 import { joinRich, sliceRich } from "./richText";
-import type { Board, Category, Note, NoteItem, Rich, Settings, TextBox, Tile } from "./types";
+import type { Board, Category, Note, NoteItem, Page, Rich, Settings, TextBox, Tile } from "./types";
 
 export const newId = () => crypto.randomUUID();
 
@@ -99,6 +99,7 @@ export function addNote(board: Board, at: { x: number; y: number }): { board: Bo
     marks: [],
     // 바로 적을 수 있게 빈 글상자 하나를 놓아 둔다. 아무것도 안 적으면 사라진다.
     boxes: [newBox(BOX_ORIGIN)],
+    page: board.settings.page,
   };
   return { board: { ...board, notes: [...board.notes, note] }, note };
 }
@@ -148,9 +149,88 @@ export const newBox = (at: { x: number; y: number }, rich: Rich = { text: "", ma
   id: newId(),
   x: Math.max(0, Math.round(at.x)),
   y: Math.max(0, Math.round(at.y)),
+  w: 0,
   text: rich.text,
   marks: rich.marks,
 });
+
+/** 값이 후보 중 하나와 `within` 안으로 가까우면 그 후보에 붙인다 (글상자 줄 맞춤). 붙었으면 guide 에 그 자리가 온다. */
+export function snap(value: number, candidates: number[], within: number): { value: number; guide: number | null } {
+  let nearest: number | null = null;
+  for (const candidate of candidates) {
+    const distance = Math.abs(candidate - value);
+    if (distance <= within && (nearest === null || distance < Math.abs(nearest - value))) nearest = candidate;
+  }
+  return nearest === null ? { value, guide: null } : { value: nearest, guide: nearest };
+}
+
+// ---- 메모판 페이지 ----
+
+export function addPage(board: Board, name: string): Board {
+  const page: Page = { id: newId(), name };
+  return { ...board, pages: [...board.pages, page], settings: { ...board.settings, page: page.id } };
+}
+
+export function renamePage(board: Board, id: string, name: string): Board {
+  return { ...board, pages: board.pages.map((p) => (p.id === id ? { ...p, name } : p)) };
+}
+
+/** 페이지와 거기 붙은 메모를 지운다. 마지막 남은 페이지는 지우지 않는다. */
+export function removePage(board: Board, id: string): Board {
+  if (board.pages.length <= 1 || !board.pages.some((p) => p.id === id)) return board;
+  const pages = board.pages.filter((p) => p.id !== id);
+  const page = board.settings.page === id ? pages[0].id : board.settings.page;
+  return { ...board, pages, notes: board.notes.filter((n) => n.page !== id), settings: { ...board.settings, page } };
+}
+
+/** 페이지 탭을 한 칸 왼쪽(-1)이나 오른쪽(+1)으로 옮긴다. */
+export function shiftPage(board: Board, id: string, delta: -1 | 1): Board {
+  const from = board.pages.findIndex((p) => p.id === id);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= board.pages.length) return board;
+  const pages = [...board.pages];
+  [pages[from], pages[to]] = [pages[to], pages[from]];
+  return { ...board, pages };
+}
+
+// ---- 지운 것 되살리기 ----
+
+/** 지웠던 메모를 다시 붙인다. 있던 페이지가 없어졌으면 지금 페이지에 붙인다. */
+export function restoreNote(board: Board, note: Note): Board {
+  if (board.notes.some((n) => n.id === note.id)) return board;
+  const page = board.pages.some((p) => p.id === note.page) ? note.page : board.settings.page;
+  return { ...board, notes: [...board.notes, { ...note, page }] };
+}
+
+/** 지웠던 타일을 있던 자리에 다시 넣는다. 카테고리가 없어졌으면 첫 카테고리 끝에 넣는다. */
+export function restoreTile(board: Board, tile: Tile, categoryId: string, index: number): Board {
+  if (findTile(board, tile.id) || board.categories.length === 0) return board;
+  const target = board.categories.some((c) => c.id === categoryId) ? categoryId : board.categories[0].id;
+  return {
+    ...board,
+    categories: board.categories.map((c) => {
+      if (c.id !== target) return c;
+      const tiles = [...c.tiles];
+      tiles.splice(c.id === categoryId ? Math.min(index, tiles.length) : tiles.length, 0, tile);
+      return { ...c, tiles };
+    }),
+  };
+}
+
+export function restoreCategory(board: Board, category: Category, index: number): Board {
+  if (board.categories.some((c) => c.id === category.id)) return board;
+  const categories = [...board.categories];
+  categories.splice(Math.min(index, categories.length), 0, category);
+  return { ...board, categories };
+}
+
+export function restorePage(board: Board, page: Page, index: number, notes: Note[]): Board {
+  if (board.pages.some((p) => p.id === page.id)) return board;
+  const pages = [...board.pages];
+  pages.splice(Math.min(index, pages.length), 0, page);
+  const missing = notes.filter((note) => !board.notes.some((n) => n.id === note.id));
+  return { ...board, pages, notes: [...board.notes, ...missing], settings: { ...board.settings, page: page.id } };
+}
 
 /** 적힌 것이 하나도 없는 메모인가 */
 export function isNoteEmpty(note: Note): boolean {
