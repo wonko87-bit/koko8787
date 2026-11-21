@@ -4,13 +4,16 @@ on:
   push:
     branches: ["main", "claude/planner**"]
     paths: ["planner/**", ".github/workflows/planner-windows.yml"]
-  pull_request:
-    paths: ["planner/**", ".github/workflows/planner-windows.yml"]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # 저장소 Secrets에 넣는 것이 원칙이지만, Variables에 넣어도 동작하게 함
+      G_ID: ${{ secrets.PLANNER_GOOGLE_CLIENT_ID || vars.PLANNER_GOOGLE_CLIENT_ID }}
+      G_SECRET: ${{ secrets.PLANNER_GOOGLE_CLIENT_SECRET || vars.PLANNER_GOOGLE_CLIENT_SECRET }}
+      HAS_SECRETS: ${{ (secrets.PLANNER_GOOGLE_CLIENT_ID || vars.PLANNER_GOOGLE_CLIENT_ID) != '' && (secrets.PLANNER_GOOGLE_CLIENT_SECRET || vars.PLANNER_GOOGLE_CLIENT_SECRET) != '' }}
     defaults:
       run:
         working-directory: planner
@@ -29,6 +32,11 @@ jobs:
         with:
           workspaces: planner/src-tauri
 
+      - name: OAuth settings check (values are never printed)
+        shell: bash
+        run: |
+          echo "::notice title=OAuth 설정 확인::client_id secrets=${{ secrets.PLANNER_GOOGLE_CLIENT_ID != '' }} vars=${{ vars.PLANNER_GOOGLE_CLIENT_ID != '' }} / client_secret secrets=${{ secrets.PLANNER_GOOGLE_CLIENT_SECRET != '' }} vars=${{ vars.PLANNER_GOOGLE_CLIENT_SECRET != '' }} / sync build=${{ env.HAS_SECRETS }}"
+
       - name: Install Tauri CLI
         run: npm ci
 
@@ -36,25 +44,54 @@ jobs:
         run: |
           node --check src/app.js
           node --check src/holidays.js
+          node --check src/sync.js
+
+      - name: Sync engine tests
+        run: node --test tests/sync.test.js
 
       - name: Run Rust tests
         run: cargo test --release
         working-directory: planner/src-tauri
 
-      - name: Build Windows installer (NSIS)
+      # ① 회사 PC용: 동기화 없음 (OAuth 시크릿 없이 빌드)
+      - name: Build local-only installer
         run: npx tauri build
 
-      - name: Collect artifacts
+      - name: Collect local-only artifacts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force out | Out-Null
-          Copy-Item src-tauri/target/release/bundle/nsis/*.exe out/
-          Copy-Item src-tauri/target/release/planner.exe out/Planner-portable.exe
-          Get-ChildItem out | Format-Table Name, Length
+          New-Item -ItemType Directory -Force out/local | Out-Null
+          Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | ForEach-Object { Copy-Item $_ ("out/local/" + $_.BaseName + "_local.exe") }
+          Copy-Item src-tauri/target/release/planner.exe out/local/Planner-local-portable.exe
 
-      - name: Upload installer artifact
+      # ② 개인용: Google 드라이브 동기화 포함 (저장소 시크릿 주입)
+      - name: Build sync-enabled installer
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        env:
+          PLANNER_GOOGLE_CLIENT_ID: ${{ env.G_ID }}
+          PLANNER_GOOGLE_CLIENT_SECRET: ${{ env.G_SECRET }}
+        run: npx tauri build
+
+      - name: Collect sync-enabled artifacts
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out/sync | Out-Null
+          Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe | ForEach-Object { Copy-Item $_ ("out/sync/" + $_.BaseName + "_sync.exe") }
+          Copy-Item src-tauri/target/release/planner.exe out/sync/Planner-sync-portable.exe
+          Get-ChildItem out -Recurse | Format-Table FullName, Length
+
+      - name: Upload local-only artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Planner-windows
-          path: planner/out/*.exe
+          name: Planner-windows-local
+          path: planner/out/local/*.exe
+          if-no-files-found: error
+
+      - name: Upload sync-enabled artifact
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Planner-windows-sync
+          path: planner/out/sync/*.exe
           if-no-files-found: error

@@ -20,7 +20,9 @@
 - `문서\Planner\planner-data.json`: 입력하는 대로 자동 저장(임시 파일에 쓴 뒤 교체)
 - `문서\Planner\backups\`: 하루 한 번, 덮어쓰기 전 상태를 보관(14일)
 - `문서\Planner\exports\`: 엑셀·JSON 내보내기
-- 외부로 보내는 것은 없습니다. (Google 드라이브 동기화는 [docs/SYNC.md](docs/SYNC.md)에서 설계 중)
+- **동기화(개인용 빌드)**: 설정 → "Google 계정 연결"을 누르면 노트북·태블릿 간 플래너를 본인 Google 드라이브의 앱 전용 숨김 공간으로 칸 단위로 맞춥니다.
+  상단의 구름 아이콘은 상태 표시이고, 누르면 지금 바로 동기화합니다. 자세한 내용은 [docs/SYNC.md](docs/SYNC.md)
+- **회사 PC용 빌드**에는 동기화 기능이 아예 없어서, 외부로 보내는 데이터가 없습니다.
 
 ## 개발
 
@@ -35,8 +37,12 @@ npm run preview        # 화면만 한 장짜리 HTML로 묶기 → preview/plan
 - 화면: `src/` (`index.html`, `style.css`, `app.js`, `holidays.js`). 빌드 도구 없이 그대로 쓰입니다.
 - 본체: `src-tauri/src/main.rs`. 데이터 저장·백업, 엑셀 내보내기, 트레이, 전역 단축키, 자동 실행.
 - 브라우저에서 `src/index.html`을 열면 localStorage에 저장하며 화면만 확인할 수 있습니다.
-- GitHub Actions **Planner Windows Build** 워크플로가 `planner/**` 변경 때마다 Rust 테스트와 설치 파일 빌드를 돌립니다.
-  설치 파일은 실행 결과의 `Planner-windows` 아티팩트로 받을 수 있습니다.
+- 동기화 엔진 테스트: `node --test tests/sync.test.js`
+- GitHub Actions **Planner Windows Build** 워크플로가 `planner/**` 변경 때마다 테스트를 돌리고 설치 파일 두 종류를 만듭니다.
+  - `Planner-windows-local`: 동기화 없음 (회사 PC용)
+  - `Planner-windows-sync`: 동기화 포함 (개인용). 저장소 시크릿 `PLANNER_GOOGLE_CLIENT_ID` / `PLANNER_GOOGLE_CLIENT_SECRET`이 있을 때만 만들어짐
+    (Settings → Secrets and variables → **Actions → Repository secrets**에 등록. Environment·Codespaces·Dependabot 시크릿은 이 빌드에서 보이지 않음)
+- 로컬에서 동기화 빌드를 하려면 위 두 환경 변수를 설정한 뒤 `npx tauri build`
 
 ## 설계 결정 (인수인계용)
 
@@ -51,6 +57,7 @@ npm run preview        # 화면만 한 장짜리 HTML로 묶기 → preview/plan
 | 줄 수 | 주간 하루 11줄 · 넘길 일 11줄 · 주 목표 4줄 / 월 목표 6줄 · 월간 할일은 높이에 맞춰 가변(최대 60) |
 | 공휴일 | `src/holidays.js`. 2026-12 ~ 2027 (우주항공청 2027년 월력요항 기준, 제헌절·노동절 포함, 대체공휴일 7일). 해마다 추가 필요 |
 | 회사 PC 빌드 | 동기화 없이 로컬 파일만 사용. 동기화는 개인용 빌드에서만 켬 ([docs/SYNC.md](docs/SYNC.md)) |
+| 동기화 | Google 드라이브 appDataFolder + 칸 단위 LWW 병합. 권한은 `drive.appdata` 하나. OAuth 시크릿은 빌드 시 주입(저장소에 없음) |
 | 앱 식별자 | `com.planner.desktop`. 이미 설치된 버전과 같은 앱으로 인식되도록 바꾸지 않음 |
 
 ## 라이선스

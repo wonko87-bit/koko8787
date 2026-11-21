@@ -1,6 +1,8 @@
 // 콘솔 창 없이 실행 (릴리스 빌드)
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod google;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -228,6 +230,70 @@ fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/* ───────────────────────── 동기화 (Google 드라이브) ───────────────────────── */
+
+#[derive(serde::Serialize)]
+struct SyncStatus {
+    available: bool,
+    connected: bool,
+}
+
+#[tauri::command]
+fn sync_status(app: AppHandle) -> SyncStatus {
+    SyncStatus { available: google::client().is_some(), connected: google::is_connected(&app) }
+}
+
+/// 블로킹 작업을 별도 스레드에서 실행
+async fn blocking<T: Send + 'static>(
+    app: AppHandle,
+    f: impl FnOnce(&AppHandle, &google::Shared) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let shared = app.state::<google::Shared>();
+        f(&app, shared.inner())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn google_login(app: AppHandle) -> Result<(), String> {
+    let res = blocking(app.clone(), |a, s| google::login(a, s)).await;
+    show_main(&app); // 브라우저에서 돌아오면 플래너를 앞으로
+    res
+}
+
+#[tauri::command]
+async fn google_logout(app: AppHandle) -> Result<(), String> {
+    blocking(app, |a, s| {
+        google::logout(a, s);
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+async fn drive_pull(app: AppHandle) -> Result<Vec<String>, String> {
+    blocking(app, |a, s| google::pull(a, s)).await
+}
+
+#[tauri::command]
+async fn drive_push(app: AppHandle, content: String) -> Result<(), String> {
+    blocking(app, move |a, s| google::push(a, s, &content)).await
+}
+
+/// 동기화용 데이터 변환 직전 원본 보관 (한 번만)
+#[tauri::command]
+fn backup_once(app: AppHandle, json: String, name: String) -> Result<(), String> {
+    let dir = sub_dir(&app, "backups")?;
+    let stem: String = name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+    let path = dir.join(format!("{stem}.json.bak"));
+    if !path.exists() {
+        fs::write(&path, json.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /* ───────────────────────── 창 / 트레이 ───────────────────────── */
 
 fn show_main(app: &AppHandle) {
@@ -314,6 +380,7 @@ fn main() {
                 })
                 .build(),
         )
+        .manage(google::Shared::default())
         .setup(move |app| {
             let handle = app.handle();
             build_tray(handle)?;
@@ -343,7 +410,13 @@ fn main() {
             export_xlsx,
             get_autostart,
             set_autostart,
-            quit_app
+            quit_app,
+            sync_status,
+            google_login,
+            google_logout,
+            drive_pull,
+            drive_push,
+            backup_once
         ])
         .run(tauri::generate_context!())
         .expect("Planner 실행 중 오류");

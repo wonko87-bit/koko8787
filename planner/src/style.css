@@ -168,6 +168,24 @@ svg { display: block; }
 .pill-btn.primary:hover { filter: brightness(1.1); background: var(--navy); color: #fff; }
 .pill-btn.danger { color: var(--danger); }
 
+.sync-btn {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 4px 11px 4px 8px;
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.sync-btn[hidden] { display: none; }
+.sync-btn:hover { background: var(--surface-3); color: var(--ink); }
+.sync-ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sync-mark { opacity: 0; }
+.sync-btn[data-state="ok"] { color: var(--done); }
+.sync-btn[data-state="ok"] .sync-mark { opacity: 1; }
+.sync-btn[data-state="busy"] .sync-ico { animation: syncPulse 1s ease-in-out infinite; }
+.sync-btn[data-state="error"] { color: #C98A12; border-color: color-mix(in srgb, #C98A12 40%, var(--line)); }
+.sync-btn[data-state="login"] { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+.sync-btn[data-state="off"] { color: var(--ink-3); }
+@keyframes syncPulse { 50% { opacity: .35; } }
 .rate { display: flex; align-items: center; gap: 8px; margin-right: 6px; }
 .ring { width: 34px; height: 34px; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-width: 4; }

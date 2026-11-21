@@ -1,7 +1,7 @@
 {
   "name": "planner",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "주간·월간 할일/일정 플래너 (Tauri)",
   "scripts": {
     "tauri": "tauri",
