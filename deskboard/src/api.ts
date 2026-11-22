@@ -63,6 +63,8 @@ export interface Api {
   onFileDrop(handler: (drop: FileDrop) => void): Promise<() => void>;
   /** 단축키나 트레이로 위젯을 불러왔을 때 */
   onSummon(handler: () => void): Promise<() => void>;
+  /** 트레이 메뉴에서 "업데이트 확인"을 골랐을 때 */
+  onUpdateRequest(handler: () => void): Promise<() => void>;
   startMove(): Promise<void>;
   startResize(edge: ResizeEdge): Promise<void>;
   setResizable(resizable: boolean): Promise<void>;
@@ -130,6 +132,7 @@ const tauriApi: Api = {
     });
   },
   onSummon: (handler) => listen("summoned", () => handler()),
+  onUpdateRequest: (handler) => listen("check-update", () => handler()),
   startMove: () => getCurrentWindow().startDragging(),
   startResize: (edge) => getCurrentWindow().startResizeDragging(edge),
   setResizable: (resizable) => getCurrentWindow().setResizable(resizable),
@@ -242,6 +245,7 @@ const previewBoard: Board = {
 interface PreviewHooks {
   drop?: (drop: FileDrop) => void;
   summon?: () => void;
+  requestUpdate?: () => void;
   update?: string | null;
 }
 const hooks: PreviewHooks = ((window as unknown as { __deskboardPreview?: PreviewHooks }).__deskboardPreview ??= {});
@@ -310,6 +314,12 @@ const previewApi: Api = {
     hooks.summon = handler;
     return () => {
       hooks.summon = undefined;
+    };
+  },
+  async onUpdateRequest(handler) {
+    hooks.requestUpdate = handler;
+    return () => {
+      hooks.requestUpdate = undefined;
     };
   },
   startMove: async () => console.info("[preview] start move"),

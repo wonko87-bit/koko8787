@@ -10,6 +10,7 @@
 #  11) 불러온 뒤 바로 타자를 치면 바로가기를 찾고, Enter 로 연다
 #  12) 그날 처음 바꿀 때 보드의 백업이 남는다
 #  10) 불러온 위젯은 겹쳐 있는 탐색기 창에서 파일을 집어 오는 동안 위에 남아 있고, 놓으면 바로가기가 된다
+#  13) 화면 밖으로 밀려난 위젯을 트레이 메뉴의 "위치·크기 초기화"로 화면 안에 되찾는다
 #   6) 바탕화면 보기 중에 탐색기가 죽었다 살아나도 위젯은 남아 있고, 새 바탕화면에서도 똑같이 동작한다
 # 사용: pwsh scripts/smoke-desktop.ps1 -Exe <deskboard.exe 경로> [-Screenshot <png 경로>]
 # 마우스를 직접 움직이고 다른 창을 최소화하므로 CI 같은 빈 환경에서만 돌린다.
@@ -49,6 +50,7 @@ public static class Win {
     [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint msg, IntPtr w, IntPtr l);
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int height, bool repaint);
     [DllImport("user32.dll")] public static extern bool GetWindowBand(IntPtr h, out uint band);
+    [DllImport("user32.dll")] public static extern int GetSystemMetrics(int index);
     // PowerShell 은 $null 을 빈 문자열로 넘기므로, 클래스 이름 없이 제목으로만 찾는 일은 여기서 한다.
     public static IntPtr Find(string title) { return FindWindowW(null, title); }
     public static string Class(IntPtr h) { var s = new StringBuilder(256); GetClassNameW(h, s, 256); return s.ToString(); }
@@ -577,6 +579,37 @@ try {
             Stop-Process -Id ($script:started | Select-Object -Last 1).Id -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
         }
+    }
+
+    # 13) 화면 구성이 바뀌어 위젯이 화면 밖에 걸치면 자물쇠·설정 단추를 누를 수 없다.
+    #     트레이 메뉴의 "위치·크기 초기화"가 잠긴 채로도 위젯을 화면 안으로 데려와야 한다.
+    #     트레이 메뉴는 직접 누를 수 없어, 같은 일을 시키는 실행 인자(--tray-action)로 대신한다.
+    if ($again -ne [IntPtr]::Zero) {
+        $screenW = [Win]::GetSystemMetrics(0)
+        $screenH = [Win]::GetSystemMetrics(1)
+        $width = $locked.R - $locked.L
+        $height = $locked.B - $locked.T
+        [Win]::MoveWindow($again, $screenW - 150, $locked.T, $width, $height, $true) | Out-Null
+        $pushedOut = WaitFor { (RectOf $again).L -eq $screenW - 150 } 5
+        Check "the widget can be pushed mostly off the screen" ($pushedOut -and (RectOf $again).R -gt $screenW) (RectText (RectOf $again))
+        Start-Sleep -Milliseconds 500
+        Start-Process -FilePath $Exe -ArgumentList "--tray-action", "reset" -Wait
+        $inside = { $now = RectOf $again; $now.L -ge 0 -and $now.T -ge 0 -and $now.R -le $screenW -and $now.B -le $screenH }
+        Check "tray reset brings the whole widget back onto the screen" (WaitFor $inside 10) "$(RectText (RectOf $again)) on ${screenW}x$screenH"
+        $back = RectOf $again
+        Check "tray reset puts it at the top right of the screen" ($back.T -lt 200 -and $screenW - $back.R -lt 200) (RectText $back)
+        Check "and brings it in front so its lock button can be used" (WaitFor { [Win]::RootAt($back.R - 52, $back.T + 18) -eq $again -and [Win]::TopMost($again) } 5) (Describe ([Win]::RootAt($back.R - 52, $back.T + 18)))
+        Check "the app is still the one that was running" (-not $app.HasExited -and [Win]::Find("DeskBoard") -eq $again)
+        Start-Sleep -Seconds 2
+        $savedNow = if (Test-Path $windowFile) { Get-Content $windowFile -Raw | ConvertFrom-Json } else { $null }
+        Check "the new place is remembered" ($null -ne $savedNow -and $savedNow.x -eq $back.L -and $savedNow.y -eq $back.T) "$(if ($savedNow) { $savedNow | ConvertTo-Json -Compress })"
+
+        # 다음 점검을 위해 불러온 것을 물리고 원래 자리로 돌려놓는다.
+        if ([Win]::TopMost($again)) { [Win]::SummonHotkey() }
+        Check "after the reset the widget can be sent back again" (WaitFor { -not [Win]::TopMost($again) } 5)
+        [Win]::MoveWindow($again, $locked.L, $locked.T, $width, $height, $true) | Out-Null
+        WaitFor { SameRect (RectOf $again) $locked } 5 | Out-Null
+        Start-Sleep -Seconds 2
     }
 
     # 6) 바탕화면 보기 중(위젯이 바탕화면 창에 딸려 있는 동안)에 탐색기가 죽었다 살아난다.

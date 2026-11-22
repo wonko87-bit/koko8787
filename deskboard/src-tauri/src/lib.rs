@@ -12,7 +12,7 @@ use geometry::{GeometryStore, Rect};
 use model::Board;
 use std::sync::Arc;
 use store::Store;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize, RunEvent, State, WebviewWindow, WindowEvent};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -116,19 +116,67 @@ fn toggle_summon(app: &AppHandle) {
     let _ = app;
 }
 
+/// 위젯을 다른 창들 위로 불러온다. 이미 불러와 있으면 그대로 둔다.
+fn summon(app: &AppHandle) {
+    #[cfg(windows)]
+    {
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if desktop::summon() {
+                let _ = tauri::Emitter::emit(&handle, "summoned", ());
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    let _ = app;
+}
+
+/// 트레이 메뉴에서 고른 일을 한다.
+/// 위젯의 단추들이 화면 밖으로 밀려나 누를 수 없을 때에도 여기서는 할 수 있어야 하는 일들이다.
+fn tray_action(app: &AppHandle, id: &str) {
+    match id {
+        "summon" => toggle_summon(app),
+        // 화면 구성이 바뀌어 위젯이 화면 밖에 걸쳤을 때, 주 모니터의 기본 자리로 데려온다.
+        "reset" => {
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(e) = place(&window, None) {
+                    eprintln!("[deskboard] could not reset the window: {e}");
+                }
+            }
+            summon(app);
+        }
+        // 확인과 설치는 화면 쪽이 맡는다. 결과가 보이도록 위젯을 불러 놓고 알린다.
+        "update" => {
+            summon(app);
+            let _ = tauri::Emitter::emit(app, "check-update", ());
+        }
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
+
+/// 이미 떠 있는데 `--tray-action <이름>` 을 붙여 또 실행하면, 떠 있는 쪽이 그 트레이 메뉴 항목을 수행한다.
+/// 트레이 메뉴를 직접 누를 수 없는 자동 점검(scripts/smoke-desktop.ps1)에서 쓴다.
+fn tray_action_from_args(app: &AppHandle, args: &[String]) {
+    if let Some(at) = args.iter().position(|arg| arg == "--tray-action") {
+        if let Some(id) = args.get(at + 1) {
+            tray_action(app, id);
+        }
+    }
+}
+
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let summon = MenuItem::with_id(app, "summon", "위젯 불러오기", true, None::<&str>)?;
+    let reset = MenuItem::with_id(app, "reset", "위치·크기 초기화", true, None::<&str>)?;
+    let update = MenuItem::with_id(app, "update", "업데이트 확인", true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "DeskBoard 종료", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&summon, &quit])?;
+    let menu = Menu::with_items(app, &[&summon, &reset, &update, &separator, &quit])?;
     let mut tray = TrayIconBuilder::with_id("deskboard-tray")
         .tooltip("DeskBoard")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "summon" => toggle_summon(app),
-            "quit" => app.exit(0),
-            _ => {}
-        })
+        .on_menu_event(|app, event| tray_action(app, event.id.as_ref()))
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
                 toggle_summon(tray.app_handle());
@@ -196,7 +244,7 @@ fn remember_geometry(window: &WebviewWindow, geometry: Arc<GeometryStore>) {
 pub fn run() {
     let app = tauri::Builder::default()
         // 두 번 실행하면 같은 파일을 두 창이 번갈아 덮어쓰게 되므로 하나만 띄운다.
-        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| tray_action_from_args(app, &args)))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_updater::Builder::new().build())

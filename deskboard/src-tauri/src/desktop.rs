@@ -124,17 +124,25 @@ pub fn sync_visibility(show: impl FnOnce()) {
 /// 위젯을 다른 창들 위로 불러온다. 이미 불러와 있으면 도로 내려보낸다. 창을 만든 스레드에서 부른다.
 /// 불러왔으면 true, 내려보냈으면 false 를 돌려준다.
 pub fn toggle_summon() -> bool {
+    if !hwnd(&WIDGET).is_invalid() && SUMMONED.load(Relaxed) {
+        unsafe { dismiss(true) };
+        return false;
+    }
+    summon()
+}
+
+/// 위젯을 다른 창들 위로 불러온다. 이미 불러와 있어도 내려보내지 않고 그대로 앞에 둔다.
+/// 창을 만든 스레드에서 부른다. 위젯 창이 없으면 false 를 돌려준다.
+pub fn summon() -> bool {
     unsafe {
         let widget = hwnd(&WIDGET);
         if widget.is_invalid() {
             return false;
         }
-        if SUMMONED.load(Relaxed) {
-            dismiss(true);
-            return false;
+        // 이미 불러와 있을 때는, 돌아갈 창을 위젯 자신으로 덮어쓰지 않는다.
+        if !SUMMONED.swap(true, Relaxed) {
+            RETURN_TO.store(GetForegroundWindow().0 as isize, Relaxed);
         }
-        RETURN_TO.store(GetForegroundWindow().0 as isize, Relaxed);
-        SUMMONED.store(true, Relaxed);
         // 앞 창이 되면서 창 순서도 맨 위로 올라가야 하므로, 이때만 순서 변경을 받아들인다.
         MOVING_SELF.store(true, Relaxed);
         let _ = SetForegroundWindow(widget);

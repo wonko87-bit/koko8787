@@ -91,6 +91,21 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toast]);
 
+  // 트레이 메뉴에서 "업데이트 확인"을 고르면 할 일. 실제 내용은 아래에서 채운다.
+  const checkFromTray = useRef<() => void>(() => {});
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let cancelled = false;
+    api.onUpdateRequest(() => checkFromTray.current()).then(
+      (unlisten) => (cancelled ? unlisten() : (stop = unlisten)),
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, []);
+
   // 단축키나 트레이로 불러오면 바로 타자를 쳐서 바로가기를 찾을 수 있게 찾기 칸에 커서를 둔다.
   useEffect(() => {
     let stop: (() => void) | undefined;
@@ -420,24 +435,47 @@ export default function App() {
     }
   };
 
-  const installUpdate = () => {
-    if (!update || installing) return;
+  /** 설치하기 전에 한 번 묻는다. */
+  const askToInstall = (found: AvailableUpdate) => {
+    if (installing) return;
     setDialog({
       type: "confirm",
       title: "업데이트 설치",
-      message: `새 버전 v${update.version} 을 내려받아 설치합니다. 설치가 끝나면 DeskBoard 가 다시 시작됩니다.`,
+      message: `새 버전 v${found.version} 을 내려받아 설치합니다. 설치가 끝나면 DeskBoard 가 다시 시작됩니다.`,
       confirmLabel: "설치",
       onConfirm: async () => {
         setInstalling(true);
         try {
           await flushPendingSave();
-          await update.install();
+          await found.install();
         } catch (e) {
           showError(e);
           setInstalling(false);
         }
       },
     });
+  };
+
+  const installUpdate = () => {
+    if (update) askToInstall(update);
+  };
+
+  // 트레이 메뉴의 "업데이트 확인". 위젯의 단추가 화면 밖에 있어도 업데이트할 수 있게,
+  // 새 버전이 있으면 바로 설치할지 묻고 없으면 그렇다고 알린다.
+  checkFromTray.current = async () => {
+    setToast({ text: "업데이트를 확인하는 중…", kind: "info" });
+    try {
+      const found = await api.checkUpdate();
+      setUpdate(found);
+      if (found) {
+        setToast(null);
+        askToInstall(found);
+      } else {
+        setToast({ text: `이미 최신 버전입니다 (v${await api.version()}).`, kind: "info" });
+      }
+    } catch (e) {
+      showError(`업데이트를 확인하지 못했습니다. (${String(e)})`);
+    }
   };
 
   const widgetStyle = {
