@@ -25,7 +25,7 @@ def selftest(inp, out):
             pass
     with open(out.rsplit(".", 1)[0] + "_report.txt", "w", encoding="utf-8") as f:
         f.write(report)
-    return 0 if (ok and field_selftest(inp)) else 1
+    return 0 if (ok and field_selftest(inp) and paths_selftest(inp)) else 1
 
 
 def field_selftest(inp):
@@ -41,6 +41,19 @@ def field_selftest(inp):
     cases = [(273, 240, 4344.7), (537, 350, 3046.3), (405, 262, 1183.3)]
     err = max(abs(fm.read(img, x, y).value - t) for x, y, t in cases)
     return err < 50
+
+
+def paths_selftest(inp):
+    """모드 3: 경로 3장 취합 → 각 경로 검출 + 배경에 빨간 선 잔상 없음."""
+    import os
+    from postfx2d import core, paths
+    d = os.path.join(os.path.dirname(os.path.abspath(inp)), "path_samples")
+    if not os.path.isdir(d):
+        return True
+    ps = [paths.make_path(f"p{i}", core.imread(os.path.join(d, f"path{i}.png"))) for i in (1, 2, 3)]
+    bg = paths.restore_background(ps)
+    out = paths.merge(ps)
+    return all(p.pixels > 500 for p in ps) and paths.red_mask(bg).sum() == 0 and out.shape == bg.shape
 
 
 if __name__ == "__main__":

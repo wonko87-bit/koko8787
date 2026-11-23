@@ -15,6 +15,7 @@ from PIL import Image, ImageGrab, ImageTk
 from . import core
 from . import enhance
 from . import fieldmap as fmap
+from . import paths as pmod
 from . import settings
 
 APP = "PostFX 2D"
@@ -75,6 +76,9 @@ class App(tk.Tk):
         self.src: np.ndarray | None = None
         self.result: core.Result | None = None
         self.src_name = "capture"
+        self.path_list: list[pmod.PathImage] = []      # 모드 3
+        self.path_merged: np.ndarray | None = None
+        self.path_sel: int | None = None
         self.show_original = False
         self._tk_img = None
         self.readings: list[fmap.Reading] = []
@@ -100,6 +104,9 @@ class App(tk.Tk):
         for k in ("<Control-minus>", "<Control-KP_Subtract>"):
             self.bind_all(k, lambda e: self.zoom_by(0.8))
         self.bind_all("<Control-0>", lambda e: self.zoom_fit())
+        for i in range(3):                                 # Ctrl+1/2/3 = 모드 전환
+            self.bind_all(f"<Control-Key-{i + 1}>", lambda e, i=i: self.set_mode(i))
+        self.bind_all("<Control-Return>", lambda e: self.merge_paths())
         self.set_status("Ctrl+V 로 클립보드 캡처를 붙여넣거나, 이미지 파일을 여세요.")
 
     # ------------------------------------------------------------ style
@@ -186,7 +193,9 @@ class App(tk.Tk):
 
         ttk.Label(side, text="모드", style="H.TLabel").pack(anchor="w", pady=(S(20), S(6)))
         self.mode = ttk.Combobox(side, state="readonly",
-                                 values=["1. 최소안전율부위", "2. 전계 값 읽기 (Rainbow map)"])
+                                 values=["1. 최소안전율부위  (Ctrl+1)",
+                                         "2. 전계 값 읽기  (Ctrl+2)",
+                                         "3. 연면 경로 취합  (Ctrl+3)"])
         self.mode.current(0)
         self.mode.pack(fill="x")
         self.mode.bind("<<ComboboxSelected>>", lambda e: self._on_mode())
@@ -196,8 +205,10 @@ class App(tk.Tk):
         self.opt_host.pack(fill="x")
         self.opt1 = ttk.Frame(self.opt_host)
         self.opt2 = ttk.Frame(self.opt_host)
+        self.opt3 = ttk.Frame(self.opt_host)
         self.opt1.pack(fill="x")
         self._build_opt2(self.opt2)
+        self._build_opt3(self.opt3)
         side_main = side
         side = self.opt1
         self.v_count = tk.IntVar(value=0)
@@ -291,9 +302,138 @@ class App(tk.Tk):
                                             "색 오차", "신뢰"])
         tables.add(self.tree_fld.master, text="  전계 측정점  (우클릭: 삭제)  ")
         tables.tab(2, state="hidden")
+        self.tree_path = self._tree(tables, ["경로", "이미지", "크기", "선 픽셀 수", "상태"])
+        tables.add(self.tree_path.master, text="  경로 목록  (선택: 미리보기 · Delete: 삭제)  ")
+        tables.tab(3, state="hidden")
+        self.tree_path.bind("<<TreeviewSelect>>", lambda e: self._on_path_select())
+        self.tree_path.bind("<Delete>", lambda e: self.delete_path())
 
         self.status = ttk.Label(self, style="Sub.TLabel", padding=(S(20), S(6)))
         self.status.pack(fill="x")
+
+    def _build_opt3(self, f):
+        ttk.Label(f, style="Muted.TLabel", justify="left", wraplength=S(250), text=(
+            "같은 구도·같은 크기 이미지를 경로별로\nCtrl+V (또는 Ctrl+O 여러 장) 로 추가"
+        )).pack(anchor="w")
+        self.lbl_pathcount = ttk.Label(f, text="추가된 경로: 0장", style="H.TLabel")
+        self.lbl_pathcount.pack(anchor="w", pady=(S(8), S(4)))
+        row = ttk.Frame(f); row.pack(fill="x")
+        ttk.Button(row, text="✕ 선택 삭제", command=self.delete_path).pack(
+            side="left", fill="x", expand=True, padx=(0, S(3)))
+        ttk.Button(row, text="⟲ 모두 지우기", command=self.clear_paths).pack(
+            side="left", fill="x", expand=True, padx=(S(3), 0))
+        self.v_pcolor = tk.BooleanVar(value=True)
+        self.v_pbadge = tk.BooleanVar(value=True)
+        self.v_plegend = tk.BooleanVar(value=True)
+        for text, var in (("경로별 색 구분", self.v_pcolor), ("번호 표시", self.v_pbadge),
+                          ("범례 표시", self.v_plegend)):
+            ttk.Checkbutton(f, text=text, variable=var, command=self._remerge).pack(
+                anchor="w", pady=(S(6), 0))
+        self.v_pthick = tk.IntVar(value=0)
+        row = ttk.Frame(f); row.pack(fill="x", pady=(S(8), 0))
+        ttk.Label(row, text="선 굵게 (px)").pack(side="left")
+        ttk.Spinbox(row, from_=0, to=6, textvariable=self.v_pthick, width=6,
+                    command=self._remerge).pack(side="right")
+        ttk.Button(f, text="🔗  경로 취합  (Ctrl+Enter)", style="Accent.TButton",
+                   command=self.merge_paths).pack(fill="x", pady=(S(16), 0))
+
+    # ------------------------------------------------------------ mode 3
+    def _add_path(self, img, name):
+        ref = self.path_list[0].img.shape if self.path_list else None
+        try:
+            p = pmod.make_path(f"{len(self.path_list) + 1}_{name}", img, ref)
+        except pmod.SizeMismatch as e:
+            messagebox.showerror(APP, f"{e}\n\n모든 경로 이미지는 같은 크기여야 합니다. "
+                                      "이 이미지는 추가하지 않았습니다.")
+            self.set_status(f"⚠ {e} → 추가 안 함")
+            return
+        self.path_list.append(p)
+        self.path_merged = None
+        self.path_sel = len(self.path_list) - 1
+        self._zoom, self._pan = 1.0, [0.0, 0.0]
+        self._fill_path_table()
+        self._show()
+        n = len(self.path_list)
+        msg = f"경로 {n} 추가 ({img.shape[1]}×{img.shape[0]}, 빨간 선 {p.pixels} px)"
+        if not p.pixels:
+            msg += "   ⚠ 빨간 선을 찾지 못했습니다"
+        if n > len(pmod.PATH_COLORS):
+            msg += f"   ⚠ {len(pmod.PATH_COLORS)}개를 넘어 색이 반복됩니다 (번호로 구분)"
+        self.set_status(msg)
+
+    def _fill_path_table(self):
+        tv = self.tree_path
+        tv.delete(*tv.get_children())
+        colored = bool(self.v_pcolor.get())
+        for i, p in enumerate(self.path_list):
+            h, w = p.img.shape[:2]
+            cname = pmod.PATH_COLORS[i % len(pmod.PATH_COLORS)][1] if colored else "빨강"
+            tv.insert("", "end", iid=str(i), values=[f"{i + 1} ({cname})", p.name, f"{w}×{h}",
+                                                     p.pixels, "OK" if p.pixels else "선 없음"],
+                      tags=() if p.pixels else ("global",))
+        self.lbl_pathcount.configure(text=f"추가된 경로: {len(self.path_list)}장")
+
+    def _on_path_select(self):
+        sel = self.tree_path.selection()
+        if sel:
+            self.path_sel = int(sel[0])
+            self.show_original = True
+            self._show()
+
+    def delete_path(self):
+        sel = self.tree_path.selection()
+        if not sel or not self.path_list:
+            return
+        self.path_list.pop(int(sel[0]))
+        self.path_merged = None
+        self.path_sel = len(self.path_list) - 1 if self.path_list else None
+        self._fill_path_table()
+        self._show()
+
+    def clear_paths(self):
+        if self.path_list and not messagebox.askyesno(APP, "추가한 경로 이미지를 모두 지울까요?"):
+            return
+        self.path_list, self.path_merged, self.path_sel = [], None, None
+        self._fill_path_table()
+        self._show()
+        self.set_status("경로 목록을 비웠습니다.")
+
+    def merge_paths(self):
+        if not self.is_paths():
+            return
+        if not self.path_list:
+            self.set_status("먼저 경로 이미지를 붙여넣으세요.")
+            return
+        self.path_merged = pmod.merge(self.path_list, int(self.v_pthick.get() or 0),
+                                      bool(self.v_pcolor.get()), bool(self.v_pbadge.get()),
+                                      bool(self.v_plegend.get()))
+        self.show_original = False
+        self._fill_path_table()
+        self._show()
+        empty = sum(not p.pixels for p in self.path_list)
+        self.set_status(f"경로 {len(self.path_list)}개 취합 완료"
+                        + (f"   ⚠ 빨간 선 없는 이미지 {empty}장" if empty else "")
+                        + "   · Space: 개별 이미지 / 결과 전환")
+
+    def _remerge(self):
+        self._fill_path_table()
+        if self.path_merged is not None:
+            self.merge_paths()
+
+    def _view_img(self):
+        """지금 화면에 보이는 이미지 (좌표 계산 기준)."""
+        if self.is_paths():
+            if self.path_merged is not None and not self.show_original:
+                return self.path_merged
+            if self.path_list:
+                i = self.path_sel if self.path_sel is not None else len(self.path_list) - 1
+                return self.path_list[min(i, len(self.path_list) - 1)].img
+            return None
+        if self.src is None:
+            return None
+        if self.is_field() or self.show_original or not self.result:
+            return self.src
+        return self.result.image
 
     def _build_opt2(self, f):
         self.v_vmin = tk.StringVar(value="0")
@@ -337,26 +477,42 @@ class App(tk.Tk):
     def is_field(self):
         return self.mode.current() == 1
 
+    def is_paths(self):
+        return self.mode.current() == 2
+
+    def set_mode(self, i):
+        if self.mode.current() != i:
+            self.mode.current(i)
+            self._on_mode()
+
     def _on_mode(self):
-        if self.is_field():
-            self.opt1.pack_forget(); self.legend1.pack_forget()
-            self.opt2.pack(fill="x")
-            self.btn_toggle.pack_forget()
-            for i in (0, 1):
-                self.tables.tab(i, state="hidden")
-            self.tables.tab(2, state="normal"); self.tables.select(2)
-            self.show_original = True
-            self._refresh_field()
-            self.set_status("최소/최대값을 입력하고 맵 위를 클릭하세요.")
-        else:
-            self.opt2.pack_forget()
+        m = self.mode.current()
+        for f in (self.opt1, self.opt2, self.opt3):
+            f.pack_forget()
+        self.legend1.pack_forget()
+        self.btn_toggle.pack_forget()
+        tabs = {0: (0, 1), 1: (2,), 2: (3,)}[m]
+        for i in range(4):
+            self.tables.tab(i, state="normal" if i in tabs else "hidden")
+        self.tables.select(tabs[0])
+        self._zoom, self._pan = 1.0, [0.0, 0.0]
+        if m == 0:
             self.opt1.pack(fill="x"); self.legend1.pack(side="bottom", fill="x")
             self.btn_toggle.pack(side="right")
-            for i in (0, 1):
-                self.tables.tab(i, state="normal")
-            self.tables.tab(2, state="hidden"); self.tables.select(0)
             if self.src is not None and self.result is None:
                 self.set_status("모드 1: '분석 실행' 을 누르면 점/숫자 분석을 시작합니다.")
+            else:
+                self.set_status("모드 1: 최소안전율부위")
+        elif m == 1:
+            self.opt2.pack(fill="x")
+            self.show_original = True
+            self._refresh_field()
+            self.set_status("모드 2: 최소/최대값을 입력하고 맵 위를 클릭하세요.")
+        else:
+            self.opt3.pack(fill="x")
+            self.btn_toggle.pack(side="right")
+            self.set_status(f"모드 3: 경로 이미지를 Ctrl+V 로 차례로 붙여넣고 '경로 취합'. "
+                            f"(현재 {len(self.path_list)}장)")
         self._show()
 
     def _on_cmap(self):
@@ -460,19 +616,20 @@ class App(tk.Tk):
     def _img_xy(self, ex, ey):
         sc, ox, oy = self._view
         x, y = int((ex - ox) / sc), int((ey - oy) / sc)
-        if self.src is None:
+        img = self._view_img()
+        if img is None:
             return None
-        h, w = self.src.shape[:2]
+        h, w = img.shape[:2]
         return (x, y) if 0 <= x < w and 0 <= y < h else None
 
     # ------------------------------------------------------------ zoom / pan
     def _base_scale(self):
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
-        h, w = self.src.shape[:2]
+        h, w = self._view_img().shape[:2]
         return min((cw - 20) / w, (ch - 20) / h, 4.0)
 
     def zoom_by(self, f, ex=None, ey=None):
-        if self.src is None:
+        if self._view_img() is None:
             return
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
         ex = cw / 2 if ex is None else ex
@@ -483,7 +640,7 @@ class App(tk.Tk):
         if abs(new_zoom - self._zoom) < 1e-9:
             return
         nsc = base * new_zoom
-        h, w = self.src.shape[:2]
+        h, w = self._view_img().shape[:2]
         # 커서 아래 이미지 지점이 그대로 머물도록 이동량 보정
         px, py = (ex - ox) / sc, (ey - oy) / sc
         self._pan = [ex - px * nsc - (cw / 2 - w * nsc / 2),
@@ -523,7 +680,7 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------ mouse
     def _on_press(self, e):
-        if self.src is None:
+        if self._view_img() is None:
             return
         if self._legend_pick:
             self._drag = (e.x, e.y)
@@ -651,6 +808,8 @@ class App(tk.Tk):
         return eimg, k
 
     def _output_image(self):
+        if self.is_paths():
+            return None if self.path_merged is None else self._enhanced(self.path_merged)[0]
         unit = self.v_unit.get().strip()
         if self.is_field():
             if self.src is None:
@@ -709,6 +868,13 @@ class App(tk.Tk):
         self._set_source(cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), "capture")
 
     def open_file(self):
+        if self.is_paths():
+            ps = filedialog.askopenfilenames(
+                title="경로 이미지 열기 (여러 장 선택 가능)",
+                filetypes=[("이미지", "*.png *.jpg *.jpeg *.bmp *.tif *.tiff"), ("모든 파일", "*.*")])
+            for p in ps:
+                self._load_path(p)
+            return
         p = filedialog.askopenfilename(
             title="해석결과 이미지 열기",
             filetypes=[("이미지", "*.png *.jpg *.jpeg *.bmp *.tif *.tiff"), ("모든 파일", "*.*")])
@@ -724,6 +890,9 @@ class App(tk.Tk):
         self._set_source(img, os.path.splitext(os.path.basename(p))[0])
 
     def _set_source(self, img, name):
+        if self.is_paths():
+            self._add_path(img, name)
+            return
         self.src, self.src_name, self.result = img, name, None
         self._zoom, self._pan = 1.0, [0.0, 0.0]
         self.show_original = True
@@ -747,7 +916,7 @@ class App(tk.Tk):
                              pad=int(self.v_pad.get()))
 
     def run(self):
-        if self.is_field():
+        if self.is_field() or self.is_paths():
             return
         if self.src is None:
             self.set_status("먼저 이미지를 붙여넣거나 여세요.")
@@ -838,6 +1007,11 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------ view
     def toggle_view(self):
+        if self.is_paths():
+            if self.path_merged is not None:
+                self.show_original = not self.show_original
+                self._show()
+            return
         if self.src is None or self.is_field():
             return
         self.show_original = not self.show_original
@@ -846,17 +1020,26 @@ class App(tk.Tk):
     def _show(self):
         self.canvas.delete("all")
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
-        if self.src is None:
+        img = self._view_img()
+        if img is None:
+            self.lbl_view.configure(text=("연면 경로 취합" if self.is_paths() else
+                                          "전계 값 읽기" if self.is_field() else "미리보기"))
+            first = ("Ctrl+V 로 경로 이미지를 차례로 붙여넣으세요" if self.is_paths()
+                     else "Ctrl+V 로 해석결과 캡처를 붙여넣으세요")
             self.canvas.create_text(cw / 2, ch / 2 - S(12), fill=MUTED, font=("Segoe UI", 13),
-                                    text="Ctrl+V 로 해석결과 캡처를 붙여넣으세요")
+                                    text=first)
             self.canvas.create_text(cw / 2, ch / 2 + S(16), fill="#5d6574", font=("Segoe UI", 10),
                                     text="또는 Ctrl+O 로 이미지 파일 열기")
             return
-        if self.is_field():
-            img = self.src
+        if self.is_paths():
+            if img is self.path_merged:
+                self.lbl_view.configure(text=f"결과 · 경로 {len(self.path_list)}개 취합")
+            else:
+                i = self.path_list.index(next(p for p in self.path_list if p.img is img)) + 1
+                self.lbl_view.configure(text=f"경로 {i} / {len(self.path_list)}")
+        elif self.is_field():
             self.lbl_view.configure(text="전계 값 읽기 · 클릭하여 측정")
         else:
-            img = self.src if (self.show_original or not self.result) else self.result.image
             self.lbl_view.configure(text="원본" if img is self.src else "결과 · 최소안전율부위")
         h, w = img.shape[:2]
         base = min((cw - 20) / w, (ch - 20) / h, 4.0)
@@ -916,17 +1099,23 @@ class App(tk.Tk):
     def save(self):
         img = self._output_image()
         if img is None or (self.is_field() and not self.readings):
-            self.set_status("저장할 결과가 없습니다.")
+            self.set_status("저장할 결과가 없습니다." + (" '경로 취합' 을 먼저 누르세요."
+                                                       if self.is_paths() else ""))
             return
-        suffix = "_field" if self.is_field() else "_minSF"
+        if self.is_paths():
+            initial = "paths_merged.png"
+        else:
+            initial = f"{self.src_name}{'_field' if self.is_field() else '_minSF'}.png"
         p = filedialog.asksaveasfilename(
             title="결과 저장", defaultextension=".png",
-            initialfile=f"{self.src_name}{suffix}.png", filetypes=[("PNG", "*.png")])
+            initialfile=initial, filetypes=[("PNG", "*.png")])
         if not p:
             return
         core.imwrite(p, img)
         csv_path = os.path.splitext(p)[0] + "_summary.csv"
-        if self.is_field():
+        if self.is_paths():
+            pmod.save_csv(self.path_list, csv_path, bool(self.v_pcolor.get()))
+        elif self.is_field():
             fmap.save_csv(self.readings, csv_path, self.v_unit.get().strip())
         else:
             core.save_csv(self.result.rows, csv_path)

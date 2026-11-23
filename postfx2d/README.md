@@ -45,6 +45,34 @@
 
 합성 샘플 300점 검증: 평균 오차 약 11 V/m (범위의 0.2%), 최대 약 140 V/m (메쉬선 근처).
 
+## 모드 3 · 연면 경로 취합
+
+해석 프로그램에서 한 번에 하나씩만 표시되는 연면 경로(빨간 선)를 여러 장 받아 한 장에 모아 표시합니다.
+
+1. `Ctrl+3` 으로 모드 3 → 경로 이미지를 `Ctrl+V` 로 차례로 붙여넣기 (또는 `Ctrl+O` 로 여러 장 선택)
+2. `🔗 경로 취합` (`Ctrl+Enter`) → 경로마다 다른 색 + 번호 배지 + 범례로 표시
+3. `PNG + CSV 저장` → `paths_merged.png` + 경로 목록 CSV (경로, 이미지, 표시 색, 선 픽셀 수, 영역)
+
+- 모든 이미지는 **같은 크기**여야 하며, 크기가 다르면 오류 메시지를 띄우고 추가하지 않습니다.
+- 빨간 선 아래 가려진 배경은 다른 이미지의 같은 위치 픽셀로 복원합니다 (같은 그림이므로 원래 배경 그대로).
+- 경로 색은 10가지까지 모두 다르고, 그 이상은 색이 반복되지만 번호로 구분됩니다.
+- 옵션: 경로별 색 구분 / 모두 빨강, 번호 표시, 범례 표시, 선 굵게. `Space` 로 개별 이미지 ↔ 결과 전환, 목록에서 선택하면 해당 이미지 미리보기, `Delete` 로 삭제.
+
+| 경로 1 | 취합 결과 (경로 3개) |
+|---|---|
+| ![](tools/path_samples/path1.png) | ![](docs/paths_result.png) |
+
+## 단축키
+
+| 키 | 동작 |
+|---|---|
+| `Ctrl+1` / `Ctrl+2` / `Ctrl+3` | 모드 1 / 2 / 3 전환 |
+| `Ctrl+V` · `Ctrl+O` · `Ctrl+S` | 붙여넣기 · 열기 · 저장 |
+| `Ctrl+Enter` | 경로 취합 (모드 3) |
+| `Space` | 원본 ↔ 결과 전환 |
+| 휠 · `Ctrl +/-` · `Ctrl+0` | 확대/축소 · 화면 맞춤 |
+| `Ctrl+Z` | 측정점 되돌리기 (모드 2) |
+
 ## 사용법 (exe)
 
 GitHub Actions → **PostFX2D Windows Build** → Artifact `PostFX2D-windows` 에서 `PostFX2D.exe` 다운로드.
@@ -74,4 +102,5 @@ python run_app.py                       # GUI
 python cli.py 입력.png [출력.png] [--groups 6]
 python tools/make_sample.py tools/sample.png
 python tools/make_field_sample.py tools/field_sample.png
+python tools/make_path_samples.py tools/path_samples
 ```
