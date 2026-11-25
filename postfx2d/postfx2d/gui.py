@@ -78,7 +78,10 @@ class App(tk.Tk):
         self.src_name = "capture"
         self.path_list: list[pmod.PathImage] = []      # 모드 3
         self.path_merged: np.ndarray | None = None
-        self.path_sel: int | None = None
+        self.path_sel = None                           # 경로 index 또는 "eq"
+        self.eq_img: np.ndarray | None = None           # 등전위선 이미지 (선택)
+        self.eq_name = ""
+        self._paste_to_eq = False
         self.show_original = False
         self._tk_img = None
         self.readings: list[fmap.Reading] = []
@@ -107,6 +110,8 @@ class App(tk.Tk):
         for i in range(3):                                 # Ctrl+1/2/3 = 모드 전환
             self.bind_all(f"<Control-Key-{i + 1}>", lambda e, i=i: self.set_mode(i))
         self.bind_all("<Control-Return>", lambda e: self.merge_paths())
+        self.bind_all("<Control-Shift-V>", lambda e: self.paste_eq())
+        self.bind_all("<Control-Shift-v>", lambda e: self.paste_eq())
         self.set_status("Ctrl+V 로 클립보드 캡처를 붙여넣거나, 이미지 파일을 여세요.")
 
     # ------------------------------------------------------------ style
@@ -129,6 +134,7 @@ class App(tk.Tk):
                      padding=(S(12), S(7)), focusthickness=0)
         st.map("TButton", background=[("active", "#323946"), ("disabled", PANEL)],
                foreground=[("disabled", MUTED)])
+        st.configure("Small.TButton", padding=(S(4), S(7)))
         st.configure("Accent.TButton", background=ACCENT, foreground="#111",
                      font=("Segoe UI Semibold", 10))
         st.map("Accent.TButton", background=[("active", "#ffc24d"), ("disabled", "#5a4a22")])
@@ -316,36 +322,70 @@ class App(tk.Tk):
             "같은 구도·같은 크기 이미지를 경로별로\nCtrl+V (또는 Ctrl+O 여러 장) 로 추가"
         )).pack(anchor="w")
         self.lbl_pathcount = ttk.Label(f, text="추가된 경로: 0장", style="H.TLabel")
-        self.lbl_pathcount.pack(anchor="w", pady=(S(8), S(4)))
+        self.lbl_pathcount.pack(anchor="w", pady=(S(6), S(4)))
         row = ttk.Frame(f); row.pack(fill="x")
         ttk.Button(row, text="✕ 선택 삭제", command=self.delete_path).pack(
             side="left", fill="x", expand=True, padx=(0, S(3)))
         ttk.Button(row, text="⟲ 모두 지우기", command=self.clear_paths).pack(
             side="left", fill="x", expand=True, padx=(S(3), 0))
+        # 등전위선 (선택) - 경로보다 먼저/나중 어느 순서로 넣어도 됨
+        head = ttk.Frame(f); head.pack(fill="x", pady=(S(12), S(4)))
+        self.lbl_eq = ttk.Label(head, text="등전위선: 없음", style="H.TLabel")
+        self.lbl_eq.pack(side="left")
+        ttk.Label(head, text="Ctrl+Shift+V", style="Muted.TLabel").pack(side="right")
+        row = ttk.Frame(f); row.pack(fill="x")
+        for text, cmd, last in (("📋 붙여넣기", self.paste_eq, False),
+                                ("📂 열기", self.open_eq, False), ("✕ 제거", self.remove_eq, True)):
+            ttk.Button(row, text=text, command=cmd, style="Small.TButton", width=4).pack(
+                side="left", fill="x", expand=True, padx=(0, 0 if last else S(3)))
+        self.v_eqshow = tk.BooleanVar(value=True)
+        self.v_eqgray = tk.BooleanVar(value=False)
+        row = ttk.Frame(f); row.pack(fill="x", pady=(S(4), 0))
+        ttk.Checkbutton(row, text="등전위선 표시", variable=self.v_eqshow,
+                        command=self._remerge).pack(side="left")
+        ttk.Checkbutton(row, text="회색", variable=self.v_eqgray,
+                        command=self._remerge).pack(side="right")
+        self.v_eqop = tk.DoubleVar(value=0.7)
+        self._slider(f, "등전위선 진하기", self.v_eqop, 0.2, 1.0)
+        self.v_eqop.trace_add("write", lambda *_: self._remerge_later())
+        # 경로 표시 옵션
         self.v_pcolor = tk.BooleanVar(value=True)
         self.v_pbadge = tk.BooleanVar(value=True)
         self.v_plegend = tk.BooleanVar(value=True)
-        for text, var in (("경로별 색 구분", self.v_pcolor), ("번호 표시", self.v_pbadge),
-                          ("범례 표시", self.v_plegend)):
-            ttk.Checkbutton(f, text=text, variable=var, command=self._remerge).pack(
-                anchor="w", pady=(S(6), 0))
+        row = ttk.Frame(f); row.pack(fill="x", pady=(S(10), 0))
+        for text, var in (("색 구분", self.v_pcolor), ("번호", self.v_pbadge),
+                          ("범례", self.v_plegend)):
+            ttk.Checkbutton(row, text=text, variable=var, command=self._remerge).pack(
+                side="left", padx=(0, S(8)))
         self.v_pthick = tk.IntVar(value=0)
-        row = ttk.Frame(f); row.pack(fill="x", pady=(S(8), 0))
-        ttk.Label(row, text="선 굵게 (px)").pack(side="left")
+        row = ttk.Frame(f); row.pack(fill="x", pady=(S(6), 0))
+        ttk.Label(row, text="경로선 굵게 (px)").pack(side="left")
         ttk.Spinbox(row, from_=0, to=6, textvariable=self.v_pthick, width=6,
                     command=self._remerge).pack(side="right")
         ttk.Button(f, text="🔗  경로 취합  (Ctrl+Enter)", style="Accent.TButton",
-                   command=self.merge_paths).pack(fill="x", pady=(S(16), 0))
+                   command=self.merge_paths).pack(fill="x", pady=(S(12), 0))
 
     # ------------------------------------------------------------ mode 3
+    def _ref_shape(self):
+        """크기 비교 기준: 먼저 들어온 경로 이미지, 없으면 등전위선 이미지."""
+        if self.path_list:
+            return self.path_list[0].img.shape
+        return None if self.eq_img is None else self.eq_img.shape
+
+    def _size_error(self, e, what):
+        messagebox.showerror(APP, f"{e}\n\n경로·등전위선 이미지는 모두 같은 크기여야 합니다. "
+                                  f"이 {what} 이미지는 추가하지 않았습니다.")
+        self.set_status(f"⚠ {e} → 추가 안 함")
+
     def _add_path(self, img, name):
-        ref = self.path_list[0].img.shape if self.path_list else None
+        if self._paste_to_eq:
+            self._paste_to_eq = False
+            self._set_eq(img, name)
+            return
         try:
-            p = pmod.make_path(f"{len(self.path_list) + 1}_{name}", img, ref)
+            p = pmod.make_path(f"{len(self.path_list) + 1}_{name}", img, self._ref_shape())
         except pmod.SizeMismatch as e:
-            messagebox.showerror(APP, f"{e}\n\n모든 경로 이미지는 같은 크기여야 합니다. "
-                                      "이 이미지는 추가하지 않았습니다.")
-            self.set_status(f"⚠ {e} → 추가 안 함")
+            self._size_error(e, "경로")
             return
         self.path_list.append(p)
         self.path_merged = None
@@ -361,9 +401,56 @@ class App(tk.Tk):
             msg += f"   ⚠ {len(pmod.PATH_COLORS)}개를 넘어 색이 반복됩니다 (번호로 구분)"
         self.set_status(msg)
 
+    def paste_eq(self):
+        if not self.is_paths():
+            return
+        self._paste_to_eq = True
+        self.paste()
+        self._paste_to_eq = False      # 클립보드에 이미지가 없었던 경우 원상복구
+
+    def open_eq(self):
+        p = filedialog.askopenfilename(
+            title="등전위선 이미지 열기",
+            filetypes=[("이미지", "*.png *.jpg *.jpeg *.bmp *.tif *.tiff"), ("모든 파일", "*.*")])
+        if p:
+            self._paste_to_eq = True
+            self._load_path(p)
+            self._paste_to_eq = False
+
+    def _set_eq(self, img, name):
+        ref = self._ref_shape()
+        if ref is not None and self.path_list and img.shape[:2] != ref[:2]:
+            h, w = img.shape[:2]
+            self._size_error(f"이미지 크기가 다릅니다: {w}×{h} (기준 {ref[1]}×{ref[0]})", "등전위선")
+            return
+        self.eq_img, self.eq_name = img, name
+        self.path_merged = None
+        self.path_sel = "eq"
+        self.show_original = True
+        self._zoom, self._pan = 1.0, [0.0, 0.0]
+        self._fill_path_table()
+        self._show()
+        self.set_status(f"등전위선 이미지 지정 ({img.shape[1]}×{img.shape[0]}). "
+                        "경로 이미지와 함께 '경로 취합' 하면 겹쳐서 표시됩니다.")
+
+    def remove_eq(self):
+        if self.eq_img is None:
+            return
+        self.eq_img, self.eq_name = None, ""
+        if self.path_sel == "eq":
+            self.path_sel = len(self.path_list) - 1 if self.path_list else None
+        self._fill_path_table()
+        self._remerge()
+        self._show()
+
     def _fill_path_table(self):
         tv = self.tree_path
         tv.delete(*tv.get_children())
+        if self.eq_img is not None:
+            h, w = self.eq_img.shape[:2]
+            tv.insert("", "end", iid="eq", values=["등전위선", self.eq_name, f"{w}×{h}", "-",
+                                                   "표시" if self.v_eqshow.get() else "숨김"],
+                      tags=("local",))
         colored = bool(self.v_pcolor.get())
         for i, p in enumerate(self.path_list):
             h, w = p.img.shape[:2]
@@ -372,17 +459,24 @@ class App(tk.Tk):
                                                      p.pixels, "OK" if p.pixels else "선 없음"],
                       tags=() if p.pixels else ("global",))
         self.lbl_pathcount.configure(text=f"추가된 경로: {len(self.path_list)}장")
+        self.lbl_eq.configure(text="등전위선: 있음" if self.eq_img is not None
+                              else "등전위선: 없음 (선택)")
 
     def _on_path_select(self):
         sel = self.tree_path.selection()
         if sel:
-            self.path_sel = int(sel[0])
+            self.path_sel = "eq" if sel[0] == "eq" else int(sel[0])
             self.show_original = True
             self._show()
 
     def delete_path(self):
         sel = self.tree_path.selection()
-        if not sel or not self.path_list:
+        if not sel:
+            return
+        if sel[0] == "eq":
+            self.remove_eq()
+            return
+        if not self.path_list:
             return
         self.path_list.pop(int(sel[0]))
         self.path_merged = None
@@ -391,9 +485,11 @@ class App(tk.Tk):
         self._show()
 
     def clear_paths(self):
-        if self.path_list and not messagebox.askyesno(APP, "추가한 경로 이미지를 모두 지울까요?"):
+        if (self.path_list or self.eq_img is not None) and not messagebox.askyesno(
+                APP, "추가한 경로·등전위선 이미지를 모두 지울까요?"):
             return
         self.path_list, self.path_merged, self.path_sel = [], None, None
+        self.eq_img, self.eq_name = None, ""
         self._fill_path_table()
         self._show()
         self.set_status("경로 목록을 비웠습니다.")
@@ -402,16 +498,24 @@ class App(tk.Tk):
         if not self.is_paths():
             return
         if not self.path_list:
-            self.set_status("먼저 경로 이미지를 붙여넣으세요.")
+            self.set_status("먼저 경로 이미지를 붙여넣으세요."
+                            + (" (등전위선만으로는 취합할 수 없습니다)" if self.eq_img is not None else ""))
             return
-        self.path_merged = pmod.merge(self.path_list, int(self.v_pthick.get() or 0),
-                                      bool(self.v_pcolor.get()), bool(self.v_pbadge.get()),
-                                      bool(self.v_plegend.get()))
+        eq = self.eq_img if self.v_eqshow.get() else None
+        try:
+            self.path_merged = pmod.merge(
+                self.path_list, int(self.v_pthick.get() or 0), bool(self.v_pcolor.get()),
+                bool(self.v_pbadge.get()), bool(self.v_plegend.get()), eq_img=eq,
+                eq_opacity=float(self.v_eqop.get()), eq_gray=bool(self.v_eqgray.get()))
+        except pmod.SizeMismatch as e:
+            messagebox.showerror(APP, str(e))
+            return
         self.show_original = False
         self._fill_path_table()
         self._show()
         empty = sum(not p.pixels for p in self.path_list)
         self.set_status(f"경로 {len(self.path_list)}개 취합 완료"
+                        + (" + 등전위선" if eq is not None else "")
                         + (f"   ⚠ 빨간 선 없는 이미지 {empty}장" if empty else "")
                         + "   · Space: 개별 이미지 / 결과 전환")
 
@@ -420,15 +524,23 @@ class App(tk.Tk):
         if self.path_merged is not None:
             self.merge_paths()
 
+    def _remerge_later(self):
+        """슬라이더 드래그 중에는 마지막 값으로 한 번만 다시 그림."""
+        if getattr(self, "_remerge_job", None):
+            self.after_cancel(self._remerge_job)
+        self._remerge_job = self.after(150, self._remerge)
+
     def _view_img(self):
         """지금 화면에 보이는 이미지 (좌표 계산 기준)."""
         if self.is_paths():
             if self.path_merged is not None and not self.show_original:
                 return self.path_merged
+            if self.path_sel == "eq" and self.eq_img is not None:
+                return self.eq_img
             if self.path_list:
-                i = self.path_sel if self.path_sel is not None else len(self.path_list) - 1
+                i = self.path_sel if isinstance(self.path_sel, int) else len(self.path_list) - 1
                 return self.path_list[min(i, len(self.path_list) - 1)].img
-            return None
+            return self.eq_img
         if self.src is None:
             return None
         if self.is_field() or self.show_original or not self.result:
@@ -1033,7 +1145,11 @@ class App(tk.Tk):
             return
         if self.is_paths():
             if img is self.path_merged:
-                self.lbl_view.configure(text=f"결과 · 경로 {len(self.path_list)}개 취합")
+                self.lbl_view.configure(text=f"결과 · 경로 {len(self.path_list)}개 취합"
+                                        + (" + 등전위선" if self.eq_img is not None
+                                           and self.v_eqshow.get() else ""))
+            elif img is self.eq_img:
+                self.lbl_view.configure(text="등전위선 이미지")
             else:
                 i = self.path_list.index(next(p for p in self.path_list if p.img is img)) + 1
                 self.lbl_view.configure(text=f"경로 {i} / {len(self.path_list)}")

@@ -53,7 +53,13 @@ def paths_selftest(inp):
     ps = [paths.make_path(f"p{i}", core.imread(os.path.join(d, f"path{i}.png"))) for i in (1, 2, 3)]
     bg = paths.restore_background(ps)
     out = paths.merge(ps)
-    return all(p.pixels > 500 for p in ps) and paths.red_mask(bg).sum() == 0 and out.shape == bg.shape
+    ok = all(p.pixels > 500 for p in ps) and paths.red_mask(bg).sum() == 0 and out.shape == bg.shape
+    eqp = os.path.join(d, "equipotential.png")
+    if ok and os.path.exists(eqp):            # 등전위선 겹치기: 선이 검출되고 결과가 달라져야 함
+        eq = core.imread(eqp)
+        ok = (paths.equipotential_alpha(eq, bg) > 0.5).sum() > 5000 and \
+            not (paths.merge(ps, eq_img=eq) == out).all()
+    return bool(ok)
 
 
 if __name__ == "__main__":

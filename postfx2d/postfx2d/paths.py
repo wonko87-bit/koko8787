@@ -95,20 +95,57 @@ def _draw_badge(img, center, text, color, s):
     cv2.putText(img, text, (x - tw // 2, y + tht // 2), font, fs, (255, 255, 255), th, cv2.LINE_AA)
 
 
+def equipotential_alpha(eq_img: np.ndarray, bg: np.ndarray) -> np.ndarray:
+    """등전위선 이미지에서 배경과 달라진 부분(= 등전위선, 라벨 등)의 불투명도 0~1.
+
+    같은 그림 위에 선만 추가된 이미지이므로, 복원한 공통 배경과의 색 차이로 선을 찾는다.
+    차이가 작은 곳은 0(배경 유지), 확실히 다른 곳은 1, 그 사이(선 가장자리)는 부드럽게.
+    """
+    diff = np.abs(eq_img.astype(np.int16) - bg.astype(np.int16)).max(axis=2).astype(np.float32)
+    alpha = np.clip((diff - 18) / 40, 0, 1)
+    # 압축 잡음 같은 외딴 점 제거
+    m = (alpha > 0.5).astype(np.uint8)
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(m, connectivity=8)
+    small = np.zeros(n, bool)
+    small[1:] = stats[1:, cv2.CC_STAT_AREA] < 4
+    alpha[small[lab]] = 0
+    return alpha
+
+
 def merge(paths: list[PathImage], thickness: int = 0, colored: bool = True,
-          badges: bool = True, legend: bool = True) -> np.ndarray:
+          badges: bool = True, legend: bool = True, eq_img: np.ndarray | None = None,
+          eq_opacity: float = 0.7, eq_gray: bool = False) -> np.ndarray:
+    """eq_img: 등전위선 이미지 (선택). 배경 위, 경로선 아래에 겹쳐 그린다."""
     if not paths:
         raise ValueError("경로 이미지가 없습니다.")
     bg = restore_background(paths)
     out = bg.copy()
+    if eq_img is not None:
+        if eq_img.shape[:2] != bg.shape[:2]:
+            raise SizeMismatch("등전위선 이미지 크기가 경로 이미지와 다릅니다.")
+        a = (equipotential_alpha(eq_img, bg) * eq_opacity)[..., None]
+        layer = eq_img.astype(np.float32)
+        if eq_gray:
+            g = cv2.cvtColor(eq_img, cv2.COLOR_BGR2GRAY)
+            layer = cv2.cvtColor(np.minimum(g, 110).astype(np.uint8),
+                                 cv2.COLOR_GRAY2BGR).astype(np.float32)
+        out = (layer * a + out.astype(np.float32) * (1 - a)).astype(np.uint8)
     h, w = out.shape[:2]
     s = max(min(h, w) / 600, 1.0)
-    for i, p in enumerate(paths):
-        color = PATH_COLORS[i % len(PATH_COLORS)][0] if colored else PATH_COLORS[0][0]
+    masks = []
+    for p in paths:
         m = p.mask.astype(np.uint8)
         if thickness > 0:
             k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * thickness + 1,) * 2)
             m = cv2.dilate(m, k)
+        masks.append(m)
+    if eq_img is not None:       # 등전위선 위에서도 경로가 보이도록 흰 테두리
+        halo = np.zeros((h, w), np.uint8)
+        for m in masks:
+            halo |= cv2.dilate(m, np.ones((5, 5), np.uint8))
+        out[halo > 0] = (255, 255, 255)
+    for i, m in enumerate(masks):
+        color = PATH_COLORS[i % len(PATH_COLORS)][0] if colored else PATH_COLORS[0][0]
         out[m > 0] = color
     if badges:
         placed = []
@@ -130,16 +167,18 @@ def merge(paths: list[PathImage], thickness: int = 0, colored: bool = True,
             placed.append(best)
             _draw_badge(out, best, str(i + 1), color, s)
     if legend:
-        _draw_legend(out, paths, colored, s)
+        _draw_legend(out, paths, colored, s, eq=eq_img is not None)
     return out
 
 
-def _draw_legend(img, paths, colored, s):
+def _draw_legend(img, paths, colored, s, eq=False):
     font, fs, th = cv2.FONT_HERSHEY_SIMPLEX, 0.45 * s, max(1, int(round(s)))
     rows = []
     for i, p in enumerate(paths):
         color = PATH_COLORS[i % len(PATH_COLORS)][0] if colored else PATH_COLORS[0][0]
         rows.append((f"Path {i + 1}", color))
+    if eq:
+        rows.append(("Equipotential", (150, 150, 150)))
     lh = int(20 * s)
     tw = max(cv2.getTextSize(t, font, fs, th)[0][0] for t, _ in rows)
     bw, bh = tw + int(44 * s), lh * len(rows) + int(12 * s)

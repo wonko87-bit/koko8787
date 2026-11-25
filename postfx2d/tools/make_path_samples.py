@@ -34,6 +34,19 @@ def main(out_dir):
         img = base()
         cv2.polylines(img, [np.array(pts, np.int32)], False, (20, 20, 230), 2, cv2.LINE_AA)
         cv2.imwrite(str(out / f"path{i}.png"), img)
+    # 등전위선 이미지: 같은 그림 위에 색 등고선 (빨간 경로 없음)
+    img = base()
+    yy, xx = np.mgrid[0:H, 0:W]
+    pot = np.exp(-(((xx - 305) / 160.0) ** 2 + ((yy - 320) / 110.0) ** 2)) \
+        + 0.8 * np.exp(-(((xx - 800) / 120.0) ** 2 + ((yy - 380) / 90.0) ** 2))
+    inside = (xx > 60) & (xx < 940) & (yy > 180) & (yy < 460)
+    colors = [(200, 80, 0), (200, 160, 0), (60, 170, 60), (0, 170, 220), (0, 90, 230)]
+    for k, lv in enumerate(np.linspace(0.15, 0.85, 5)):
+        band = (np.abs(pot - lv) < 0.006) & inside
+        img[band] = colors[k]
+    cv2.putText(img, "Equipotential", (790, 170), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (60, 60, 60), 1,
+                cv2.LINE_AA)
+    cv2.imwrite(str(out / "equipotential.png"), img)
     print("saved", out)
 
 
